@@ -1,0 +1,177 @@
+{
+  "cpw_item.json": {
+    "bytes": 2587,
+    "elapsed_since_fetcher_start_s": 3.0404594099995848,
+    "provider": "CPW",
+    "purpose": "source description/license",
+    "retrieved_utc": "2026-09-26T03:33:01.177576+00:00",
+    "sha256": "859956a9912647d4deb9e44e1bf8ed93e5285d9089d95393e4505deddedf9da4",
+    "url": "https://www.arcgis.com/sharing/rest/content/items/50322b83e815436aadf588757822e72f?f=json"
+  },
+  "cpw_service.json": {
+    "bytes": 67132,
+    "elapsed_since_fetcher_start_s": 2.6769775189995926,
+    "provider": "CPW",
+    "retrieved_utc": "2026-09-26T03:33:00.814095+00:00",
+    "sha256": "f1ed39a8cd6a5ac5fbbf2ce81e66514cf66327ef00a07cf75bcc64b4a6de3b58",
+    "url": "https://services5.arcgis.com/ttNGmDvKQA7oeDQ3/arcgis/rest/services/CPWSpeciesData/FeatureServer?f=json"
+  },
+  "fine_dem.tif": {
+    "acquisition_date": "2019 project title; exact collection days unknown",
+    "bytes": 262214898,
+    "elapsed_since_fetcher_start_s": 25.695564447999914,
+    "license": "USGS public domain",
+    "provider": "USGS 3DEP",
+    "publication_date": "2021-06-12",
+    "purpose": "two exploratory 400m viewsheds only",
+    "resolution_m": 1,
+    "retrieved_utc": "2026-09-26T03:42:41.469719+00:00",
+    "sha256": "e7e4448bf93f1e28e392fe6a8822eb3ec48060732ffa732736366c85d6d867ac",
+    "title": "USGS 1 Meter 13 x31y428 CO_WestCentral_2019_A19",
+    "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/1m/Projects/CO_WestCentral_2019_A19/TIFF/USGS_1M_13_x31y428_CO_WestCentral_2019_A19.tif",
+    "vertical_datum": "verify product metadata",
+    "vertical_units": "m; verify source info"
+  },
+  "fine_dem_catalog.json": {
+    "bytes": 23501,
+    "elapsed_since_fetcher_start_s": 15.069749626999965,
+    "provider": "USGS TNM",
+    "purpose": "availability inventory only; not all products selected",
+    "retrieved_utc": "2026-09-26T03:33:13.206866+00:00",
+    "sha256": "78c1f953752c9b1909e334578a05c11af0f52e39f5531fb3398281becb8d01cf",
+    "url": "https://tnmaccess.nationalmap.gov/api/v1/products?datasets=Digital+Elevation+Model+%28DEM%29+1+meter&bbox=-107.20263106592638%2C38.58213754386353%2C-107.0376729144239%2C38.71150093219924&max=100"
+  },
+  "herb.tif": {
+    "acquisition_date": "annual Landsat composite; exact acquisition dates mixed/unknown",
+    "bytes": 247954,
+    "crs": "EPSG:32613 requested; source EPSG:5070",
+    "elapsed_since_fetcher_start_s": 14.499442114999965,
+    "license": "USGS public-domain; WCS access constraints NONE",
+    "provider": "USGS EROS RCMAP",
+    "resolution_m": 30,
+    "retrieved_utc": "2026-09-26T03:33:12.636558+00:00",
+    "sha256": "30ddfde006bab70ad93ecf192ff079b84e248ec7c509104c8b2e1886faa5cf27",
+    "units": "percent areal cover, not optical transmission",
+    "url": "https://dmsdata.cr.usgs.gov/geoserver/mrlc_herb_westernconus_year_data/wcs?service=WCS&version=1.0.0&request=GetCoverage&coverage=mrlc_herb_westernconus_year_data%3Aherb_westernconus_year_data&crs=EPSG%3A32613&response_crs=EPSG%3A32613&bbox=308480.0%2C4272700.0%2C322520.0%2C4286740.0&resx=30&resy=30&format=GeoTIFF&time=2023-01-01T00%3A00%3A00Z&interpolation=nearest+neighbor",
+    "vertical_reference": "not applicable",
+    "year": 2023
+  },
+  "herb_capabilities.xml": {
+    "bytes": 3900,
+    "elapsed_since_fetcher_start_s": 11.745029450999937,
+    "provider": "USGS EROS",
+    "retrieved_utc": "2026-09-26T03:33:09.882145+00:00",
+    "sha256": "e2b3cdb055f639aa8055d3ecc30c9d6442fc878773da265e6acc44bfcaeaefd4",
+    "url": "https://dmsdata.cr.usgs.gov/geoserver/mrlc_herb_westernconus_year_data/wcs?service=WCS&version=1.0.0&request=GetCapabilities"
+  },
+  "herb_description.xml": {
+    "bytes": 5604,
+    "elapsed_since_fetcher_start_s": 11.9601978339997,
+    "provider": "USGS EROS",
+    "retrieved_utc": "2026-09-26T03:33:10.097314+00:00",
+    "sha256": "f3c6789a1fc352ed53c4cb42f01eefd4a26e2266bf7bda8cbc718e087f469161",
+    "url": "https://dmsdata.cr.usgs.gov/geoserver/mrlc_herb_westernconus_year_data/wcs?service=WCS&version=1.0.0&request=DescribeCoverage&coverage=mrlc_herb_westernconus_year_data%3Aherb_westernconus_year_data"
+  },
+  "shrub.tif": {
+    "acquisition_date": "annual Landsat composite; exact acquisition dates mixed/unknown",
+    "bytes": 247954,
+    "crs": "EPSG:32613 requested; source EPSG:5070",
+    "elapsed_since_fetcher_start_s": 11.499478347999684,
+    "license": "USGS public-domain; WCS access constraints NONE",
+    "provider": "USGS EROS RCMAP",
+    "resolution_m": 30,
+    "retrieved_utc": "2026-09-26T03:33:09.636595+00:00",
+    "sha256": "44b997788cec62b77273cdf0a5bd2e8de74a8bd3877c8103a13c0d88e30a97b4",
+    "units": "percent areal cover, not optical transmission",
+    "url": "https://dmsdata.cr.usgs.gov/geoserver/mrlc_shrub_westernconus_year_data/wcs?service=WCS&version=1.0.0&request=GetCoverage&coverage=mrlc_shrub_westernconus_year_data%3Ashrub_westernconus_year_data&crs=EPSG%3A32613&response_crs=EPSG%3A32613&bbox=308480.0%2C4272700.0%2C322520.0%2C4286740.0&resx=30&resy=30&format=GeoTIFF&time=2023-01-01T00%3A00%3A00Z&interpolation=nearest+neighbor",
+    "vertical_reference": "not applicable",
+    "year": 2023
+  },
+  "shrub_capabilities.xml": {
+    "bytes": 3910,
+    "elapsed_since_fetcher_start_s": 8.790098462999595,
+    "provider": "USGS EROS",
+    "retrieved_utc": "2026-09-26T03:33:06.927215+00:00",
+    "sha256": "d9969b2e029714e79200968223d3d0a8d3a4a8b345b1f2e122f343478d8dd49e",
+    "url": "https://dmsdata.cr.usgs.gov/geoserver/mrlc_shrub_westernconus_year_data/wcs?service=WCS&version=1.0.0&request=GetCapabilities"
+  },
+  "shrub_description.xml": {
+    "bytes": 5610,
+    "elapsed_since_fetcher_start_s": 9.040358487999583,
+    "provider": "USGS EROS",
+    "retrieved_utc": "2026-09-26T03:33:07.177475+00:00",
+    "sha256": "11c0ba4ae71ce16caae6a720f2ccd2b1f3186362fc9129c57dddc958d9758094",
+    "url": "https://dmsdata.cr.usgs.gov/geoserver/mrlc_shrub_westernconus_year_data/wcs?service=WCS&version=1.0.0&request=DescribeCoverage&coverage=mrlc_shrub_westernconus_year_data%3Ashrub_westernconus_year_data"
+  },
+  "summer.geojson": {
+    "acquisition_date": "unknown; source feature attributes retained",
+    "bytes": 1292996,
+    "crs": "EPSG:4326",
+    "elapsed_since_fetcher_start_s": 4.394633720000002,
+    "license": "CPW as-is terms in cpw_item.json",
+    "provider": "CPW",
+    "resolution": "agency range polygons, not cell-scale occupancy",
+    "retrieved_utc": "2026-09-26T03:33:02.531751+00:00",
+    "sha256": "00fc3239c9a31f3ae864bbf605b85fc729c04194c977086c8e0507ec9844214c",
+    "url": "https://services5.arcgis.com/ttNGmDvKQA7oeDQ3/arcgis/rest/services/CPWSpeciesData/FeatureServer/99/query?f=geojson&where=1%3D1&geometry=308480.0%2C4272700.0%2C322520.0%2C4286740.0&geometryType=esriGeometryEnvelope&inSR=32613&spatialRel=esriSpatialRelIntersects&outFields=%2A&outSR=4326"
+  },
+  "summer_metadata.json": {
+    "bytes": 8998,
+    "elapsed_since_fetcher_start_s": 3.379572883999572,
+    "provider": "CPW",
+    "retrieved_utc": "2026-09-26T03:33:01.516689+00:00",
+    "sha256": "66abd6d333c9df2ff930a22eb8bc212473d642ae8dbf3274e53f44469d908a18",
+    "url": "https://services5.arcgis.com/ttNGmDvKQA7oeDQ3/arcgis/rest/services/CPWSpeciesData/FeatureServer/99?f=json"
+  },
+  "tree.tif": {
+    "acquisition_date": "annual Landsat composite; exact acquisition dates mixed/unknown",
+    "bytes": 247954,
+    "crs": "EPSG:32613 requested; source EPSG:5070",
+    "elapsed_since_fetcher_start_s": 8.431908384999588,
+    "license": "USGS public-domain; WCS access constraints NONE",
+    "provider": "USGS EROS RCMAP",
+    "resolution_m": 30,
+    "retrieved_utc": "2026-09-26T03:33:06.569025+00:00",
+    "sha256": "8bc40c95bec10757aa32f1b7977f1d2d37d0aba72140fba0c275282e07393be1",
+    "units": "percent areal cover, not optical transmission",
+    "url": "https://dmsdata.cr.usgs.gov/geoserver/mrlc_tree_westernconus_year_data/wcs?service=WCS&version=1.0.0&request=GetCoverage&coverage=mrlc_tree_westernconus_year_data%3Atree_westernconus_year_data&crs=EPSG%3A32613&response_crs=EPSG%3A32613&bbox=308480.0%2C4272700.0%2C322520.0%2C4286740.0&resx=30&resy=30&format=GeoTIFF&time=2023-01-01T00%3A00%3A00Z&interpolation=nearest+neighbor",
+    "vertical_reference": "not applicable",
+    "year": 2023
+  },
+  "tree_capabilities.xml": {
+    "bytes": 3900,
+    "elapsed_since_fetcher_start_s": 5.929607229999874,
+    "provider": "USGS EROS",
+    "retrieved_utc": "2026-09-26T03:33:04.066723+00:00",
+    "sha256": "685053d69cd0ce7c7633e0e37b4831f32ad65ebdd361ea6a3e32a10fab0311e2",
+    "url": "https://dmsdata.cr.usgs.gov/geoserver/mrlc_tree_westernconus_year_data/wcs?service=WCS&version=1.0.0&request=GetCapabilities"
+  },
+  "tree_description.xml": {
+    "bytes": 5604,
+    "elapsed_since_fetcher_start_s": 6.144690480000008,
+    "provider": "USGS EROS",
+    "retrieved_utc": "2026-09-26T03:33:04.281807+00:00",
+    "sha256": "a2aee91bdbe83817fbd94d69952529daaa42c08856dabcdbfa7061357b9006b9",
+    "url": "https://dmsdata.cr.usgs.gov/geoserver/mrlc_tree_westernconus_year_data/wcs?service=WCS&version=1.0.0&request=DescribeCoverage&coverage=mrlc_tree_westernconus_year_data%3Atree_westernconus_year_data"
+  },
+  "winter.geojson": {
+    "acquisition_date": "unknown; source feature attributes retained",
+    "bytes": 1011978,
+    "crs": "EPSG:4326",
+    "elapsed_since_fetcher_start_s": 5.5798029609995865,
+    "license": "CPW as-is terms in cpw_item.json",
+    "provider": "CPW",
+    "resolution": "agency range polygons, not cell-scale occupancy",
+    "retrieved_utc": "2026-09-26T03:33:03.716919+00:00",
+    "sha256": "006d0e0f14656dceeded8ec540f26878bfad077bbbc9ec814c5080556568d3fc",
+    "url": "https://services5.arcgis.com/ttNGmDvKQA7oeDQ3/arcgis/rest/services/CPWSpeciesData/FeatureServer/105/query?f=geojson&where=1%3D1&geometry=308480.0%2C4272700.0%2C322520.0%2C4286740.0&geometryType=esriGeometryEnvelope&inSR=32613&spatialRel=esriSpatialRelIntersects&outFields=%2A&outSR=4326"
+  },
+  "winter_metadata.json": {
+    "bytes": 9001,
+    "elapsed_since_fetcher_start_s": 4.770015570999931,
+    "provider": "CPW",
+    "retrieved_utc": "2026-09-26T03:33:02.907132+00:00",
+    "sha256": "78977eca4fc82b4c8112fa0ab756d74f22d400bbf6497d354dab870c6ce6b7bb",
+    "url": "https://services5.arcgis.com/ttNGmDvKQA7oeDQ3/arcgis/rest/services/CPWSpeciesData/FeatureServer/105?f=json"
+  }
+}

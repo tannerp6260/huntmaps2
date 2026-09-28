@@ -1,0 +1,140 @@
+{
+  "access": {
+    "ascent_m_per_hour": [
+      300,
+      600
+    ],
+    "barriers": [],
+    "buffer_m": 10000,
+    "entries": null,
+    "entry_gap_review_m": 50,
+    "extent_polygon": null,
+    "max_final_leg_m": 2000,
+    "max_slope_deg": 30,
+    "offtrail_allowed": null,
+    "repair_tolerance_m": 5,
+    "routes": null,
+    "walking_kmh": [
+      1.5,
+      3
+    ]
+  },
+  "candidate_count": 24,
+  "curvature": 0.8571428571428571,
+  "data": {
+    "approach_evidence": null,
+    "dem": {
+      "acquisition_date": "not applicable",
+      "license": "project fixture",
+      "path": "runs/transfer_fixture_inputs/dem.tif",
+      "provider": "synthetic offline fixture",
+      "sha256": "c659582a7a004e198905fe3fd9b35b33e47fd8f37242a37361733ed4b5cf64f3",
+      "vertical_datum": "arbitrary synthetic zero",
+      "vertical_units": "m"
+    },
+    "herb": {
+      "acquisition_date": "not applicable",
+      "license": "project fixture",
+      "path": "runs/transfer_fixture_inputs/herb.tif",
+      "provider": "synthetic offline fixture",
+      "sha256": "7d22b57b586d5d1a63c857a14209708f268c2d963b59298da95894b5b03fe204",
+      "vertical_datum": "arbitrary synthetic zero",
+      "vertical_units": "m"
+    },
+    "imagery": [],
+    "shrub": {
+      "acquisition_date": "not applicable",
+      "license": "project fixture",
+      "path": "runs/transfer_fixture_inputs/shrub.tif",
+      "provider": "synthetic offline fixture",
+      "sha256": "6f58a64a3c895a007f95d68e49f2c66eceeb4c4ae8d0ff6b5823c33d93440f6e",
+      "vertical_datum": "arbitrary synthetic zero",
+      "vertical_units": "m"
+    },
+    "summer": {
+      "acquisition_date": "not applicable",
+      "license": "project fixture",
+      "path": "runs/transfer_fixture_inputs/range.geojson",
+      "provider": "synthetic offline fixture",
+      "sha256": "7feac4fcb3e91634c06635bc442e2397a917fc0555c97219b6f06f7564466798",
+      "vertical_datum": "arbitrary synthetic zero",
+      "vertical_units": "m"
+    },
+    "tree": {
+      "acquisition_date": "not applicable",
+      "license": "project fixture",
+      "path": "runs/transfer_fixture_inputs/tree.tif",
+      "provider": "synthetic offline fixture",
+      "sha256": "cb4901bf0a6eb30336e16be5a4edcafe874940d9d73bdb6040372ee8da9ffb7c",
+      "vertical_datum": "arbitrary synthetic zero",
+      "vertical_units": "m"
+    },
+    "winter": {
+      "acquisition_date": "not applicable",
+      "license": "project fixture",
+      "path": "runs/transfer_fixture_inputs/range.geojson",
+      "provider": "synthetic offline fixture",
+      "sha256": "7feac4fcb3e91634c06635bc442e2397a917fc0555c97219b6f06f7564466798",
+      "vertical_datum": "arbitrary synthetic zero",
+      "vertical_units": "m"
+    }
+  },
+  "disk_bytes": 800000000,
+  "download_bytes": 250000000,
+  "epsg": 32612,
+  "eye_m": 1.7,
+  "frozen_control": "docs/glassing/transfer/FROZEN_CONTROL.json",
+  "hiking_preferences": {
+    "daily_gain_ft": [
+      2000,
+      3500
+    ],
+    "daily_miles": [
+      5,
+      8
+    ]
+  },
+  "input_kind": "synthetic_fixture",
+  "manual_points": "runs/transfer_fixture_inputs/manual.geojson",
+  "manual_provenance": {
+    "independent_human_selection": false,
+    "selector": "synthetic generator"
+  },
+  "max_cells": 3000000,
+  "memory_mb": 1536,
+  "model_lock": "configs/transfer_model.lock.json",
+  "observation_minutes": 30,
+  "observer_exclusions": [],
+  "observer_polygon": "runs/transfer_fixture_inputs/observer.geojson",
+  "radius_m": 500,
+  "refinement": {
+    "max_centres_per_group": 2,
+    "max_points": 60,
+    "radius_m": 100,
+    "spacing_m": 50
+  },
+  "resolution_m": 10,
+  "review": {
+    "max_automated": 5,
+    "recovery_distance_m": 200
+  },
+  "runtime_s": 900,
+  "season": {
+    "hunt": "Colorado GMU54 second rifle 2026",
+    "legal_dates": [
+      "2026-10-24",
+      "2026-11-01"
+    ],
+    "light": "morning",
+    "light_label": "hypothetical inherited angles, not date-specific sun",
+    "personal_dates": null,
+    "winter_mix": 0.5
+  },
+  "seed": 5403,
+  "spacing_m": 60,
+  "target_exclusions": [],
+  "target_limit": null,
+  "target_m": 0.8,
+  "target_policy": "Terrain observation support only; permissions and follow-up actionability unknown",
+  "work": "runs/transfer_fixture"
+}

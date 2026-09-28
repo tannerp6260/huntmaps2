@@ -1,0 +1,13 @@
+{
+ "work":"runs/scouting","inputs":"data/scouting","baseline_config":"configs/gmu54.json",
+ "comparison_config":"configs/comparison.json","frozen_control":"docs/glassing/scouting/FROZEN_CONTROL.json",
+ "candidates":["C0068","C0095","C0049","C0090","C0064"],"random_control":"C0025",
+ "hunt":{"unit":54,"species":"mule deer","season":"second rifle","year":2026,"legal_dates":["2026-10-24","2026-11-01"],"personal_dates":null,"camp":null,"parking":null},
+ "preferences":{"daily_miles":[5,8],"daily_gain_ft":[2000,3500],"remote_public_land":true,"lower_pressure":"preference, no measured pressure prediction","mature_buck":"preference, no age/antler forecast"},
+ "optics":{"binoculars":"SIG Zulu6 16x50","optional_spotter":"Leica Televid 77 20-60x","calibrated_detection":false},
+ "attention":{"budget_minutes":30,"rate_km2_min":0.02,"overhead_minutes":0.5,"width_deg":30,"band_m":500,"winter_mix":0.5,"light":"hypothetical old morning, not a dated forecast"},
+ "access_extents":[[300000,4260000,330000,4290000],[295000,4250000,345000,4300000]],
+ "offtrail":{"resolution_m":20,"max_slope_deg":30,"max_connector_m":3500,"walking_kmh":[1.5,3],"ascent_m_per_hour":[300,600]},
+ "topology":{"same_route_endpoint_tolerance_m":5,"shared_vertex_tolerance_m":0.01},
+ "download_bytes":180000000,"disk_bytes":800000000,"memory_mb":2048,"runtime_s":900
+}

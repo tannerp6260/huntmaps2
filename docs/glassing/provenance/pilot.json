@@ -1,0 +1,33 @@
+{
+  "area_m2": 64000000.0,
+  "boundary_sha256": "187c49e9ad7e3c821769c8080fa6ab476fdbdd87684226a3283b26616527a03a",
+  "epsg": 32613,
+  "geometry": {
+    "coordinates": [
+      [
+        [
+          311500.0,
+          4283720.0
+        ],
+        [
+          319500.0,
+          4283720.0
+        ],
+        [
+          319500.0,
+          4275720.0
+        ],
+        [
+          311500.0,
+          4275720.0
+        ],
+        [
+          311500.0,
+          4283720.0
+        ]
+      ]
+    ],
+    "type": "Polygon"
+  },
+  "selection": "GMU 54 dissolved projected centroid rounded to 10 m; 8 km square intersected with unit"
+}

@@ -1,0 +1,112 @@
+{
+  "attention": {
+    "band_m": 500,
+    "budget_minutes": 30,
+    "light": "hypothetical old morning, not a dated forecast",
+    "overhead_minutes": 0.5,
+    "rate_km2_min": 0.02,
+    "width_deg": 30,
+    "winter_mix": 0.5
+  },
+  "comparison": {
+    "access_csv": null,
+    "actionable_target_geojson": null,
+    "baseline_config": "configs/gmu54.json",
+    "canopy_heights_m": [
+      5,
+      15,
+      25
+    ],
+    "canopy_threshold": 0.2,
+    "dense_side_m": 2000,
+    "dense_spacing_m": 100,
+    "disk_bytes": 1500000000,
+    "distance_curves": {
+      "classify": [
+        1,
+        0.75,
+        0.3,
+        0.05
+      ],
+      "detect": [
+        1,
+        0.95,
+        0.7,
+        0.25
+      ],
+      "judge": [
+        1,
+        0.4,
+        0.1,
+        0
+      ],
+      "knots_m": [
+        0,
+        500,
+        1000,
+        2000
+      ]
+    },
+    "distance_scale": 1,
+    "download_bytes": 300000000,
+    "expert_csv": null,
+    "features": {
+      "distance": true,
+      "foreground": false,
+      "habitat": true,
+      "inspection": true,
+      "intervening": false,
+      "light": true,
+      "perspective": true,
+      "searchability": true
+    },
+    "fine_dem": {
+      "sha256": "e7e4448bf93f1e28e392fe6a8822eb3ec48060732ffa732736366c85d6d867ac",
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/1m/Projects/CO_WestCentral_2019_A19/TIFF/USGS_1M_13_x31y428_CO_WestCentral_2019_A19.tif"
+    },
+    "foreground_radius_m": 30,
+    "foreground_stress_penalty": 0.5,
+    "glare_cone_deg": 25,
+    "glare_strength": 0.5,
+    "habitat_floor": 0.25,
+    "inputs": "data/comparison",
+    "light": "morning",
+    "memory_mb": 2048,
+    "observation_minutes": 30,
+    "perspective_floor": 0.3,
+    "preferences": {
+      "max_gain_m": null,
+      "max_hike_km": null,
+      "pressure_weight": 0,
+      "require_verified_access": false,
+      "roadlessness_weight": 0
+    },
+    "protocol": "docs/glassing/comparison/PROTOCOL.md",
+    "random_replicates": 100,
+    "rays_per_candidate": 32,
+    "runtime_s": 900,
+    "scan_km2_per_minute": 0.02,
+    "season": "summer",
+    "seed": 5402,
+    "source_lock": "configs/comparison_sources.lock.json",
+    "sun_scenarios": {
+      "evening": {
+        "azimuth_deg": 250,
+        "elevation_deg": 15
+      },
+      "morning": {
+        "azimuth_deg": 110,
+        "elevation_deg": 15
+      }
+    },
+    "task": "detect",
+    "vegetation_year": 2023,
+    "work": "runs/comparison"
+  },
+  "implementation": {
+    "glassing/attention.py": "6bf5e40d7875115cc9aa40430ba414f51891746176e31d7202ce2005d0507c59",
+    "glassing/compare.py": "620be7e40a3d1a288605d3806a5f985da5adb51738f537c24a083e1a4e6e8d45",
+    "glassing/comparison_models.py": "e5a39d675123542ecf4240f27b6b6cc90311b2463176e83e05c42557863bb11a",
+    "glassing/core.py": "df1cb85f1fc42223816c88cd86ef45454705af5347c4c8c6be229214e2191962"
+  }
+}

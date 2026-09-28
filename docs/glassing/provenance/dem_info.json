@@ -1,0 +1,140 @@
+{
+  "bands": [
+    {
+      "band": 1,
+      "block": [
+        512,
+        512
+      ],
+      "colorInterpretation": "Gray",
+      "metadata": {
+        "": {
+          "DESCRIPTION": "*",
+          "LAYER_TYPE": "*",
+          "RepresentationType": "*"
+        }
+      },
+      "noDataValue": -999999.0,
+      "overviews": [
+        {
+          "size": [
+            5406,
+            5406
+          ]
+        },
+        {
+          "size": [
+            2703,
+            2703
+          ]
+        },
+        {
+          "size": [
+            1351,
+            1351
+          ]
+        },
+        {
+          "size": [
+            675,
+            675
+          ]
+        },
+        {
+          "size": [
+            337,
+            337
+          ]
+        }
+      ],
+      "type": "Float32"
+    }
+  ],
+  "coordinateSystem": {
+    "dataAxisToSRSAxisMapping": [
+      2,
+      1
+    ],
+    "wkt": "GEOGCRS[\"NAD83\",\n    DATUM[\"North American Datum 1983\",\n        ELLIPSOID[\"GRS 1980\",6378137,298.257222101004,\n            LENGTHUNIT[\"metre\",1]]],\n    PRIMEM[\"Greenwich\",0,\n        ANGLEUNIT[\"degree\",0.0174532925199433]],\n    CS[ellipsoidal,2],\n        AXIS[\"geodetic latitude (Lat)\",north,\n            ORDER[1],\n            ANGLEUNIT[\"degree\",0.0174532925199433]],\n        AXIS[\"geodetic longitude (Lon)\",east,\n            ORDER[2],\n            ANGLEUNIT[\"degree\",0.0174532925199433]],\n    ID[\"EPSG\",4269]]"
+  },
+  "cornerCoordinates": {
+    "center": [
+      -107.5,
+      38.5
+    ],
+    "lowerLeft": [
+      -108.0005556,
+      37.9994444
+    ],
+    "lowerRight": [
+      -106.9994444,
+      37.9994444
+    ],
+    "upperLeft": [
+      -108.0005556,
+      39.0005556
+    ],
+    "upperRight": [
+      -106.9994444,
+      39.0005556
+    ]
+  },
+  "description": "data/gmu54/USGS_13_n39w108_20220331.tif",
+  "driverLongName": "GeoTIFF",
+  "driverShortName": "GTiff",
+  "files": [
+    "data/gmu54/USGS_13_n39w108_20220331.tif"
+  ],
+  "geoTransform": [
+    -108.00055555609346,
+    9.25925926922e-05,
+    0.0,
+    39.00055555659456,
+    0.0,
+    -9.25925927754e-05
+  ],
+  "metadata": {
+    "": {
+      "AREA_OR_POINT": "Area",
+      "BandDefinitionKeyword": "*",
+      "DataType": "*"
+    },
+    "IMAGE_STRUCTURE": {
+      "COMPRESSION": "LZW",
+      "INTERLEAVE": "BAND",
+      "LAYOUT": "COG",
+      "PREDICTOR": "3"
+    }
+  },
+  "size": [
+    10812,
+    10812
+  ],
+  "wgs84Extent": {
+    "coordinates": [
+      [
+        [
+          -108.0005556,
+          39.0005556
+        ],
+        [
+          -108.0005556,
+          37.9994444
+        ],
+        [
+          -106.9994444,
+          37.9994444
+        ],
+        [
+          -106.9994444,
+          39.0005556
+        ],
+        [
+          -108.0005556,
+          39.0005556
+        ]
+      ]
+    ],
+    "type": "Polygon"
+  }
+}

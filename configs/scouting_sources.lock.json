@@ -1,0 +1,463 @@
+{
+  "BLM_CO_GTLF_service.json": {
+    "bytes": 5133,
+    "elapsed_since_fetcher_start_s": 0.6452114990097471,
+    "provider": "BLM Colorado GIS",
+    "retrieved_utc": "2026-09-28T21:26:28.737184+00:00",
+    "sha256": "9e1b889ff1e3827595451deb2ec45480884ef01b593796354164cd8117af913a",
+    "url": "https://gis.blm.gov/coarcgis/rest/services/transportation/BLM_CO_GTLF/MapServer?f=json"
+  },
+  "BLM_CO_Seasonal_Closure_Gates_service.json": {
+    "bytes": 3158,
+    "elapsed_since_fetcher_start_s": 1.8797881130012684,
+    "provider": "BLM Colorado GIS",
+    "retrieved_utc": "2026-09-28T21:26:29.971759+00:00",
+    "sha256": "ba2d282b9d6cf5418e3fcd36ce26478971875555bd5b34eb183d595dd2ecb135",
+    "url": "https://gis.blm.gov/coarcgis/rest/services/transportation/BLM_CO_Seasonal_Closure_Gates/MapServer?f=json"
+  },
+  "BLM_CO_Seasonal_Closures_service.json": {
+    "bytes": 3860,
+    "elapsed_since_fetcher_start_s": 1.4665700570039917,
+    "provider": "BLM Colorado GIS",
+    "retrieved_utc": "2026-09-28T21:26:29.558540+00:00",
+    "sha256": "87f028b32e8e7645400ade7158c1880b2b2cb50d5ef8b239a35bc8308f4112f6",
+    "url": "https://gis.blm.gov/coarcgis/rest/services/recreation/BLM_CO_Seasonal_Closures/MapServer?f=json"
+  },
+  "BLM_Colorado_Surface_Management_Agency_service.json": {
+    "bytes": 4449,
+    "elapsed_since_fetcher_start_s": 1.0045766819966957,
+    "provider": "BLM Colorado GIS",
+    "retrieved_utc": "2026-09-28T21:26:29.096547+00:00",
+    "sha256": "51aa3688bc33682286f93a34ee7322304763fe6c7d61c9297ad839e355119d8f",
+    "url": "https://gis.blm.gov/coarcgis/rest/services/lands/BLM_Colorado_Surface_Management_Agency/MapServer?f=json"
+  },
+  "access_points.geojson": {
+    "acquisition_date": "unknown unless source attributes provide date",
+    "bytes": 17918,
+    "crs": "EPSG:4326",
+    "elapsed_since_fetcher_start_s": 18.223234770994168,
+    "license": "USDA Forest Service",
+    "provider": "USFS/BLM official GIS",
+    "retrieved_utc": "2026-09-28T21:22:52.129737+00:00",
+    "sha256": "7edb94004a905b3c8e5ae96f4d8f0ea06f5e5ce85fb49ceca003a4433ee8cc16",
+    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_RecreationOpportunities_01/MapServer/0/query?f=geojson&where=1%3D1&geometry=295000%2C4250000%2C345000%2C4300000&geometryType=esriGeometryEnvelope&inSR=32613&spatialRel=esriSpatialRelIntersects&outFields=%2A&outSR=4326"
+  },
+  "access_points_meta.json": {
+    "bytes": 205773,
+    "elapsed_since_fetcher_start_s": 17.862309390009614,
+    "provider": "Official agency GIS",
+    "retrieved_utc": "2026-09-28T21:22:51.768813+00:00",
+    "sha256": "7d065613e6d0fb955ece3f0cfe33d5a5883ac5c256fb26642359b94d33190cbb",
+    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_RecreationOpportunities_01/MapServer/0?f=json"
+  },
+  "biggame_archive.pdf": {
+    "bytes": 96660296,
+    "elapsed_since_fetcher_start_s": 9.676523482979974,
+    "provider": "CPW/Colorado State Publications Library",
+    "retrieved_utc": "2026-09-28T21:24:06.779045+00:00",
+    "sha256": "38cf26e1d0cdb930c38a9d18f04bbaced7c72a2573c86613c3ca5a9adb3582b3",
+    "url": "https://spl.cde.state.co.us/artemis/nrserials/nr1431internet/nr14312026internet.pdf"
+  },
+  "biggame_view.html": {
+    "bytes": 24479,
+    "elapsed_since_fetcher_start_s": 0.3507230609830003,
+    "provider": "CPW/Colorado State Publications Library",
+    "retrieved_utc": "2026-09-28T21:23:57.453247+00:00",
+    "sha256": "c79536faad6234b5fab429985489901d66d392575a7e62936646a7cded0e4e16",
+    "url": "https://cpw.widen.net/s/n62qtjdsbw/biggame"
+  },
+  "blm_co_routes.geojson": {
+    "acquisition_date": "unknown unless source attributes provide date",
+    "bytes": 3333567,
+    "crs": "EPSG:4326",
+    "elapsed_since_fetcher_start_s": 1.5056898040056694,
+    "license": "BLM Colorado",
+    "provider": "USFS/BLM official GIS",
+    "retrieved_utc": "2026-09-28T21:27:08.185662+00:00",
+    "sha256": "821138fb748497e74008e62f412dfcd0cc55931ba09ee06b8fbaaf27a12cd7fe",
+    "url": "https://gis.blm.gov/coarcgis/rest/services/transportation/BLM_CO_GTLF/MapServer/5/query?f=geojson&where=1%3D1&geometry=295000%2C4250000%2C345000%2C4300000&geometryType=esriGeometryEnvelope&inSR=32613&spatialRel=esriSpatialRelIntersects&outFields=%2A&outSR=4326"
+  },
+  "blm_co_routes_meta.json": {
+    "bytes": 46846,
+    "elapsed_since_fetcher_start_s": 0.36662997299572453,
+    "provider": "Official agency GIS",
+    "retrieved_utc": "2026-09-28T21:27:07.046603+00:00",
+    "sha256": "f68711e994a97f0fc6f77053697f386c38412aa414f25230a7f4ee59db695446",
+    "url": "https://gis.blm.gov/coarcgis/rest/services/transportation/BLM_CO_GTLF/MapServer/5?f=json"
+  },
+  "blm_gates.geojson": {
+    "acquisition_date": "unknown unless source attributes provide date",
+    "bytes": 42,
+    "crs": "EPSG:4326",
+    "elapsed_since_fetcher_start_s": 6.612593137018848,
+    "license": "BLM Colorado",
+    "provider": "USFS/BLM official GIS",
+    "retrieved_utc": "2026-09-28T21:27:13.292564+00:00",
+    "sha256": "ed778c73ea51338d6576fb5992b189f2b94d9f3d5e199f46c1af520d6b0b3e6c",
+    "url": "https://gis.blm.gov/coarcgis/rest/services/transportation/BLM_CO_Seasonal_Closure_Gates/MapServer/0/query?f=geojson&where=1%3D1&geometry=295000%2C4250000%2C345000%2C4300000&geometryType=esriGeometryEnvelope&inSR=32613&spatialRel=esriSpatialRelIntersects&outFields=%2A&outSR=4326"
+  },
+  "blm_gates_meta.json": {
+    "bytes": 10692,
+    "elapsed_since_fetcher_start_s": 6.127882419998059,
+    "provider": "Official agency GIS",
+    "retrieved_utc": "2026-09-28T21:27:12.807853+00:00",
+    "sha256": "f9395f449e464e73353180072d0607a1be7cd82ea5613d640c3e26ab8cc58178",
+    "url": "https://gis.blm.gov/coarcgis/rest/services/transportation/BLM_CO_Seasonal_Closure_Gates/MapServer/0?f=json"
+  },
+  "blm_seasonal_closures.geojson": {
+    "acquisition_date": "unknown unless source attributes provide date",
+    "bytes": 196168,
+    "crs": "EPSG:4326",
+    "elapsed_since_fetcher_start_s": 5.809603456000332,
+    "license": "BLM Colorado",
+    "provider": "USFS/BLM official GIS",
+    "retrieved_utc": "2026-09-28T21:27:12.489577+00:00",
+    "sha256": "68b484a9f1d9e96c70cefe816dae56785bb15e4aa2ffd952a88ae18bd4db3524",
+    "url": "https://gis.blm.gov/coarcgis/rest/services/recreation/BLM_CO_Seasonal_Closures/MapServer/0/query?f=geojson&where=1%3D1&geometry=295000%2C4250000%2C345000%2C4300000&geometryType=esriGeometryEnvelope&inSR=32613&spatialRel=esriSpatialRelIntersects&outFields=%2A&outSR=4326"
+  },
+  "blm_seasonal_closures_meta.json": {
+    "bytes": 12416,
+    "elapsed_since_fetcher_start_s": 5.008038839005167,
+    "provider": "Official agency GIS",
+    "retrieved_utc": "2026-09-28T21:27:11.688010+00:00",
+    "sha256": "bc175db0252828d002db4afd1aeaf71de16e9dbf9ed5df8a4f9ffd71c5d26a7e",
+    "url": "https://gis.blm.gov/coarcgis/rest/services/recreation/BLM_CO_Seasonal_Closures/MapServer/0?f=json"
+  },
+  "cdot_local.geojson": {
+    "acquisition_date": "unknown unless source attributes provide date",
+    "bytes": 331409,
+    "crs": "EPSG:4326",
+    "elapsed_since_fetcher_start_s": 0.9904815229820088,
+    "license": "not stated by layer",
+    "provider": "Colorado Department of Transportation",
+    "retrieved_utc": "2026-09-28T21:36:25.229739+00:00",
+    "sha256": "b623e191306fef155625dc14f64fd3ed51cf2cc6e385ecac0878ba48b7114de7",
+    "url": "https://dtdapps.codot.gov/server/rest/services/Webapps/open_data_sde/FeatureServer/14/query?f=geojson&where=1%3D1&geometry=300000%2C4260000%2C330000%2C4290000&geometryType=esriGeometryEnvelope&inSR=32613&spatialRel=esriSpatialRelIntersects&outFields=%2A&outSR=4326"
+  },
+  "cdot_local_meta.json": {
+    "bytes": 12858,
+    "elapsed_since_fetcher_start_s": 0.32168943199212663,
+    "provider": "Colorado Department of Transportation",
+    "retrieved_utc": "2026-09-28T21:36:24.560947+00:00",
+    "sha256": "db48fa0b64a140c3f804d20cdd4bdf9a07457b5a0859aa1ccdcfbbc937bb082f",
+    "url": "https://dtdapps.codot.gov/server/rest/services/Webapps/open_data_sde/FeatureServer/14?f=json"
+  },
+  "cdot_routes.geojson": {
+    "acquisition_date": "unknown unless source attributes provide date",
+    "bytes": 293863,
+    "crs": "EPSG:4326",
+    "elapsed_since_fetcher_start_s": 2.5487701559904963,
+    "license": "not stated by layer",
+    "provider": "USFS/BLM official GIS",
+    "retrieved_utc": "2026-09-28T21:35:41.617419+00:00",
+    "sha256": "a9d4f13ae56adecbad9ff5e67c96b546bdef27e589bff3bd1947b400b1aeceae",
+    "url": "https://services.arcgis.com/yzB9WM8W0BO3Ql7d/arcgis/rest/services/Routes_gdb/FeatureServer/0/query?f=geojson&where=1%3D1&geometry=300000%2C4260000%2C330000%2C4290000&geometryType=esriGeometryEnvelope&inSR=32613&spatialRel=esriSpatialRelIntersects&outFields=%2A&outSR=4326"
+  },
+  "cdot_routes_meta.json": {
+    "bytes": 7799,
+    "elapsed_since_fetcher_start_s": 0.7075019529729616,
+    "provider": "Official agency GIS",
+    "retrieved_utc": "2026-09-28T21:35:39.776150+00:00",
+    "sha256": "b2a7771f745ea27231c66a899e2cd08eace3f08d11086e54c657100ef9eef3e4",
+    "url": "https://services.arcgis.com/yzB9WM8W0BO3Ql7d/arcgis/rest/services/Routes_gdb/FeatureServer/0?f=json"
+  },
+  "cdot_service.json": {
+    "bytes": 3087,
+    "elapsed_since_fetcher_start_s": 0.3981097719806712,
+    "provider": "Colorado Department of Transportation",
+    "retrieved_utc": "2026-09-28T21:35:39.466759+00:00",
+    "sha256": "016dcb4ca4dfb67c9e4668f92929ef7b65a80a5ee0fa8400336da8233cb20805",
+    "url": "https://services.arcgis.com/yzB9WM8W0BO3Ql7d/arcgis/rest/services/Routes_gdb/FeatureServer?f=json"
+  },
+  "closed_roads.geojson": {
+    "acquisition_date": "unknown unless source attributes provide date",
+    "bytes": 630696,
+    "crs": "EPSG:4326",
+    "elapsed_since_fetcher_start_s": 10.397078748996137,
+    "license": "not stated by layer",
+    "provider": "USFS/BLM official GIS",
+    "retrieved_utc": "2026-09-28T21:22:44.303583+00:00",
+    "sha256": "e095c1af077d9c879ff3bcbf2e3958efcddc9a071d12c40aabe1f0612f7df054",
+    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_RoadBasic_01/MapServer/1/query?f=geojson&where=1%3D1&geometry=295000%2C4250000%2C345000%2C4300000&geometryType=esriGeometryEnvelope&inSR=32613&spatialRel=esriSpatialRelIntersects&outFields=%2A&outSR=4326"
+  },
+  "closed_roads_meta.json": {
+    "bytes": 8491,
+    "elapsed_since_fetcher_start_s": 8.800814196991269,
+    "provider": "Official agency GIS",
+    "retrieved_utc": "2026-09-28T21:22:42.707317+00:00",
+    "sha256": "a6022ba404a1046efabfd1e0882ad374effd533566a42744976c20923c2c9223",
+    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_RoadBasic_01/MapServer/1?f=json"
+  },
+  "flowlines.geojson": {
+    "acquisition_date": "unknown unless source attributes provide date",
+    "bytes": 519800,
+    "crs": "EPSG:4326",
+    "elapsed_since_fetcher_start_s": 3.9340292869892437,
+    "license": "U.S. Geological Survey",
+    "provider": "USGS National Map NHD",
+    "retrieved_utc": "2026-09-28T21:44:49.326608+00:00",
+    "sha256": "c127a11371892cc5168ae19b6466a992b9d0518595c132a3b1029028b00eaef2",
+    "url": "https://hydro.nationalmap.gov/arcgis/rest/services/nhd/MapServer/6/query?f=geojson&where=1%3D1&geometry=314000%2C4273000%2C324000%2C4281000&geometryType=esriGeometryEnvelope&inSR=32613&spatialRel=esriSpatialRelIntersects&outFields=%2A&outSR=4326"
+  },
+  "flowlines_meta.json": {
+    "bytes": 58431,
+    "elapsed_since_fetcher_start_s": 0.2623661129910033,
+    "provider": "USGS National Map NHD",
+    "retrieved_utc": "2026-09-28T21:44:45.654946+00:00",
+    "sha256": "e2bb99377ae583206a7dad2484a9d58abc6d31b2e06d14fe36720c24cd023c9d",
+    "url": "https://hydro.nationalmap.gov/arcgis/rest/services/nhd/MapServer/6?f=json"
+  },
+  "food_order.pdf": {
+    "bytes": 130320,
+    "elapsed_since_fetcher_start_s": 5.004089319991181,
+    "license": "agency public distribution; further terms not stated",
+    "provider": "CPW/USFS official",
+    "purpose": "Season, entry, restrictions and geographic context; dated evidence",
+    "retrieved_utc": "2026-09-28T21:23:04.402848+00:00",
+    "sha256": "0963be8599a5ea420889fa2192cb8d7ee8f376cc59e173e53ce81a65f6a10985",
+    "url": "https://www.fs.usda.gov/sites/nfs/files/r02/gmug/publication/alerts/2022-06-Food%20and%20Refuse%20Storage%20Order.pdf"
+  },
+  "gmug_alerts.html": {
+    "bytes": 251694,
+    "elapsed_since_fetcher_start_s": 3.626123933994677,
+    "license": "agency public distribution; further terms not stated",
+    "provider": "CPW/USFS official",
+    "purpose": "Season, entry, restrictions and geographic context; dated evidence",
+    "retrieved_utc": "2026-09-28T21:23:03.024883+00:00",
+    "sha256": "efa80217231b910868b135b546251157f14f9349af3308df171ead914aaec09b",
+    "url": "https://www.fs.usda.gov/r02/gmug/alerts"
+  },
+  "gold_creek_order.html": {
+    "bytes": 212438,
+    "elapsed_since_fetcher_start_s": 2.357414094993146,
+    "provider": "USFS GMUG",
+    "retrieved_utc": "2026-09-28T21:51:24.350133+00:00",
+    "sha256": "4ae2b4d76466ec10289003158b9cc9234b20918cd5b4a0fa35067065093e6f76",
+    "url": "https://www.fs.usda.gov/r02/gmug/alerts/gold-creek-bridge-closure-order"
+  },
+  "gunnison_swa.html": {
+    "bytes": 197748,
+    "elapsed_since_fetcher_start_s": 4.041929639992304,
+    "license": "agency public distribution; further terms not stated",
+    "provider": "CPW/USFS official",
+    "purpose": "Season, entry, restrictions and geographic context; dated evidence",
+    "retrieved_utc": "2026-09-28T21:23:03.440688+00:00",
+    "sha256": "c76f12f64a6fb86a1090156414b9ef3b17e9bb298e070d2a8f4aaeee6bbdd6c5",
+    "url": "https://cpw.state.co.us/state-wildlife-areas/gunnison-swa"
+  },
+  "gunnison_swa.pdf": {
+    "bytes": 4186058,
+    "elapsed_since_fetcher_start_s": 0.9163264239905402,
+    "license": "agency public distribution; further terms not stated",
+    "provider": "CPW/USFS official",
+    "purpose": "Season, entry, restrictions and geographic context; dated evidence",
+    "retrieved_utc": "2026-09-28T21:23:00.315087+00:00",
+    "sha256": "47cb45ba6e3971e7d0847286b7eca5084bb8f2988f0e8bdff6edba096d6d2dfa",
+    "url": "https://cpw.state.co.us/sites/default/files/dam/a3jjqsph26/gunnisonswa_geo.pdf"
+  },
+  "hydro_service.json": {
+    "bytes": 12629,
+    "elapsed_since_fetcher_start_s": 0.2985943329986185,
+    "provider": "USGS National Map NHD",
+    "retrieved_utc": "2026-09-28T21:44:39.143258+00:00",
+    "sha256": "b4cfdefc7673bea2186dd71b9235faafd7fc8afeb434675d60ff5edaad25fc12",
+    "url": "https://hydro.nationalmap.gov/arcgis/rest/services/nhd/MapServer?f=json"
+  },
+  "mvum_roads.geojson": {
+    "acquisition_date": "unknown unless source attributes provide date",
+    "bytes": 2895479,
+    "crs": "EPSG:4326",
+    "elapsed_since_fetcher_start_s": 23.045196090009995,
+    "license": "not stated by layer",
+    "provider": "USFS/BLM official GIS",
+    "retrieved_utc": "2026-09-28T21:22:56.951699+00:00",
+    "sha256": "e01bcd39768367480fea829b782e2cdcd1803fccdf44f6a53df639ee8ec27826",
+    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_MVUM_01/MapServer/1/query?f=geojson&where=1%3D1&geometry=295000%2C4250000%2C345000%2C4300000&geometryType=esriGeometryEnvelope&inSR=32613&spatialRel=esriSpatialRelIntersects&outFields=%2A&outSR=4326"
+  },
+  "mvum_roads_meta.json": {
+    "bytes": 14049,
+    "elapsed_since_fetcher_start_s": 18.460897094017128,
+    "provider": "Official agency GIS",
+    "retrieved_utc": "2026-09-28T21:22:52.367400+00:00",
+    "sha256": "cf6949e7b895fef43db0b7b8c3d08cef4ebe3f31bdeeb37f732593550bf61ee0",
+    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_MVUM_01/MapServer/1?f=json"
+  },
+  "mvum_trails.geojson": {
+    "acquisition_date": "unknown unless source attributes provide date",
+    "bytes": 315057,
+    "crs": "EPSG:4326",
+    "elapsed_since_fetcher_start_s": 24.10224415900302,
+    "license": "U.S. Forest Service",
+    "provider": "USFS/BLM official GIS",
+    "retrieved_utc": "2026-09-28T21:22:58.008747+00:00",
+    "sha256": "41fca063171a5356354138a6147c87099dc0cc4ace3f072396f2becf916658c9",
+    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_MVUM_01/MapServer/2/query?f=geojson&where=1%3D1&geometry=295000%2C4250000%2C345000%2C4300000&geometryType=esriGeometryEnvelope&inSR=32613&spatialRel=esriSpatialRelIntersects&outFields=%2A&outSR=4326"
+  },
+  "mvum_trails_meta.json": {
+    "bytes": 15216,
+    "elapsed_since_fetcher_start_s": 23.29645772499498,
+    "provider": "Official agency GIS",
+    "retrieved_utc": "2026-09-28T21:22:57.202960+00:00",
+    "sha256": "dd077d021f634d6867b2a7ae024f81093251a482e94c73fecefcd114e66ca9da",
+    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_MVUM_01/MapServer/2?f=json"
+  },
+  "occupancy_order.pdf": {
+    "bytes": 4517555,
+    "elapsed_since_fetcher_start_s": 6.378502881008899,
+    "license": "agency public distribution; further terms not stated",
+    "provider": "CPW/USFS official",
+    "purpose": "Season, entry, restrictions and geographic context; dated evidence",
+    "retrieved_utc": "2026-09-28T21:23:05.777262+00:00",
+    "sha256": "f0c6c3466e12e9b731e965fdab948c07534fd4162a72b8a7790f9f18bc6a4d3c",
+    "url": "https://www.fs.usda.gov/sites/nfs/files/r02/gmug/publication/alerts/GMUG-2017-08.pdf"
+  },
+  "ownership.geojson": {
+    "acquisition_date": "unknown unless source attributes provide date",
+    "bytes": 4029645,
+    "crs": "EPSG:4326",
+    "elapsed_since_fetcher_start_s": 17.264468701003352,
+    "license": "not stated by layer",
+    "provider": "USFS/BLM official GIS",
+    "retrieved_utc": "2026-09-28T21:22:51.170971+00:00",
+    "sha256": "57464b640073a28abc50d127690a2c48874f31f94d1d2a1b20340d6983da8b12",
+    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_BasicOwnership_01/MapServer/0/query?f=geojson&where=1%3D1&geometry=295000%2C4250000%2C345000%2C4300000&geometryType=esriGeometryEnvelope&inSR=32613&spatialRel=esriSpatialRelIntersects&outFields=%2A&outSR=4326"
+  },
+  "ownership_meta.json": {
+    "bytes": 7549,
+    "elapsed_since_fetcher_start_s": 10.622268481005449,
+    "provider": "Official agency GIS",
+    "retrieved_utc": "2026-09-28T21:22:44.528771+00:00",
+    "sha256": "b9bb311e7547d155df549665c27e4f99f462de59401f8978710b98c03ed621fa",
+    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_BasicOwnership_01/MapServer/0?f=json"
+  },
+  "rec_sites.geojson": {
+    "acquisition_date": "unknown unless source attributes provide date",
+    "bytes": 41591,
+    "crs": "EPSG:4326",
+    "elapsed_since_fetcher_start_s": 24.90264355301042,
+    "license": "not stated by layer",
+    "provider": "USFS/BLM official GIS",
+    "retrieved_utc": "2026-09-28T21:22:58.809147+00:00",
+    "sha256": "fbb59a2393938ab15eb5e55bc1d4e60ba758775b546eafe87e33d02285f619fc",
+    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_RecInfraRecreationSites_02/MapServer/0/query?f=geojson&where=1%3D1&geometry=295000%2C4250000%2C345000%2C4300000&geometryType=esriGeometryEnvelope&inSR=32613&spatialRel=esriSpatialRelIntersects&outFields=%2A&outSR=4326"
+  },
+  "rec_sites_meta.json": {
+    "bytes": 108250,
+    "elapsed_since_fetcher_start_s": 24.571781133010518,
+    "provider": "Official agency GIS",
+    "retrieved_utc": "2026-09-28T21:22:58.478284+00:00",
+    "sha256": "c6609d1933114882544db8685fcba21711d656dfff2be3fae85d30c659491ea7",
+    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_RecInfraRecreationSites_02/MapServer/0?f=json"
+  },
+  "rec_subsites_meta.json": {
+    "bytes": 110688,
+    "elapsed_since_fetcher_start_s": 25.36100965901278,
+    "provider": "Official agency GIS",
+    "retrieved_utc": "2026-09-28T21:22:59.267512+00:00",
+    "sha256": "777c06b38693b7bc78446f4db447c46e925c2aedaeb70ecb4dce3d113b1a7c68",
+    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_RecInfraRecreationSites_02/MapServer/1?f=json"
+  },
+  "roads.geojson": {
+    "acquisition_date": "unknown unless source attributes provide date",
+    "bytes": 2682641,
+    "crs": "EPSG:4326",
+    "elapsed_since_fetcher_start_s": 8.558059092989424,
+    "license": "not stated by layer",
+    "provider": "USFS/BLM official GIS",
+    "retrieved_utc": "2026-09-28T21:22:42.464562+00:00",
+    "sha256": "1c73f169ccb967d4e027f8626a0af549861d12b210be522ba89f535b8ce392b4",
+    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_RoadBasic_01/MapServer/0/query?f=geojson&where=1%3D1&geometry=295000%2C4250000%2C345000%2C4300000&geometryType=esriGeometryEnvelope&inSR=32613&spatialRel=esriSpatialRelIntersects&outFields=%2A&outSR=4326"
+  },
+  "roads_meta.json": {
+    "bytes": 12286,
+    "elapsed_since_fetcher_start_s": 4.756473134009866,
+    "provider": "Official agency GIS",
+    "retrieved_utc": "2026-09-28T21:22:38.662976+00:00",
+    "sha256": "bdea0c7fd0d65a29e89a9e5d308783b40db1f481f44c03ddda386edfc3ad4ae9",
+    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_RoadBasic_01/MapServer/0?f=json"
+  },
+  "surface_management.geojson": {
+    "acquisition_date": "unknown unless source attributes provide date",
+    "bytes": 6054007,
+    "crs": "EPSG:4326",
+    "elapsed_since_fetcher_start_s": 4.456326881016139,
+    "license": "BLM, Colorado",
+    "provider": "USFS/BLM official GIS",
+    "retrieved_utc": "2026-09-28T21:27:11.136298+00:00",
+    "sha256": "0c37aff5f1e969a9be0eef57f5d47d9a47e351d2deac9beddbb19e6dba37239a",
+    "url": "https://gis.blm.gov/coarcgis/rest/services/lands/BLM_Colorado_Surface_Management_Agency/MapServer/1/query?f=geojson&where=1%3D1&geometry=295000%2C4250000%2C345000%2C4300000&geometryType=esriGeometryEnvelope&inSR=32613&spatialRel=esriSpatialRelIntersects&outFields=%2A&outSR=4326"
+  },
+  "surface_management_meta.json": {
+    "bytes": 12740,
+    "elapsed_since_fetcher_start_s": 1.9727943250036333,
+    "provider": "Official agency GIS",
+    "retrieved_utc": "2026-09-28T21:27:08.652765+00:00",
+    "sha256": "b5e683ca942acac89ea55496a23db8e1ff2eb96a1ce7336100858e9c1517971e",
+    "url": "https://gis.blm.gov/coarcgis/rest/services/lands/BLM_Colorado_Surface_Management_Agency/MapServer/1?f=json"
+  },
+  "trails.geojson": {
+    "acquisition_date": "unknown unless source attributes provide date",
+    "bytes": 2165082,
+    "crs": "EPSG:4326",
+    "elapsed_since_fetcher_start_s": 4.464411647000816,
+    "license": "USDA Forest Service",
+    "provider": "USFS/BLM official GIS",
+    "retrieved_utc": "2026-09-28T21:22:38.370915+00:00",
+    "sha256": "7caa8485c8387c122bdc8747f8e30b8c049f0876f9360d68b18368d84acc3e39",
+    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_TrailNFSPublish_01/MapServer/0/query?f=geojson&where=1%3D1&geometry=295000%2C4250000%2C345000%2C4300000&geometryType=esriGeometryEnvelope&inSR=32613&spatialRel=esriSpatialRelIntersects&outFields=%2A&outSR=4326"
+  },
+  "trails_meta.json": {
+    "bytes": 19244,
+    "elapsed_since_fetcher_start_s": 0.2870921239955351,
+    "provider": "Official agency GIS",
+    "retrieved_utc": "2026-09-28T21:22:34.193596+00:00",
+    "sha256": "07ca0aa0ef2bbee2ccaa075a84ae748d006100c0ee4a7e9cbb97ce1d590b6962",
+    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_TrailNFSPublish_01/MapServer/0?f=json"
+  },
+  "unit_topo.png": {
+    "acquisition_date": "mixed map vintages, unspecified",
+    "bytes": 7589118,
+    "elapsed_since_fetcher_start_s": 5.2633503139950335,
+    "provider": "USGS National Map topographic basemap",
+    "purpose": "Named geographic context, not access rights",
+    "retrieved_utc": "2026-09-28T21:28:48.539775+00:00",
+    "sha256": "45fa5858e74599fa6368045145d549b112cb9771d67cf9e49b491a231935db09",
+    "url": "https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/export?f=image&bbox=285481.9441851459%2C4255303.198535261%2C342450.7645127388%2C4307323.203922415&bboxSR=32613&imageSR=32613&size=1800%2C1800&format=png32&transparent=false"
+  },
+  "unit_topo_extent.json": {
+    "bytes": 365,
+    "elapsed_since_fetcher_start_s": 4.245456805016147,
+    "provider": "USGS National Map",
+    "purpose": "Actual image extent to prevent aspect-ratio registration error",
+    "retrieved_utc": "2026-09-28T21:42:45.285381+00:00",
+    "sha256": "7a9c6ec49373b9bf8e6bd38d8580cae2c081ac3065ad5563c4c44f6c8190daea",
+    "url": "https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/export?f=json&bbox=285481.9441851459%2C4255303.198535261%2C342450.7645127388%2C4307323.203922415&bboxSR=32613&imageSR=32613&size=1800%2C1800&format=png32&transparent=false"
+  },
+  "waterbodies.geojson": {
+    "acquisition_date": "unknown unless source attributes provide date",
+    "bytes": 2937,
+    "crs": "EPSG:4326",
+    "elapsed_since_fetcher_start_s": 5.6755684849922545,
+    "license": "U.S. Geological Survey",
+    "provider": "USGS National Map NHD",
+    "retrieved_utc": "2026-09-28T21:44:51.068146+00:00",
+    "sha256": "57de442c610ff8860a39ef15157fa969b91e6b1ea85f31572417b299d44c7348",
+    "url": "https://hydro.nationalmap.gov/arcgis/rest/services/nhd/MapServer/12/query?f=geojson&where=1%3D1&geometry=314000%2C4273000%2C324000%2C4281000&geometryType=esriGeometryEnvelope&inSR=32613&spatialRel=esriSpatialRelIntersects&outFields=%2A&outSR=4326"
+  },
+  "waterbodies_meta.json": {
+    "bytes": 23556,
+    "elapsed_since_fetcher_start_s": 4.11449296399951,
+    "provider": "USGS National Map NHD",
+    "retrieved_utc": "2026-09-28T21:44:49.507071+00:00",
+    "sha256": "be047656b794587948b60e44ec3fe9507c2a46cd5ab93f24cffc3461173195a7",
+    "url": "https://hydro.nationalmap.gov/arcgis/rest/services/nhd/MapServer/12?f=json"
+  },
+  "west_elk_order.html": {
+    "bytes": 209211,
+    "elapsed_since_fetcher_start_s": 4.767777353001293,
+    "provider": "USFS GMUG",
+    "retrieved_utc": "2026-09-28T21:51:26.760496+00:00",
+    "sha256": "2cce8f92eec3cd39e2424149ac76fcaf4ea46fc417b5db906a571f12bd81076e",
+    "url": "https://www.fs.usda.gov/r02/gmug/alerts/west-elk-wilderness-area-occupancy-use"
+  }
+}

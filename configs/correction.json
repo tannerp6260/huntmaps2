@@ -1,0 +1,9 @@
+{
+ "comparison_config": "configs/comparison.json", "work": "runs/correction", "inputs": "data/correction",
+ "frozen_control": "docs/glassing/correction/FROZEN_CONTROL.json", "protocol": "docs/glassing/correction/PROTOCOL.md",
+ "budgets_minutes": [15,30,60], "patch_width_deg": 30, "band_width_m": 500,
+ "scan_km2_per_minute": 0.02, "patch_overhead_minutes": 0.5, "time_quantum_minutes": 0.25,
+ "winter_mixtures": [0,0.25,0.5,0.75,1], "hunt_dates": null,
+ "download_bytes": 75000000, "disk_bytes": 600000000, "memory_mb": 2048, "runtime_s": 900,
+ "access_bounds_utm": [300000,4260000,330000,4290000], "seed": 5426
+}

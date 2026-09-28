@@ -1,0 +1,93 @@
+{
+  "access": {
+    "ascent_m_per_hour": [
+      300,
+      600
+    ],
+    "barriers": [],
+    "buffer_m": 10000,
+    "entries": null,
+    "entry_gap_review_m": 50,
+    "extent_polygon": null,
+    "max_final_leg_m": 2000,
+    "max_slope_deg": 30,
+    "offtrail_allowed": null,
+    "repair_tolerance_m": 5,
+    "routes": null,
+    "walking_kmh": [
+      1.5,
+      3
+    ]
+  },
+  "candidate_count": 150,
+  "curvature": 0.8571428571428571,
+  "data": {
+    "approach_evidence": null,
+    "dem": null,
+    "herb": null,
+    "imagery": [],
+    "shrub": null,
+    "summer": null,
+    "tree": null,
+    "winter": null
+  },
+  "disk_bytes": 800000000,
+  "download_bytes": 250000000,
+  "epsg": 32613,
+  "eye_m": 1.7,
+  "frozen_control": "docs/glassing/transfer/FROZEN_CONTROL.json",
+  "hiking_preferences": {
+    "daily_gain_ft": [
+      2000,
+      3500
+    ],
+    "daily_miles": [
+      5,
+      8
+    ]
+  },
+  "input_kind": "hunter",
+  "manual_points": "inputs/hunter/manual_points.gpx",
+  "manual_provenance": {
+    "prior_model_exposure": "has reviewed earlier pilot; new-area selection independence not yet attested",
+    "selection_date": "unknown",
+    "selector": "user"
+  },
+  "max_cells": 3000000,
+  "memory_mb": 1536,
+  "model_lock": "configs/transfer_model.lock.json",
+  "observation_minutes": 30,
+  "observer_exclusions": [],
+  "observer_polygon": "inputs/hunter/observer_area.geojson",
+  "radius_m": 2000,
+  "refinement": {
+    "max_centres_per_group": 2,
+    "max_points": 128,
+    "radius_m": 150,
+    "spacing_m": 50
+  },
+  "resolution_m": 10,
+  "review": {
+    "max_automated": 5,
+    "recovery_distance_m": 200
+  },
+  "runtime_s": 900,
+  "season": {
+    "hunt": "Colorado GMU54 second rifle 2026",
+    "legal_dates": [
+      "2026-10-24",
+      "2026-11-01"
+    ],
+    "light": "morning",
+    "light_label": "hypothetical inherited angles, not date-specific sun",
+    "personal_dates": null,
+    "winter_mix": 0.5
+  },
+  "seed": 5403,
+  "spacing_m": 150,
+  "target_exclusions": [],
+  "target_limit": null,
+  "target_m": 0.8,
+  "target_policy": "Terrain observation support only; permissions and follow-up actionability unknown",
+  "work": "runs/hunter_transfer"
+}

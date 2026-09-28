@@ -1,0 +1,10 @@
+{
+  "mode": "synthetic", "work": "runs/synthetic", "epsg": 32613,
+  "resolution_m": 10, "candidate_count": 150, "spacing_m": 150,
+  "radii_m": [1000, 2000, 3000], "baseline_radius_m": 2000,
+  "eye_m": 1.7, "target_m": 0.8, "curvature": 0.8571428571428571,
+  "vertical_units": "m", "vertical_datum": "synthetic arbitrary zero",
+  "download_bytes": 2000000000, "disk_bytes": 4000000000,
+  "memory_mb": 2048, "runtime_s": 900, "max_cells": 3000000,
+  "seed": 54, "manual_points": []
+}

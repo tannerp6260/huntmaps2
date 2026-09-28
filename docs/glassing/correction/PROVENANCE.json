@@ -1,0 +1,528 @@
+{
+  "C0025_naip.tif": {
+    "acquisition_dates": [
+      "2019-09-14",
+      "2019-09-14"
+    ],
+    "bytes": 1230407,
+    "crs": "EPSG:32613",
+    "elapsed_since_fetcher_start_s": 10.563905408998835,
+    "export_resolution_m": 1,
+    "license": "Public domain USDA/USGS; service terms retained",
+    "object_ids": [
+      29493,
+      29498
+    ],
+    "provider": "USGS/USDA NAIP",
+    "purpose": "Review imagery only, not independent adjudication",
+    "retrieved_utc": "2026-09-26T13:01:23.652386+00:00",
+    "sha256": "8dd5599fad6b6c84daf09abdc24a2434c56fb8c5b52e51b2ab5b9f1998b4989c",
+    "url": "https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPImagery/ImageServer/exportImage?f=image&bbox=314775.0%2C4279035.0%2C315375.0%2C4279635.0&bboxSR=32613&imageSR=32613&size=600%2C600&format=tiff&mosaicRule=%7B%22mosaicMethod%22%3A+%22esriMosaicLockRaster%22%2C+%22lockRasterIds%22%3A+%5B29493%2C+29498%5D%7D&renderingRule=%7B%22rasterFunction%22%3A+%22NaturalColor%22%7D",
+    "year": 2019
+  },
+  "C0025_naip_records.json": {
+    "bytes": 4398,
+    "elapsed_since_fetcher_start_s": 8.62407109799824,
+    "provider": "USGS/USDA NAIP",
+    "purpose": "source date and image lock for review",
+    "retrieved_utc": "2026-09-26T13:01:21.712551+00:00",
+    "sha256": "e9d371b40b1376172fec1d891260dce70bb9aa949f05ed4d3906c31c453f210f",
+    "url": "https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPImagery/ImageServer/query?f=json&where=Category%3D1&geometry=314775.0%2C4279035.0%2C315375.0%2C4279635.0&geometryType=esriGeometryEnvelope&inSR=32613&spatialRel=esriSpatialRelIntersects&outFields=%2A&returnGeometry=false"
+  },
+  "C0025_wide_naip.tif": {
+    "acquisition_dates": [
+      "2019-09-14",
+      "2019-09-14",
+      "2019-09-14",
+      "2019-09-14"
+    ],
+    "bytes": 3147569,
+    "crs": "EPSG:32613",
+    "elapsed_since_fetcher_start_s": 16.022749670999474,
+    "export_resolution_m": 4.0,
+    "license": "Public domain USDA/USGS; service terms retained",
+    "object_ids": [
+      29493,
+      29498,
+      29523,
+      29528
+    ],
+    "provider": "USGS/USDA NAIP",
+    "purpose": "Review imagery only, not independent adjudication",
+    "retrieved_utc": "2026-09-26T13:04:40.655393+00:00",
+    "sha256": "d061c6627d7a8dca2da4fb8376cd0bbb858de5dafdd3fd2577435c2a3e500d53",
+    "url": "https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPImagery/ImageServer/exportImage?f=image&bbox=313075.0%2C4277335.0%2C317075.0%2C4281335.0&bboxSR=32613&imageSR=32613&size=1000%2C1000&format=tiff&mosaicRule=%7B%22mosaicMethod%22%3A+%22esriMosaicLockRaster%22%2C+%22lockRasterIds%22%3A+%5B29493%2C+29498%2C+29523%2C+29528%5D%7D&renderingRule=%7B%22rasterFunction%22%3A+%22NaturalColor%22%7D",
+    "year": 2019
+  },
+  "C0025_wide_naip_records.json": {
+    "bytes": 6185,
+    "elapsed_since_fetcher_start_s": 14.464187245997891,
+    "provider": "USGS/USDA NAIP",
+    "purpose": "source date and image lock for review",
+    "retrieved_utc": "2026-09-26T13:04:39.096831+00:00",
+    "sha256": "55d00c007e3dc82211f239e157c1236ebb9c47f33f883918e94751677a45118f",
+    "url": "https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPImagery/ImageServer/query?f=json&where=Category%3D1&geometry=313075.0%2C4277335.0%2C317075.0%2C4281335.0&geometryType=esriGeometryEnvelope&inSR=32613&spatialRel=esriSpatialRelIntersects&outFields=%2A&returnGeometry=false"
+  },
+  "C0049_naip.tif": {
+    "acquisition_dates": [
+      "2019-09-14"
+    ],
+    "bytes": 1230407,
+    "crs": "EPSG:32613",
+    "elapsed_since_fetcher_start_s": 12.608874515004572,
+    "export_resolution_m": 1,
+    "license": "Public domain USDA/USGS; service terms retained",
+    "object_ids": [
+      29528
+    ],
+    "provider": "USGS/USDA NAIP",
+    "purpose": "Review imagery only, not independent adjudication",
+    "retrieved_utc": "2026-09-26T13:01:25.697355+00:00",
+    "sha256": "69801d77f1150de1173b0b6ce21540e57a28f5f4e1f1eeaa61a47da207116685",
+    "url": "https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPImagery/ImageServer/exportImage?f=image&bbox=318195.0%2C4276105.0%2C318795.0%2C4276705.0&bboxSR=32613&imageSR=32613&size=600%2C600&format=tiff&mosaicRule=%7B%22mosaicMethod%22%3A+%22esriMosaicLockRaster%22%2C+%22lockRasterIds%22%3A+%5B29528%5D%7D&renderingRule=%7B%22rasterFunction%22%3A+%22NaturalColor%22%7D",
+    "year": 2019
+  },
+  "C0049_naip_records.json": {
+    "bytes": 3500,
+    "elapsed_since_fetcher_start_s": 10.743165867999778,
+    "provider": "USGS/USDA NAIP",
+    "purpose": "source date and image lock for review",
+    "retrieved_utc": "2026-09-26T13:01:23.831645+00:00",
+    "sha256": "dd4e94a859ef33b54010c78ec03938cd871c42696165b4e96638c27a40b5ec15",
+    "url": "https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPImagery/ImageServer/query?f=json&where=Category%3D1&geometry=318195.0%2C4276105.0%2C318795.0%2C4276705.0&geometryType=esriGeometryEnvelope&inSR=32613&spatialRel=esriSpatialRelIntersects&outFields=%2A&returnGeometry=false"
+  },
+  "C0049_wide_naip.tif": {
+    "acquisition_dates": [
+      "2019-09-14",
+      "2019-09-14",
+      "2019-09-14",
+      "2019-09-14"
+    ],
+    "bytes": 3147569,
+    "crs": "EPSG:32613",
+    "elapsed_since_fetcher_start_s": 18.536652654001955,
+    "export_resolution_m": 4.0,
+    "license": "Public domain USDA/USGS; service terms retained",
+    "object_ids": [
+      29497,
+      29498,
+      29527,
+      29528
+    ],
+    "provider": "USGS/USDA NAIP",
+    "purpose": "Review imagery only, not independent adjudication",
+    "retrieved_utc": "2026-09-26T13:04:43.169296+00:00",
+    "sha256": "d99a6419c29d2840c19004b82ad764761bccc468a61cea30e74e24a90f0e7dbc",
+    "url": "https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPImagery/ImageServer/exportImage?f=image&bbox=316495.0%2C4274405.0%2C320495.0%2C4278405.0&bboxSR=32613&imageSR=32613&size=1000%2C1000&format=tiff&mosaicRule=%7B%22mosaicMethod%22%3A+%22esriMosaicLockRaster%22%2C+%22lockRasterIds%22%3A+%5B29497%2C+29498%2C+29527%2C+29528%5D%7D&renderingRule=%7B%22rasterFunction%22%3A+%22NaturalColor%22%7D",
+    "year": 2019
+  },
+  "C0049_wide_naip_records.json": {
+    "bytes": 6159,
+    "elapsed_since_fetcher_start_s": 16.226263780998124,
+    "provider": "USGS/USDA NAIP",
+    "purpose": "source date and image lock for review",
+    "retrieved_utc": "2026-09-26T13:04:40.858907+00:00",
+    "sha256": "25324abdabbe7534fae614dd1fee920edb12161999caf9525c8d2ba8b7266427",
+    "url": "https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPImagery/ImageServer/query?f=json&where=Category%3D1&geometry=316495.0%2C4274405.0%2C320495.0%2C4278405.0&geometryType=esriGeometryEnvelope&inSR=32613&spatialRel=esriSpatialRelIntersects&outFields=%2A&returnGeometry=false"
+  },
+  "C0064_naip.tif": {
+    "acquisition_dates": [
+      "2019-09-14"
+    ],
+    "bytes": 1230407,
+    "crs": "EPSG:32613",
+    "elapsed_since_fetcher_start_s": 2.953118943005393,
+    "export_resolution_m": 1,
+    "license": "Public domain USDA/USGS; service terms retained",
+    "object_ids": [
+      29498
+    ],
+    "provider": "USGS/USDA NAIP",
+    "purpose": "Review imagery only, not independent adjudication",
+    "retrieved_utc": "2026-09-26T13:01:16.041599+00:00",
+    "sha256": "15260cf900d15b7d29416e1565acf625e3e1f8c8a2c1483676514ded6acda3dd",
+    "url": "https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPImagery/ImageServer/exportImage?f=image&bbox=316725.0%2C4279155.0%2C317325.0%2C4279755.0&bboxSR=32613&imageSR=32613&size=600%2C600&format=tiff&mosaicRule=%7B%22mosaicMethod%22%3A+%22esriMosaicLockRaster%22%2C+%22lockRasterIds%22%3A+%5B29498%5D%7D&renderingRule=%7B%22rasterFunction%22%3A+%22NaturalColor%22%7D",
+    "year": 2019
+  },
+  "C0064_naip_records.json": {
+    "bytes": 3501,
+    "elapsed_since_fetcher_start_s": 0.5188043570014997,
+    "provider": "USGS/USDA NAIP",
+    "purpose": "source date and image lock for review",
+    "retrieved_utc": "2026-09-26T13:01:13.607284+00:00",
+    "sha256": "6e43461c64971f505f08434b0fa5ae8b21d0c1e83e32a6e1c1742a32623ba491",
+    "url": "https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPImagery/ImageServer/query?f=json&where=Category%3D1&geometry=316725.0%2C4279155.0%2C317325.0%2C4279755.0&geometryType=esriGeometryEnvelope&inSR=32613&spatialRel=esriSpatialRelIntersects&outFields=%2A&returnGeometry=false"
+  },
+  "C0064_wide_naip.tif": {
+    "acquisition_dates": [
+      "2019-09-14",
+      "2019-09-14",
+      "2019-09-14",
+      "2019-09-14"
+    ],
+    "bytes": 3147569,
+    "crs": "EPSG:32613",
+    "elapsed_since_fetcher_start_s": 4.491065843998513,
+    "export_resolution_m": 4.0,
+    "license": "Public domain USDA/USGS; service terms retained",
+    "object_ids": [
+      29493,
+      29498,
+      29523,
+      29528
+    ],
+    "provider": "USGS/USDA NAIP",
+    "purpose": "Review imagery only, not independent adjudication",
+    "retrieved_utc": "2026-09-26T13:04:29.123710+00:00",
+    "sha256": "d2489226b69586ed69ba940accb3dade99f930eb60a8c2ecf6ba1e43658e80c4",
+    "url": "https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPImagery/ImageServer/exportImage?f=image&bbox=315025.0%2C4277455.0%2C319025.0%2C4281455.0&bboxSR=32613&imageSR=32613&size=1000%2C1000&format=tiff&mosaicRule=%7B%22mosaicMethod%22%3A+%22esriMosaicLockRaster%22%2C+%22lockRasterIds%22%3A+%5B29493%2C+29498%2C+29523%2C+29528%5D%7D&renderingRule=%7B%22rasterFunction%22%3A+%22NaturalColor%22%7D",
+    "year": 2019
+  },
+  "C0064_wide_naip_records.json": {
+    "bytes": 6185,
+    "elapsed_since_fetcher_start_s": 0.645447505004995,
+    "provider": "USGS/USDA NAIP",
+    "purpose": "source date and image lock for review",
+    "retrieved_utc": "2026-09-26T13:04:25.278092+00:00",
+    "sha256": "55d00c007e3dc82211f239e157c1236ebb9c47f33f883918e94751677a45118f",
+    "url": "https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPImagery/ImageServer/query?f=json&where=Category%3D1&geometry=315025.0%2C4277455.0%2C319025.0%2C4281455.0&geometryType=esriGeometryEnvelope&inSR=32613&spatialRel=esriSpatialRelIntersects&outFields=%2A&returnGeometry=false"
+  },
+  "C0068_naip.tif": {
+    "acquisition_dates": [
+      "2019-09-14",
+      "2019-09-14"
+    ],
+    "bytes": 1230407,
+    "crs": "EPSG:32613",
+    "elapsed_since_fetcher_start_s": 8.439943099998345,
+    "export_resolution_m": 1,
+    "license": "Public domain USDA/USGS; service terms retained",
+    "object_ids": [
+      29498,
+      29528
+    ],
+    "provider": "USGS/USDA NAIP",
+    "purpose": "Review imagery only, not independent adjudication",
+    "retrieved_utc": "2026-09-26T13:01:21.528423+00:00",
+    "sha256": "a8864a15338da48e3c31d072cea44ee5bd20143563f5674ecb4adae1ceaf9aca",
+    "url": "https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPImagery/ImageServer/exportImage?f=image&bbox=318315.0%2C4277245.0%2C318915.0%2C4277845.0&bboxSR=32613&imageSR=32613&size=600%2C600&format=tiff&mosaicRule=%7B%22mosaicMethod%22%3A+%22esriMosaicLockRaster%22%2C+%22lockRasterIds%22%3A+%5B29498%2C+29528%5D%7D&renderingRule=%7B%22rasterFunction%22%3A+%22NaturalColor%22%7D",
+    "year": 2019
+  },
+  "C0068_naip_records.json": {
+    "bytes": 4391,
+    "elapsed_since_fetcher_start_s": 6.018399828004476,
+    "provider": "USGS/USDA NAIP",
+    "purpose": "source date and image lock for review",
+    "retrieved_utc": "2026-09-26T13:01:19.106879+00:00",
+    "sha256": "345afebacfa8e2d9d753fac1de2d597f7b03c392439057b476ddc93a269f80ed",
+    "url": "https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPImagery/ImageServer/query?f=json&where=Category%3D1&geometry=318315.0%2C4277245.0%2C318915.0%2C4277845.0&geometryType=esriGeometryEnvelope&inSR=32613&spatialRel=esriSpatialRelIntersects&outFields=%2A&returnGeometry=false"
+  },
+  "C0068_wide_naip.tif": {
+    "acquisition_dates": [
+      "2019-09-14",
+      "2019-09-14",
+      "2019-09-14",
+      "2019-09-14"
+    ],
+    "bytes": 3147569,
+    "crs": "EPSG:32613",
+    "elapsed_since_fetcher_start_s": 14.191226902999915,
+    "export_resolution_m": 4.0,
+    "license": "Public domain USDA/USGS; service terms retained",
+    "object_ids": [
+      29497,
+      29498,
+      29527,
+      29528
+    ],
+    "provider": "USGS/USDA NAIP",
+    "purpose": "Review imagery only, not independent adjudication",
+    "retrieved_utc": "2026-09-26T13:04:38.823871+00:00",
+    "sha256": "d73339318ff15b566393c7a61d0e576bee602c79b6840874e03cc5c6502091b7",
+    "url": "https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPImagery/ImageServer/exportImage?f=image&bbox=316615.0%2C4275545.0%2C320615.0%2C4279545.0&bboxSR=32613&imageSR=32613&size=1000%2C1000&format=tiff&mosaicRule=%7B%22mosaicMethod%22%3A+%22esriMosaicLockRaster%22%2C+%22lockRasterIds%22%3A+%5B29497%2C+29498%2C+29527%2C+29528%5D%7D&renderingRule=%7B%22rasterFunction%22%3A+%22NaturalColor%22%7D",
+    "year": 2019
+  },
+  "C0068_wide_naip_records.json": {
+    "bytes": 6159,
+    "elapsed_since_fetcher_start_s": 9.19032720800169,
+    "provider": "USGS/USDA NAIP",
+    "purpose": "source date and image lock for review",
+    "retrieved_utc": "2026-09-26T13:04:33.822971+00:00",
+    "sha256": "25324abdabbe7534fae614dd1fee920edb12161999caf9525c8d2ba8b7266427",
+    "url": "https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPImagery/ImageServer/query?f=json&where=Category%3D1&geometry=316615.0%2C4275545.0%2C320615.0%2C4279545.0&geometryType=esriGeometryEnvelope&inSR=32613&spatialRel=esriSpatialRelIntersects&outFields=%2A&returnGeometry=false"
+  },
+  "C0090_naip.tif": {
+    "acquisition_dates": [
+      "2019-09-14"
+    ],
+    "bytes": 1230407,
+    "crs": "EPSG:32613",
+    "elapsed_since_fetcher_start_s": 5.807426785002463,
+    "export_resolution_m": 1,
+    "license": "Public domain USDA/USGS; service terms retained",
+    "object_ids": [
+      29528
+    ],
+    "provider": "USGS/USDA NAIP",
+    "purpose": "Review imagery only, not independent adjudication",
+    "retrieved_utc": "2026-09-26T13:01:18.895907+00:00",
+    "sha256": "5d6feadcb9c9258cf6936bc4367389126f70132aa159eecca775bffb268414e1",
+    "url": "https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPImagery/ImageServer/exportImage?f=image&bbox=316025.0%2C4275625.0%2C316625.0%2C4276225.0&bboxSR=32613&imageSR=32613&size=600%2C600&format=tiff&mosaicRule=%7B%22mosaicMethod%22%3A+%22esriMosaicLockRaster%22%2C+%22lockRasterIds%22%3A+%5B29528%5D%7D&renderingRule=%7B%22rasterFunction%22%3A+%22NaturalColor%22%7D",
+    "year": 2019
+  },
+  "C0090_naip_records.json": {
+    "bytes": 3500,
+    "elapsed_since_fetcher_start_s": 3.3656144170017797,
+    "provider": "USGS/USDA NAIP",
+    "purpose": "source date and image lock for review",
+    "retrieved_utc": "2026-09-26T13:01:16.454094+00:00",
+    "sha256": "dd4e94a859ef33b54010c78ec03938cd871c42696165b4e96638c27a40b5ec15",
+    "url": "https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPImagery/ImageServer/query?f=json&where=Category%3D1&geometry=316025.0%2C4275625.0%2C316625.0%2C4276225.0&geometryType=esriGeometryEnvelope&inSR=32613&spatialRel=esriSpatialRelIntersects&outFields=%2A&returnGeometry=false"
+  },
+  "C0090_wide_naip.tif": {
+    "acquisition_dates": [
+      "2019-09-14",
+      "2019-09-14",
+      "2019-09-14",
+      "2019-09-14"
+    ],
+    "bytes": 3147569,
+    "crs": "EPSG:32613",
+    "elapsed_since_fetcher_start_s": 8.987761891003174,
+    "export_resolution_m": 4.0,
+    "license": "Public domain USDA/USGS; service terms retained",
+    "object_ids": [
+      29493,
+      29498,
+      29523,
+      29528
+    ],
+    "provider": "USGS/USDA NAIP",
+    "purpose": "Review imagery only, not independent adjudication",
+    "retrieved_utc": "2026-09-26T13:04:33.620406+00:00",
+    "sha256": "9691b1efc0648224b85bfc826a360d92bc07a22acb9ec9b8f9e117aea90f6629",
+    "url": "https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPImagery/ImageServer/exportImage?f=image&bbox=314325.0%2C4273925.0%2C318325.0%2C4277925.0&bboxSR=32613&imageSR=32613&size=1000%2C1000&format=tiff&mosaicRule=%7B%22mosaicMethod%22%3A+%22esriMosaicLockRaster%22%2C+%22lockRasterIds%22%3A+%5B29493%2C+29498%2C+29523%2C+29528%5D%7D&renderingRule=%7B%22rasterFunction%22%3A+%22NaturalColor%22%7D",
+    "year": 2019
+  },
+  "C0090_wide_naip_records.json": {
+    "bytes": 6185,
+    "elapsed_since_fetcher_start_s": 4.6919761410026695,
+    "provider": "USGS/USDA NAIP",
+    "purpose": "source date and image lock for review",
+    "retrieved_utc": "2026-09-26T13:04:29.324620+00:00",
+    "sha256": "55d00c007e3dc82211f239e157c1236ebb9c47f33f883918e94751677a45118f",
+    "url": "https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPImagery/ImageServer/query?f=json&where=Category%3D1&geometry=314325.0%2C4273925.0%2C318325.0%2C4277925.0&geometryType=esriGeometryEnvelope&inSR=32613&spatialRel=esriSpatialRelIntersects&outFields=%2A&returnGeometry=false"
+  },
+  "C0095_naip.tif": {
+    "acquisition_dates": [
+      "2019-09-14",
+      "2019-09-14"
+    ],
+    "bytes": 1230407,
+    "crs": "EPSG:32613",
+    "elapsed_since_fetcher_start_s": 13.786668369000836,
+    "export_resolution_m": 1,
+    "license": "Public domain USDA/USGS; service terms retained",
+    "object_ids": [
+      29498,
+      29528
+    ],
+    "provider": "USGS/USDA NAIP",
+    "purpose": "Review imagery only, not independent adjudication",
+    "retrieved_utc": "2026-09-26T13:01:26.875149+00:00",
+    "sha256": "8c11591c3ad72b4b4db8af6b8f67683e75821c7df74bd83dd983117c4a4174d0",
+    "url": "https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPImagery/ImageServer/exportImage?f=image&bbox=318955.0%2C4277175.0%2C319555.0%2C4277775.0&bboxSR=32613&imageSR=32613&size=600%2C600&format=tiff&mosaicRule=%7B%22mosaicMethod%22%3A+%22esriMosaicLockRaster%22%2C+%22lockRasterIds%22%3A+%5B29498%2C+29528%5D%7D&renderingRule=%7B%22rasterFunction%22%3A+%22NaturalColor%22%7D",
+    "year": 2019
+  },
+  "C0095_naip_records.json": {
+    "bytes": 4391,
+    "elapsed_since_fetcher_start_s": 12.808692660000816,
+    "provider": "USGS/USDA NAIP",
+    "purpose": "source date and image lock for review",
+    "retrieved_utc": "2026-09-26T13:01:25.897172+00:00",
+    "sha256": "345afebacfa8e2d9d753fac1de2d597f7b03c392439057b476ddc93a269f80ed",
+    "url": "https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPImagery/ImageServer/query?f=json&where=Category%3D1&geometry=318955.0%2C4277175.0%2C319555.0%2C4277775.0&geometryType=esriGeometryEnvelope&inSR=32613&spatialRel=esriSpatialRelIntersects&outFields=%2A&returnGeometry=false"
+  },
+  "C0095_wide_naip.tif": {
+    "acquisition_dates": [
+      "2019-09-14",
+      "2019-09-14",
+      "2019-09-14",
+      "2019-09-14"
+    ],
+    "bytes": 3147569,
+    "crs": "EPSG:32613",
+    "elapsed_since_fetcher_start_s": 19.786997914001404,
+    "export_resolution_m": 4.0,
+    "license": "Public domain USDA/USGS; service terms retained",
+    "object_ids": [
+      29497,
+      29498,
+      29527,
+      29528
+    ],
+    "provider": "USGS/USDA NAIP",
+    "purpose": "Review imagery only, not independent adjudication",
+    "retrieved_utc": "2026-09-26T13:04:44.419642+00:00",
+    "sha256": "24f20cd8450154464a707489f5cfa467383da10967729350ffa5792dde6573fe",
+    "url": "https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPImagery/ImageServer/exportImage?f=image&bbox=317255.0%2C4275475.0%2C321255.0%2C4279475.0&bboxSR=32613&imageSR=32613&size=1000%2C1000&format=tiff&mosaicRule=%7B%22mosaicMethod%22%3A+%22esriMosaicLockRaster%22%2C+%22lockRasterIds%22%3A+%5B29497%2C+29498%2C+29527%2C+29528%5D%7D&renderingRule=%7B%22rasterFunction%22%3A+%22NaturalColor%22%7D",
+    "year": 2019
+  },
+  "C0095_wide_naip_records.json": {
+    "bytes": 6159,
+    "elapsed_since_fetcher_start_s": 18.73647564300336,
+    "provider": "USGS/USDA NAIP",
+    "purpose": "source date and image lock for review",
+    "retrieved_utc": "2026-09-26T13:04:43.369119+00:00",
+    "sha256": "25324abdabbe7534fae614dd1fee920edb12161999caf9525c8d2ba8b7266427",
+    "url": "https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPImagery/ImageServer/query?f=json&where=Category%3D1&geometry=317255.0%2C4275475.0%2C321255.0%2C4279475.0&geometryType=esriGeometryEnvelope&inSR=32613&spatialRel=esriSpatialRelIntersects&outFields=%2A&returnGeometry=false"
+  },
+  "access_points.geojson": {
+    "acquisition_date": "unknown; provider attributes and last-edit metadata retained",
+    "bytes": 42,
+    "crs": "EPSG:4326",
+    "elapsed_since_fetcher_start_s": 14.480077537002217,
+    "license": "USDA Forest Service",
+    "provider": "USFS EDW",
+    "purpose": "mapped evidence only; not legal/physical access certification",
+    "retrieved_utc": "2026-09-26T12:54:39.175998+00:00",
+    "sha256": "ed778c73ea51338d6576fb5992b189f2b94d9f3d5e199f46c1af520d6b0b3e6c",
+    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_RecreationOpportunities_01/MapServer/0/query?f=geojson&where=1%3D1&geometry=300000%2C4260000%2C330000%2C4290000&geometryType=esriGeometryEnvelope&inSR=32613&spatialRel=esriSpatialRelIntersects&outFields=%2A&outSR=4326"
+  },
+  "access_points_metadata.json": {
+    "bytes": 205773,
+    "elapsed_since_fetcher_start_s": 14.229733448002662,
+    "provider": "USFS Enterprise Data Warehouse",
+    "retrieved_utc": "2026-09-26T12:54:38.925656+00:00",
+    "sha256": "7d065613e6d0fb955ece3f0cfe33d5a5883ac5c256fb26642359b94d33190cbb",
+    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_RecreationOpportunities_01/MapServer/0?f=json"
+  },
+  "closed_roads.geojson": {
+    "acquisition_date": "unknown; provider attributes and last-edit metadata retained",
+    "bytes": 214576,
+    "crs": "EPSG:4326",
+    "elapsed_since_fetcher_start_s": 5.685606787003053,
+    "license": "",
+    "provider": "USFS EDW",
+    "purpose": "mapped evidence only; not legal/physical access certification",
+    "retrieved_utc": "2026-09-26T12:54:30.381528+00:00",
+    "sha256": "c0fa89e6be43c7e161e8126606cccbca7a491b8ee0da4ad8eec53511b6e19e06",
+    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_RoadBasic_01/MapServer/1/query?f=geojson&where=1%3D1&geometry=300000%2C4260000%2C330000%2C4290000&geometryType=esriGeometryEnvelope&inSR=32613&spatialRel=esriSpatialRelIntersects&outFields=%2A&outSR=4326"
+  },
+  "closed_roads_metadata.json": {
+    "bytes": 8491,
+    "elapsed_since_fetcher_start_s": 4.971071913001651,
+    "provider": "USFS Enterprise Data Warehouse",
+    "retrieved_utc": "2026-09-26T12:54:29.666993+00:00",
+    "sha256": "a6022ba404a1046efabfd1e0882ad374effd533566a42744976c20923c2c9223",
+    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_RoadBasic_01/MapServer/1?f=json"
+  },
+  "mvum_roads.geojson": {
+    "acquisition_date": "unknown; provider attributes and last-edit metadata retained",
+    "bytes": 903844,
+    "crs": "EPSG:4326",
+    "elapsed_since_fetcher_start_s": 15.987387884000782,
+    "license": "",
+    "provider": "USFS EDW",
+    "purpose": "mapped evidence only; not legal/physical access certification",
+    "retrieved_utc": "2026-09-26T12:54:40.683309+00:00",
+    "sha256": "b13bd51ea2c742916a377dcddac0d6401faea56b0f426b2567c2c4483d91ac19",
+    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_MVUM_01/MapServer/1/query?f=geojson&where=1%3D1&geometry=300000%2C4260000%2C330000%2C4290000&geometryType=esriGeometryEnvelope&inSR=32613&spatialRel=esriSpatialRelIntersects&outFields=%2A&outSR=4326"
+  },
+  "mvum_roads_metadata.json": {
+    "bytes": 14049,
+    "elapsed_since_fetcher_start_s": 14.711339335997764,
+    "provider": "USFS Enterprise Data Warehouse",
+    "retrieved_utc": "2026-09-26T12:54:39.407260+00:00",
+    "sha256": "cf6949e7b895fef43db0b7b8c3d08cef4ebe3f31bdeeb37f732593550bf61ee0",
+    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_MVUM_01/MapServer/1?f=json"
+  },
+  "mvum_trails.geojson": {
+    "acquisition_date": "unknown; provider attributes and last-edit metadata retained",
+    "bytes": 148747,
+    "crs": "EPSG:4326",
+    "elapsed_since_fetcher_start_s": 16.730226387000585,
+    "license": "U.S. Forest Service",
+    "provider": "USFS EDW",
+    "purpose": "mapped evidence only; not legal/physical access certification",
+    "retrieved_utc": "2026-09-26T12:54:41.426148+00:00",
+    "sha256": "9b81440e225b72657be4e923a2104ec99988967936856393d2b792d085d9a1b8",
+    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_MVUM_01/MapServer/2/query?f=geojson&where=1%3D1&geometry=300000%2C4260000%2C330000%2C4290000&geometryType=esriGeometryEnvelope&inSR=32613&spatialRel=esriSpatialRelIntersects&outFields=%2A&outSR=4326"
+  },
+  "mvum_trails_metadata.json": {
+    "bytes": 15216,
+    "elapsed_since_fetcher_start_s": 16.20026687400241,
+    "provider": "USFS Enterprise Data Warehouse",
+    "retrieved_utc": "2026-09-26T12:54:40.896188+00:00",
+    "sha256": "dd077d021f634d6867b2a7ae024f81093251a482e94c73fecefcd114e66ca9da",
+    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_MVUM_01/MapServer/2?f=json"
+  },
+  "naip_service.json": {
+    "bytes": 7184,
+    "elapsed_since_fetcher_start_s": 0.299474696003017,
+    "provider": "USGS NAIP imagery service",
+    "retrieved_utc": "2026-09-26T13:01:13.387955+00:00",
+    "sha256": "750f4e8ca6a525091876440712c40c85c953c67c5d0bebcc28e5fbeed52c40be",
+    "url": "https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPImagery/ImageServer?f=json"
+  },
+  "ownership.geojson": {
+    "acquisition_date": "unknown; provider attributes and last-edit metadata retained",
+    "bytes": 4029607,
+    "crs": "EPSG:4326",
+    "elapsed_since_fetcher_start_s": 13.63949424999737,
+    "license": "",
+    "provider": "USFS EDW",
+    "purpose": "mapped evidence only; not legal/physical access certification",
+    "retrieved_utc": "2026-09-26T12:54:38.335416+00:00",
+    "sha256": "53e67856b39a7d5caa5ccec847ebc3a8a22ebd6b86b8997dd22445c02a609f31",
+    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_BasicOwnership_01/MapServer/0/query?f=geojson&where=1%3D1&geometry=300000%2C4260000%2C330000%2C4290000&geometryType=esriGeometryEnvelope&inSR=32613&spatialRel=esriSpatialRelIntersects&outFields=%2A&outSR=4326"
+  },
+  "ownership_metadata.json": {
+    "bytes": 7549,
+    "elapsed_since_fetcher_start_s": 5.935879937002028,
+    "provider": "USFS Enterprise Data Warehouse",
+    "retrieved_utc": "2026-09-26T12:54:30.631801+00:00",
+    "sha256": "b9bb311e7547d155df549665c27e4f99f462de59401f8978710b98c03ed621fa",
+    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_BasicOwnership_01/MapServer/0?f=json"
+  },
+  "roads.geojson": {
+    "acquisition_date": "unknown; provider attributes and last-edit metadata retained",
+    "bytes": 871272,
+    "crs": "EPSG:4326",
+    "elapsed_since_fetcher_start_s": 4.668764215995907,
+    "license": "",
+    "provider": "USFS EDW",
+    "purpose": "mapped evidence only; not legal/physical access certification",
+    "retrieved_utc": "2026-09-26T12:54:29.364685+00:00",
+    "sha256": "e797ed0b381915fd7fc81c72c28222f365739a36d34b333b64497a0d94bc2cf6",
+    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_RoadBasic_01/MapServer/0/query?f=geojson&where=1%3D1&geometry=300000%2C4260000%2C330000%2C4290000&geometryType=esriGeometryEnvelope&inSR=32613&spatialRel=esriSpatialRelIntersects&outFields=%2A&outSR=4326"
+  },
+  "roads_metadata.json": {
+    "bytes": 12286,
+    "elapsed_since_fetcher_start_s": 3.4349832910011173,
+    "provider": "USFS Enterprise Data Warehouse",
+    "retrieved_utc": "2026-09-26T12:54:28.130905+00:00",
+    "sha256": "bdea0c7fd0d65a29e89a9e5d308783b40db1f481f44c03ddda386edfc3ad4ae9",
+    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_RoadBasic_01/MapServer/0?f=json"
+  },
+  "trails.geojson": {
+    "acquisition_date": "unknown; provider attributes and last-edit metadata retained",
+    "bytes": 1879283,
+    "crs": "EPSG:4326",
+    "elapsed_since_fetcher_start_s": 3.1333902819969808,
+    "license": "USDA Forest Service",
+    "provider": "USFS EDW",
+    "purpose": "mapped evidence only; not legal/physical access certification",
+    "retrieved_utc": "2026-09-26T12:54:27.829311+00:00",
+    "sha256": "00a5e24dfe142ed22aedd9a388cc477ce23daaa9b9b4db460769862d986acf7d",
+    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_TrailNFSPublish_01/MapServer/0/query?f=geojson&where=1%3D1&geometry=300000%2C4260000%2C330000%2C4290000&geometryType=esriGeometryEnvelope&inSR=32613&spatialRel=esriSpatialRelIntersects&outFields=%2A&outSR=4326"
+  },
+  "trails_metadata.json": {
+    "bytes": 19244,
+    "elapsed_since_fetcher_start_s": 0.26061139199737227,
+    "provider": "USFS Enterprise Data Warehouse",
+    "retrieved_utc": "2026-09-26T12:54:24.956534+00:00",
+    "sha256": "07ca0aa0ef2bbee2ccaa075a84ae748d006100c0ee4a7e9cbb97ce1d590b6962",
+    "url": "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_TrailNFSPublish_01/MapServer/0?f=json"
+  }
+}

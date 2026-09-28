@@ -1,0 +1,34 @@
+{
+  "bestFitIndex": 0.0,
+  "body": "This is a tile of the standard one-meter resolution digital elevation model (DEM) produced through the 3D Elevation Program (3DEP) .  The elevations in this DEM represent the topographic bare-earth surface.  USGS standard one-meter DEMs are produced exclusively from high resolution light detection and ranging (lidar) source data of one-meter or higher resolution.  One-meter DEM surfaces are seamless within collection projects, but, not necessarily seamless across projects.  The spatial reference used for tiles of the one-meter DEM  within the conterminous United States (CONUS) is Universal Transverse Mercator (UTM) in units of meters, and in conformance with the North American Datum of 1983 (NAD83).  All bare earth elevation values are in meters and are referenced to the North American Vertical Datum of 1988 (NAVD88).  Each tile is distributed in the UTM Zone in which it lies.  If a tile crosses two UTM zones, it is delivered in both zones.  The one-meter DEM is the highest resolution standard DEM offered in the 3DEP product suite.  Other 3DEP products are nationally seamless DEMs in resolutions of 1/3, 1, and 2 arc seconds.  These seamless DEMs were referred to as the National Elevation Dataset (NED) from about 2000 through 2015 at which time they became the seamless DEM layers under the 3DEP program and lost the NED branding.  Other 3DEP products include five-meter DEMs in Alaska as well as various source datasets including the lidar point cloud and interferometric synthetic aperture radar (Ifsar) digital surface models and intensity images. All 3DEP products are public domain.",
+  "boundingBox": {
+    "maxX": -107.06589127299998,
+    "maxY": 38.650291293000066,
+    "minX": -107.1833160799999,
+    "minY": 38.55814921100006
+  },
+  "datasets": [],
+  "dateCreated": "2021-06-15T23:08:59.921-06:00",
+  "downloadLazURL": null,
+  "downloadURL": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/1m/Projects/CO_WestCentral_2019_A19/TIFF/USGS_1M_13_x31y428_CO_WestCentral_2019_A19.tif",
+  "downloadURLRaster": null,
+  "extent": "10000 x 10000 meter",
+  "format": "GeoTIFF",
+  "lastUpdated": "2021-06-16T19:11:45.394-06:00",
+  "metaUrl": "https://www.sciencebase.gov/catalog/item/60c9876bd34e86b9389f3aaa",
+  "modificationInfo": "2021-06-16",
+  "moreInfo": "This is a tile of the standard one-meter resolution digital elevation model (DEM) produced through the 3D Elevation Program (3DEP) . The elevations in this DEM represent the topographic bare-earth surface. USGS standard one-meter DEMs are produced exclusively from high resolution light detection and ranging (lidar) source data of one-meter or higher resolution. One-meter DEM surfaces are seamless within collection projects, but, not necessarily seamless across projects. The spatial reference used for tiles of the one-meter DEM within the conterminous United States (CONUS) is Universal Transverse Mercator (UTM) in units of meters, and in conformance with the North American Datum of 1983 (NAD83). All bare earth elevation values are in [...]",
+  "previewGraphicURL": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/1m/Projects/CO_WestCentral_2019_A19/browse/USGS_1M_13_x31y428_CO_WestCentral_2019_A19.jpg",
+  "processingUrl": "processingUrl",
+  "publicationDate": "2021-06-12",
+  "sizeInBytes": 262214898,
+  "sourceId": "60c9876bd34e86b9389f3aaa",
+  "sourceName": "ScienceBase",
+  "sourceOriginId": null,
+  "sourceOriginName": "gda",
+  "title": "USGS 1 Meter 13 x31y428 CO_WestCentral_2019_A19",
+  "urls": {
+    "TIFF": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/1m/Projects/CO_WestCentral_2019_A19/TIFF/USGS_1M_13_x31y428_CO_WestCentral_2019_A19.tif"
+  },
+  "vendorMetaUrl": "https://prd-tnm.s3.amazonaws.com/index.html?prefix=StagedProducts/Elevation/metadata/CO_WestCentral_2019_A19/CO_WestCentral_2019"
+}
