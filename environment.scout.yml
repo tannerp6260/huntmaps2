@@ -1,0 +1,10 @@
+name: glassing-scout
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - gdal>=3.4,<4
+  - numpy=1.26.4
+  - scipy=1.14.1
+  - shapely=2.0.6
+  - matplotlib=3.9.2

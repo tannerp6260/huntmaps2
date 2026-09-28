@@ -386,3 +386,41 @@ GeoJSON polygon + GPX waypoints preferred; CSV/GeoJSON points supported. KML/KMZ
 can be supplied for explicit conversion, not currently claimed as direct intake.
 Stop here. Source acquisition, actual imagery/entry checks and a usefulness-vs-manual
 recommendation require the real inputs. Soap Creek remains only a candidate area.
+
+## Latest: owner usability milestone, 2026-09-28
+
+Normal entry point is now `./scout`; README and START_HERE.md supersede the older
+required-two-file normal-use instructions. Manual points remain optional; only the
+owner-selected observer-search polygon is missing. No replacement AOI was selected.
+Implementation, scope, commands, measurements and acquisition limits are in
+usability/REPORT.md. Initial Git status clean; Git worked in this session.
+
+Ran `./scout doctor`: Python3.10.12/GDAL3.4.1/NumPy1.26.4/SciPy1.14.1/
+Shapely2.0.6/Matplotlib3.9.2 ready. `free -h`, `nproc`, `df -h .`: ~14GiB RAM,
+~6.3GiB available, 16 CPUs, ~26GiB disk free. Default acquisition cap600MB, analysis
+memory1536MiB/runtime900s/grid3million cells retained/configurable.
+
+Ran `.venv/bin/python -m unittest discover -s tests -v`: 32 passed, 9.54s.
+Owner-only tests also run after final integrity changes. Isolated actual launcher
+journeys used `/tmp/scout-journey-*`, no historical runs/docs or real cached inputs.
+Normal no-manual and matched optional-manual journeys succeed; points remain unchanged
+and auto pools match. GPX/KML/GPKG read-back passes. Startup with missing dependencies
+prints setup instructions; missing historical archives do not affect normal operation.
+Verification is read-only; tampered current outputs fail. Import selection, cache
+coverage/checksum and download-budget checks pass. Initial pytest invocation failed
+because pytest is absent; used existing unittest without installation.
+
+Representative fixture normal engine1.57s/208MiB peak, owner analysis+handoff2.42s,
+1.76MB results; matched2.07s/218MiB, handoff2.95s/2.19MB. Download0bytes/$0.
+These are synthetic500m checks, not measured real-AOI performance. Overview and PDF
+card visually inspected with explicit synthetic/imagery-pending/access-pending labels.
+After tests, all6,326 files in usability/PRESERVED.json unchanged; no historical hashes
+rewritten, real archives moved, commits or pushes. Fresh environment solve/install and
+new-area live acquisition remain untested; documented honestly.
+
+Next action: owner supplies only `inputs/my-area.geojson` (or KML/KMZ). Run
+`./scout run --area inputs/my-area.geojson --name my-area`; results under
+`results/my-area/`. If data are missing, read DATA_REQUIRED.md/download_plan.json and
+repeat with --download within the stated cap. Optional manual comparison uses --manual
+and a separate completed-run name. No further research-model or route work authorized
+by this handoff. Stop here pending the polygon.

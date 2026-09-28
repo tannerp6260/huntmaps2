@@ -1,0 +1,10 @@
+#!/bin/sh
+# Explicit interpreter override supports isolated conda/venv installs.
+cd "$(dirname "$0")" || exit 1
+if [ -n "${SCOUT_PYTHON:-}" ]; then
+    exec "$SCOUT_PYTHON" -m glassing.owner "$@"
+elif [ -x .venv/bin/python ]; then
+    exec .venv/bin/python -m glassing.owner "$@"
+else
+    exec python3 -m glassing.owner "$@"
+fi

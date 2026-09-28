@@ -78,3 +78,14 @@ would trigger reconsidering entries or pilot location, not silent route optimiza
 
 Next action: supply the two files described in transfer/INPUTS.md. Do not select a
 centroid crop, invent Soap Creek basins, tune coefficients or begin route optimization.
+
+## Owner usability milestone — completed engineering handoff, 2026-09-28
+
+- Reuse transfer analysis with optional manual inputs and separate history check: done.
+- Single CLI, explicit polygon conversion, cached-data checks and bounded supported
+  acquisition plans: done. Multi-tile DEM/source selection assistance remains explicit.
+- Normal results overview/cards/report/exports and fresh-clone setup guide: done.
+- Isolated archive-free actual launcher journeys and targeted integrity checks: passed;
+  see usability/REPORT.md. Historical evidence preserved.
+- Next input is **only the owner's observer polygon**, not mandatory manual points.
+  No real area has been substituted. Stop before any further model or route work.

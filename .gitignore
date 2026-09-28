@@ -5,3 +5,8 @@ data/
 runs/
 .cache/
 inputs/hunter/
+
+# Owner scouting inputs and derived products
+results/
+inputs/
+.scout-env/

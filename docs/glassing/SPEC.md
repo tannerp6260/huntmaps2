@@ -119,3 +119,18 @@ validated GPX/KML/GPKG/PDF. Access evidence is configured, never pilot-specific.
 Required real inputs: hunter observer polygon and manual waypoints. Neither exists;
 synthetic fixtures demonstrate engineering only. No Soap Creek boundary chosen.
 See transfer/INPUTS.md, PROTOCOL.md and REPORT.md; stop at missing-input handoff.
+
+## Owner usability milestone (2026-09-28; supersedes required-manual normal intake)
+
+Normal scouting requires only an owner-selected observer-search polygon. Manual
+points are optional comparison inputs; historical matched experiments retain their
+original protocol. `./scout` is the entry point; see START_HERE.md. Observer, target,
+terrain-halo and access extents remain separate. GeoJSON/KML/KMZ import must preserve
+originals and require explicit selection for multiple polygons. Normal analysis
+must work without historical ignored runs, while validating current sources,
+configuration, frozen model implementation, runtime and derived outputs. Historical
+verification stays opt-in; archive hashes must not be rewritten. Output is provisional
+and inspectable without field validation. Bulk source plans show an estimate and cap;
+unsupported acquisition must name the missing source/configuration field. No new
+scoring model or route optimization. Acceptance: isolated no-manual, optional-manual,
+archive-free and corrupt-current-input tests pass, with clear maps/reports/exports.

@@ -27,3 +27,8 @@ Use docs/glassing/transfer/{INPUTS,PROTOCOL,README}.md and configs/transfer.temp
 Preserve all prior outputs; no replacement centroid AOI, generated human selections,
 new model coefficients or itinerary solver. If hunter files are absent, finish portable
 imports/configuration and offline checks, then stop requesting those exact inputs.
+
+The user authorizes a usability milestone: normal scouting needs only an observer
+polygon; manual points are optional. Use START_HERE.md and docs/glassing/usability/REPORT.md.
+Normal runs must not depend on historical archives. Preserve prior evidence and model
+controls; no new scoring model or route optimization.
