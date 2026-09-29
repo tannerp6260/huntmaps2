@@ -134,3 +134,15 @@ and inspectable without field validation. Bulk source plans show an estimate and
 unsupported acquisition must name the missing source/configuration field. No new
 scoring model or route optimization. Acceptance: isolated no-manual, optional-manual,
 archive-free and corrupt-current-input tests pass, with clear maps/reports/exports.
+
+Acquisition validity clarification (Soap Creek real-run regression): source geographic
+coverage and valid-data coverage are distinct. Obstruction DEM must remain valid;
+vegetation NoData must propagate through the existing unknown-cover mask, never be
+reclassified as open/zero cover. WCS boundary padding must not change owner/target
+polygons. Replacements and agency normalization/geometry repairs retain raw sources,
+checksums and explicit provenance; unrecognized CRS or incomplete responses still fail.
+
+Derived review maps must display actual evaluated visibility separately from attention
+footprints, verify transform alignment and mapped area against saved scores, and retain
+imagery dates/native versus exported resolution. Derived packets use separate integrity
+records; original numerical results and packets remain unchanged.

@@ -424,3 +424,52 @@ Next action: owner supplies only `inputs/my-area.geojson` (or KML/KMZ). Run
 repeat with --download within the stated cap. Optional manual comparison uses --manual
 and a separate completed-run name. No further research-model or route work authorized
 by this handoff. Stop here pending the polygon.
+
+## Latest: actual Soap Creek acquisition failure resolved
+
+Owner supplied inputs/test.kml and authorized diagnosis/resume of soap-creek-v1.
+Initial Git status was clean. Read the failed notices, configuration, request plan,
+actual downloaded raster and acquisition adapter. Root cause: covers() conflated
+internal vegetation NoData101 with missing geographic coverage; all four failing
+coarse-probe samples were interior. Full 10m grid also exposed WCS crop/alignment
+edge artifacts. Separate geographic coverage from data validity; keep DEM strict,
+vegetation unknown explicit. Aligned/padded WCS replacements retain original tree.tif
+and provenance; no polygon or scoring change. CPW explicit4326 legacy CRS and invalid
+summer nested shells were further blockers; normalized copies and recorded make_valid
+repair resolved them, with zero changed summer-mask cells locally. Original sources
+retained. Full report: usability/ACQUISITION_FIX.md.
+
+Resumed exact command through completion: ./scout run --area ./inputs/test.kml
+--name soap-creek-v1 --download. Engine5.30s/243.65MiB peak; owner6.35s;150 candidates,
+5 leading alternatives,16 KML polygons. Total downloads2,368,910bytes including failed
+original, below600MB. .venv/bin/python -m unittest discover -s tests -v:34pass/9.85s.
+./scout verify --name soap-creek-v1:passed. git diff --check clean;6,326 prior evidence
+hashes unchanged. Overview visually inspected. Current results:results/soap-creek-v1/
+REPORT.md,overview.png,review_packet.pdf,review.gpx,sectors.kml,comparison.gpkg.
+No remaining engineering blocker for this run; imagery/access/field claims remain
+pending as labeled. Next action is owner desktop review, not further model changes.
+
+## Latest: Soap Creek derived visibility/imagery review, 2026-09-29
+
+User authorized visualization only. Preserved existing acquisition-fix changes and
+all original soap-creek-v1 files. Added glassing/review_maps.py and targeted alignment
+regression; no scoring, masks, rankings or original packet changed. New outputs are in
+results/soap-creek-v1-review-v2/ (separate derived manifest/provenance).
+
+Ran .venv/bin/python -m glassing.review_maps --download, then --download --redraw using
+checked image cache for final percentage/native-resolution labels. Downloaded31,533,624
+bytes under120MB cap: ten coverage-validated NAIP clips, 0.6m source dated2019-09-13/14.
+Context exports4.4m; setup exports0.5m are resampling, not extra detail. Packet12pages:
+overview, five context maps, five setup close-ups, existing pairwise overlap table.
+Cyan actual target-clipped visibility versus orange attention footprints; grid north,
+lat/lon, labeled distance rings, bearings, rounded cover percentages and caveats.
+
+Verified source/analysis CRS, pixel scale and integral origins; all five mapped areas
+match original raw_km2 exactly (tolerance1e-9km²), pairwise shared areas also match.
+Ran unittest test_review_maps.py:1pass (target/radius clipping and registration failure).
+Rendered all12 PDF pages with pdftoppm and visually inspected them; no missing imagery.
+./scout verify --name soap-creek-v1 passed. Opened finished PDF via xdg-open (exit0).
+Original packet/integrity files remain unchanged. Pending human review: tree/opening
+interpretation, local setup adjustments; field checks: ground sightlines/footing,
+connected legal approach, vegetation changes since2019 and actual detection.
+Stop at this visualization handoff; no modeling or itinerary work.

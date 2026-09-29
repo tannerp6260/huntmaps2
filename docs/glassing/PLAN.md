@@ -89,3 +89,11 @@ centroid crop, invent Soap Creek basins, tune coefficients or begin route optimi
   see usability/REPORT.md. Historical evidence preserved.
 - Next input is **only the owner's observer polygon**, not mandatory manual points.
   No real area has been substituted. Stop before any further model or route work.
+
+Soap Creek actual acquisition/resume correction completed: see usability/ACQUISITION_FIX.md.
+Normal real run and current-run verification now succeed; no substitute AOI. Review
+results/soap-creek-v1/REPORT.md and overview.png. Stop at this requested repair checkpoint.
+
+Soap Creek visualization-only handoff complete: results/soap-creek-v1-review-v2/
+review_packet.pdf. Saved visibility over dated imagery, setup close-ups and overlap;
+original evidence untouched. Next action is owner imagery/field review, not scoring changes.
