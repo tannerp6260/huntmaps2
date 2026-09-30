@@ -1,0 +1,47 @@
+{
+  "baseline": "results/soap-creek-v1",
+  "review": "results/soap-creek-v1-review-v2",
+  "output": "results/soap-creek-vegetation-v2",
+  "audit_candidate": "A0031",
+  "parent_count": 8,
+  "max_alternatives": 64,
+  "offset_m": 50,
+  "direction_rings_m": [
+    [
+      10,
+      60
+    ],
+    [
+      60,
+      120
+    ]
+  ],
+  "direction_thresholds": [
+    0.2,
+    0.4
+  ],
+  "canopy_heights_m": [
+    5,
+    15
+  ],
+  "canopy_thresholds": [
+    0.2,
+    0.4
+  ],
+  "ray_count": 96,
+  "seed": 5403,
+  "download_bytes": 100000000,
+  "memory_mb": 1536,
+  "runtime_s": 900,
+  "disk_bytes": 500000000,
+  "lidar_source": {
+    "path": "results/soap-creek-vegetation-v1/downloads/local_A0031.laz",
+    "sha256": "5ba0d0f5d1ecb6f2b366224fd8cefad669871f601de1d631da4103d40c2e0803",
+    "url": "https://rockyweb.usgs.gov/vdelivery/Datasets/Staged/Elevation/LPC/Projects/CO_WestCentral_2019_A19/CO_WestCentral_2019/LAZ/USGS_LPC_CO_WestCentral_2019_A19_w0967n1797.laz",
+    "bytes": 71291641
+  },
+  "preserve_extra": [
+    "results/soap-creek-vegetation-v1"
+  ],
+  "lidar_metadata_dir": "results/soap-creek-vegetation-v1/downloads"
+}

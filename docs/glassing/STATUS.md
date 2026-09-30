@@ -473,3 +473,16 @@ Original packet/integrity files remain unchanged. Pending human review: tree/ope
 interpretation, local setup adjustments; field checks: ground sightlines/footing,
 connected legal approach, vegetation changes since2019 and actual detection.
 Stop at this visualization handoff; no modeling or itinerary work.
+
+## Bounded Soap Creek vegetation experiment completed — 2026-09-30
+
+Recovered the interrupted-session v1 and preserved it. Final separate handoff is
+results/soap-creek-vegetation-v2/REPORT.md and vegetation_review.pdf, plus local lidar
+review, components/sensitivity/overlap and original/alternative GPX/KML exports.
+150 original positions and52 nearby alternatives; no frozen/normal scoring changes.
+A0031 coarse4.9% sampling reproduced, ground-level setup still unresolved. One cached
+2019 lidar tile gives bounded column sensitivity, not measured deer visibility.
+39 tests pass; repeated numerical/GIS exports identical;6,326 earlier historical
+files plus419 immediate source/review/v1 files unchanged. Original scout verify passes.
+Runtime30.89s/723.33MiB/output42.18MB; zero new bulk downloads. Detailed audit,
+reproduction, evidence and limitations: vegetation/{README,REPORT}.md. Stop here.

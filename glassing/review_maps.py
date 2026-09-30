@@ -109,7 +109,7 @@ def main():
     draw_lines(ax,shape(domains['observer']).boundary,color='#00e5ff',lw=2);draw_lines(ax,shape(domains['target']).boundary,color='#c26aff',lw=1)
     for n,p in enumerate(points):
         ax.plot(p['x'],p['y'],'r^',mec='white',ms=9);ax.annotate(f'{n+1}. {p["id"]}',(p['x'],p['y']),xytext=(8,8),textcoords='offset points',bbox=dict(facecolor='white',alpha=.8,edgecolor='none'),fontsize=10)
-    ax.set_title('Soap Creek — unchanged five provisional alternatives\nCyan: your observer-search polygon | purple: evaluated target support\nHillshade is terrain context, not habitat; imagery follows on individual pages',fontsize=12)
+    ax.set_title(run.name+' — unchanged provisional alternatives\nCyan: your observer-search polygon | purple: evaluated target support\nHillshade is terrain context, not habitat; imagery follows on individual pages',fontsize=12)
     ax.set_xlabel(f'Easting (m), EPSG:{c["epsg"]}');ax.set_ylabel('Northing (m)');fig.tight_layout();save(fig,'overview')
     for rank,p in enumerate(points,1):
         lo,la=ll(p['x'],p['y']);chosen=[t for t in patches[p['id']]['patches'] if t['id'] in patches[p['id']]['selection']['patch_ids']]
@@ -140,7 +140,13 @@ def main():
     for v in overlap:rows.append([v['a'],v['b'],f'{v["shared_km2"]:.4f}',f'{v["fraction_a"]:.1%}',f'{v["fraction_b"]:.1%}',f'{v["jaccard"]:.1%}'])
     table=ax.table(cellText=rows,colLabels=['Point A','Point B','Shared km²','% of A visible','% of B visible','Intersection / union'],bbox=[.02,.29,.96,.59]);table.auto_set_font_size(False);table.set_fontsize(11)
     ax.set_title('Complementarity — existing pairwise terrain overlap, unchanged',fontsize=15,pad=20)
-    ax.text(.02,.19,'A0031 and A0140 share no scored visible cells with the other leading points.\nA0075, A0081 and A0139 share substantial terrain; compare their foreground and approach practicality.\nZero overlap means different modeled target cells, not independent deer opportunities or better access.',fontsize=11,va='top')
+    independent=[p['id'] for p in points if all(v['shared_km2']==0 for v in overlap if p['id'] in [v['a'],v['b']])]
+    shared=sorted([v for v in overlap if v['shared_km2']>0],key=lambda v:-v['shared_km2'])
+    summary=('No shared scored cells with other leaders: '+', '.join(independent)+'.\n') if independent else ''
+    if shared:
+        v=shared[0];summary+=f"Largest shared area: {v['a']} / {v['b']} ({v['shared_km2']:.4f} km²). Compare foreground and approach practicality.\n"
+    summary+='Zero overlap means different modeled target cells, not independent deer opportunities or better access.'
+    ax.text(.02,.19,summary,fontsize=11,va='top')
     ax.text(.02,.06,'Human review: inspect openings, immediate tree/branch obstruction and possible nearby setup adjustments.\nField checks: ground-level sightlines, footing, connected legal approach and actual deer-detection performance.',fontsize=11,va='top');save(fig,'overlap')
     pdf.close()
     for path,h in original.items():
