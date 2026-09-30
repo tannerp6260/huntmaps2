@@ -39,3 +39,10 @@ with independently generated candidates. No human selections are synthesized.
 
 The old adapter is retained as `python -m glassing.transfer_legacy` for reproducing
 previous adapter identities. Historical `runs/` files are intentionally not in Git.
+
+## Local scouting application
+
+Launch the installed browser GUI with `./huntmaps-gui`. Review saved terrain views,
+compare setups, annotate and export observer waypoints, or prepare a new baseline.
+See [GUI first-use and setup guide](docs/gui/README.md) and
+[verification evidence](docs/gui/VERIFICATION.md). Existing `./scout` commands are unchanged.

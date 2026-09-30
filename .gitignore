@@ -10,3 +10,8 @@ inputs/hunter/
 results/
 inputs/
 .scout-env/
+
+# Local GUI state and frontend dependencies
+.gui/
+gui/frontend/node_modules/
+gui/frontend/dist/
