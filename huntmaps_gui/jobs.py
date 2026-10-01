@@ -91,6 +91,8 @@ class Jobs:
                 lines=(self.folder/(ident+'.log')).read_text(errors='replace').splitlines()
                 diagnostics=[line for line in lines if line.startswith(('SCOUT:','GUI JOB:','ValueError:','FileNotFoundError:'))]
                 j['error']=(diagnostics[-1]+' ' if diagnostics else 'Job failed. ')+'Review the acquisition plan and log below. Fix the named source, area or budget, then refresh the plan or use a new run name. Partial files were retained.'
+            if status=='failed' and j['kind'].startswith('first-person'):
+                j['error']=(diagnostics[-1]+' ' if diagnostics else 'First-person preparation failed. ')+'Review the source plan and preparation log in the first-person viewer. Valid bundles and partial source files were retained.'
             write(path,j)
 
     def cancel(self,ident):

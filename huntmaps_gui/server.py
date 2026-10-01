@@ -1,4 +1,4 @@
-"""Local FastAPI application. No external basemap, arbitrary commands or run writes."""
+"""Local FastAPI application. Optional browser basemap; no arbitrary commands or historical run writes."""
 import io
 import json
 import re
@@ -45,6 +45,28 @@ def create_app():
     @app.exception_handler(ValueError)
     async def invalid(request,error):
         return __import__('fastapi').responses.JSONResponse(status_code=400,content={'detail':str(error)})
+
+    from . import first_person as fp
+    @app.post('/api/first-person/plans')
+    def fp_plan():
+        ident=fp.new_plan()
+        return jobs.start([sys.executable,'-u','-m','huntmaps_gui.first_person_worker','plan',ident],'first-person-plan',plan=ident)
+    @app.get('/api/first-person/plans/{ident}')
+    def fp_get_plan(ident):return fp.plan(ident)
+    @app.post('/api/first-person/plans/{ident}/start')
+    def fp_start(ident,body:dict):
+        p=fp.plan(ident)
+        if not p.get('prepared'):raise ValueError('Review the source plan first')
+        return jobs.start([sys.executable,'-u','-m','huntmaps_gui.first_person_worker','prepare',ident]+(['--download'] if body.get('download') is True else []),'first-person-prepare',plan=ident)
+    @app.get('/api/runs/{ident}/first-person/{cid}')
+    def fp_scene(ident,cid):return fp.scene(ident,cid)
+    @app.get('/api/runs/{ident}/first-person/{cid}/assets/{name}')
+    def fp_asset(ident,cid,name):
+        fp.candidate(ident,cid);folder,meta=fp.bundle(cid)
+        if name not in meta['hashes'] or name.endswith('.npz'):raise ValueError('Unknown scene asset')
+        return FileResponse(folder/name,headers={'Cache-Control':'private, max-age=3600'})
+    @app.post('/api/runs/{ident}/first-person/{cid}/profile')
+    def fp_profile(ident,cid,body:dict):return fp.profile(ident,cid,body)
 
     @app.get('/api/runs')
     def get_runs():return runs()

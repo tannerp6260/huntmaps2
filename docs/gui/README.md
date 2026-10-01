@@ -159,3 +159,11 @@ Only complete valid local DEM coverage is supported. See [training](TRAINING.md)
 **Locations to evaluate** controls initial separated sampling across your polygon, not the number of top results. Open **How locations are chosen** for spatial and terrain sampling details. Too many locations for the area and spacing causes a clear failure. Nearby diagnostic alternatives can add results. **Advanced scoring settings → Assumed inspection time** retains the existing 30-minute assumption; it affects inspection scores and rankings, not raw terrain-visible area or a recommended stop duration. **View radius** is analysis distance, not guaranteed deer identification distance. **Maximum download size (MB)** limits analysis source acquisition, separate from processing limits and online map browsing.
 
 Online map regression: with the GUI running, use `cd gui/frontend && npm run test:online`. It verifies live tiles, drawing, settings payload without preparing a real job, offline failure/retry, and 3D within local coverage.
+
+## First-person terrain pilot
+
+For the four prepared Soap Creek review setups, **View from this setup** opens a
+fixed-position terrain preview, measured lidar points and an interactive sightline
+profile. See [usage and limits](FIRST_PERSON.md) and
+[verification evidence](FIRST_PERSON_VERIFICATION.md). Fine ground covers 300 m;
+this is not a photorealistic or vegetation-validated field view.

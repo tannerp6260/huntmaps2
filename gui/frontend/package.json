@@ -7,14 +7,17 @@
     "build": "tsc --noEmit && vite build",
     "test:browser": "node browser-check.mjs",
     "test:training": "node browser-training-check.mjs",
-    "test:online": "node browser-online-check.mjs"
+    "test:online": "node browser-online-check.mjs",
+    "test:first-person": "node browser-first-person-check.mjs"
   },
   "dependencies": {
+    "@types/three": "0.180.0",
     "maplibre-gl": "6.11.2",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "terra-draw": "1.35.0",
-    "terra-draw-maplibre-gl-adapter": "1.4.1"
+    "terra-draw-maplibre-gl-adapter": "1.4.1",
+    "three": "0.180.0"
   },
   "devDependencies": {
     "@types/react": "19.1.8",
