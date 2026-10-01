@@ -17,6 +17,7 @@ from shapely.geometry import mapping
 from .catalog import ROOT,STATE,Run,runs,read,collection,feature
 from .jobs import Jobs,write
 from .tiles import tile
+from .terrain import metadata, elevation_tile
 from glassing.owner_area import choices,convert,LIMIT
 
 STORE_LOCK=threading.RLock()
@@ -56,6 +57,11 @@ def create_app():
     @app.get('/api/runs/{ident}/tiles/{layer}/{candidate}/{z}/{x}/{y}.png')
     def get_tile(ident,layer,candidate,z:int,x:int,y:int,color:int=0):
         return Response(tile(Run(ident),layer,candidate,z,x,y,color),media_type='image/png',headers={'Cache-Control':'private, max-age=3600'})
+    @app.get('/api/runs/{ident}/terrain')
+    def terrain_info(ident):return metadata(Run(ident))
+    @app.get('/api/runs/{ident}/terrain/{z}/{x}/{y}.png')
+    def terrain_tile(ident,z:int,x:int,y:int):
+        return Response(elevation_tile(Run(ident),z,x,y),media_type='image/png',headers={'Cache-Control':'private, max-age=3600'})
     @app.get('/api/runs/{ident}/overlap')
     def overlap(ident,ids:str):
         r=Run(ident);selected=ids.split(',')
@@ -93,12 +99,12 @@ def create_app():
         return Response(ET.tostring(root,encoding='utf-8',xml_declaration=True),media_type='application/xml',headers={'Content-Disposition':f'attachment; filename="{ident}-observers.{fmt}"'})
 
     @app.post('/api/imports')
-    async def import_area(file:UploadFile=File(...)):
+    async def import_area(file:UploadFile=File(...),practice:bool=False):
         ext=Path(file.filename or '').suffix.lower()
         if ext not in ['.geojson','.json','.kml','.kmz']:raise ValueError('Import GeoJSON, KML or KMZ')
         data=await file.read(LIMIT+1)
         if len(data)>LIMIT:raise ValueError('Area file exceeds 10 MB')
-        ident=uuid.uuid4().hex;folder=STATE/'imports'/ident;folder.mkdir(parents=True);path=folder/('area'+ext);path.write_bytes(data)
+        ident=uuid.uuid4().hex;folder=STATE/('practice-areas' if practice else 'imports')/ident;folder.mkdir(parents=True);path=folder/('area'+ext);path.write_bytes(data)
         items=choices(path)
         result=dict(id=ident,path=str(path),choices=[dict(number=str(n+1),name=name,geometry=mapping(g)) for n,(name,g) in enumerate(items)])
         write(folder/'import.json',result);return result

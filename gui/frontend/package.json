@@ -1,1 +1,26 @@
-{"name":"huntmaps-local-ui","private":true,"version":"1.0.0","type":"module","scripts":{"build":"tsc --noEmit && vite build","test:browser":"node browser-check.mjs"},"dependencies":{"maplibre-gl":"6.11.2","react":"19.1.0","react-dom":"19.1.0"},"devDependencies":{"@types/react":"19.1.8","@types/react-dom":"19.1.6","playwright":"1.63.0","typescript":"5.8.3","vite":"6.4.3"}}
+{
+  "name": "huntmaps-local-ui",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit && vite build",
+    "test:browser": "node browser-check.mjs",
+    "test:training": "node browser-training-check.mjs",
+    "test:online": "node browser-online-check.mjs"
+  },
+  "dependencies": {
+    "maplibre-gl": "6.11.2",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "terra-draw": "1.35.0",
+    "terra-draw-maplibre-gl-adapter": "1.4.1"
+  },
+  "devDependencies": {
+    "@types/react": "19.1.8",
+    "@types/react-dom": "19.1.6",
+    "playwright": "1.63.0",
+    "typescript": "5.8.3",
+    "vite": "6.4.3"
+  }
+}

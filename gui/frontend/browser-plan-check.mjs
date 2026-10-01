@@ -3,7 +3,7 @@ import fs from 'node:fs';
 const out='/tmp/huntmaps-gui-browser';fs.mkdirSync(out,{recursive:true});
 const browser=await chromium.launch({executablePath:'/usr/bin/google-chrome',headless:true,args:['--no-sandbox','--enable-unsafe-swiftshader','--use-gl=angle','--use-angle=swiftshader']});const page=await browser.newPage({viewport:{width:1500,height:1050}});
 const errors=[];page.on('pageerror',e=>errors.push(e.message));
-await page.goto('http://127.0.0.1:8765');await page.getByRole('button',{name:'+ New baseline run'}).click();await page.getByLabel('Import observer polygon').setInputFiles('/home/tanner/Desktop/huntmaps2/inputs/test.kml');await page.getByLabel('Polygon selection').waitFor();
+await page.goto('http://127.0.0.1:8765');await page.getByRole('button',{name:'+ New baseline run'}).click();await page.getByRole('button',{name:'Import file',exact:true}).click();await page.getByLabel('Import observer polygon').setInputFiles('/home/tanner/Desktop/huntmaps2/inputs/test.kml');await page.getByLabel('Polygon selection').waitFor();
 const name='gui-plan-check-'+Date.now();await page.getByLabel('New run name').fill(name);await page.getByRole('button',{name:'Prepare acquisition plan',exact:true}).click();await page.getByText(name+' acquisition plan',{exact:true}).waitFor({timeout:90000});
 await page.getByText('MB estimated',{exact:false}).first().waitFor({timeout:90000});await page.waitForTimeout(1000);await page.screenshot({path:out+'/07-acquisition-plan.png',fullPage:true});
 const plans=await (await page.request.get('http://127.0.0.1:8765/api/jobs')).json();const job=plans.find(j=>j.name===name);const plan=await (await page.request.get('http://127.0.0.1:8765/api/plans/'+job.plan)).json();

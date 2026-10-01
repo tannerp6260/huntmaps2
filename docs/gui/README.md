@@ -18,7 +18,7 @@ verification. Existing CLI commands continue to work.
 
 1. Open a completed run in the header. The initial Soap Creek neighborhood review
    is explicitly experimental; choose **soap-creek-v1 · baseline** to see the
-   unchanged normal analysis. Opening results starts no analysis or downloads.
+   unchanged normal analysis. Opening results starts no analysis or source acquisition; enabled online imagery requests display tiles.
 2. The initial list shows saved review positions. Use the neighborhood filter or
    **All setups** for the full saved pool. Select A0075, V010 or V008 to inspect
    coordinates, parent relationship, target area, cover breakdown and uncertainty.
@@ -36,10 +36,7 @@ verification. Existing CLI commands continue to work.
 
 Map controls include zoom, compass rotation/reset, metric scale, imagery and
 visibility toggles, opacity sliders, legend and whole-area/close-up buttons.
-Aerial imagery is entirely local; dates and native/export resolutions are in the
-source drawer. Hillshade covers available DEM terrain outside aerial clips. Outside
-the saved terrain footprint no basemap is invented. No PDF screenshots are used as
-map layers.
+Online imagery fills gaps behind saved aerial clips by default, fetching visible USGS National Map tiles as you pan and zoom. Turn off **Online imagery — fill gaps** for entirely local viewing; this preference persists in your browser. Provider attribution appears on the map. Online acquisition dates vary and tiles are browsing context, separate from analysis sources and its download cap. There is no offline tile pack. Saved imagery dates and native/export resolutions remain in the source drawer. When online imagery fails, the map keeps cached imagery and local hillshade where covered, with a retry control. No PDF screenshots are used as map layers.
 
 ## New baseline run
 
@@ -138,3 +135,27 @@ by normal runs. Cached 2019 imagery/2023 vegetation can differ from present cond
 No new scoring model, automatic grouping, optimizer, timed itinerary or field
 validation is claimed. Map tiles resample for display; saved cell counts, not screen
 pixels or Web Mercator surface area, define reported terrain-visible area.
+
+## In-app training
+
+Choose **Learn** for the optional hands-on Soap Creek compare/export lesson,
+new-area boundary lesson, and hunter’s task guide. Practice reviews stay separate
+from real annotations. See [training instructions](TRAINING.md).
+
+## Drawing and 3D terrain
+
+New baseline run offers **Draw on map** or **Import file**. Drawing validates the
+user's exact polygon through the existing import adapter. The revised learning
+path teaches reviewing saved results first, then drawing a separate practice area.
+Question marks explain the supported settings; resource details are expandable.
+
+Saved-result review offers **3D terrain**, tilt/rotation and a 2D reset. It uses
+local saved elevation and imagery, with no extra downloads or change to scoring.
+It is terrain context, not vegetation geometry or a field sightline simulation.
+Only complete valid local DEM coverage is supported. See [training](TRAINING.md).
+
+## Clearer settings
+
+**Locations to evaluate** controls initial separated sampling across your polygon, not the number of top results. Open **How locations are chosen** for spatial and terrain sampling details. Too many locations for the area and spacing causes a clear failure. Nearby diagnostic alternatives can add results. **Advanced scoring settings → Assumed inspection time** retains the existing 30-minute assumption; it affects inspection scores and rankings, not raw terrain-visible area or a recommended stop duration. **View radius** is analysis distance, not guaranteed deer identification distance. **Maximum download size (MB)** limits analysis source acquisition, separate from processing limits and online map browsing.
+
+Online map regression: with the GUI running, use `cd gui/frontend && npm run test:online`. It verifies live tiles, drawing, settings payload without preparing a real job, offline failure/retry, and 3D within local coverage.
