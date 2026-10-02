@@ -150,3 +150,37 @@ input records. Desktop and 900-pixel screenshots under
 `screenshots/browser-network-compat-check/` were inspected. Existing filtering,
 approach/export, training, first-person and working-waypoint journeys also passed.
 No acquisition or historical analysis was repeated by this fix.
+
+## Observer proximity source correction — 2026-10-02
+
+The owner's `test` (0.5 miles) and `test1` (2 miles) failed before proximity was
+evaluated: acquisition rejected an empty per-kind network inventory, and both plans
+had empty sampling source IDs. Selecting roads/trails as types did not select the
+source datasets displayed on the map. A read-only geometric check of the imported
+polygon against its loaded checksum-verified inventories found approximately 91.8%
+of polygon area within 0.5 miles of mapped segments, and 100% within 2 miles. These
+are buffered geometry checks, not DEM-valid sampling counts or walking distances.
+
+Preparation can now freeze references to covering verified cached inventories with
+zero network download reservation. Explicit refresh upgrades an older failed plan's
+network review without rewriting its old network definition. Empty acquired inventories
+are preserved as bounded query evidence; empty user imports still fail validation.
+The worker preserves explicit selected IDs, or binds empty IDs to the reviewed plan's
+inventory, validates usable lines before DEM acquisition, and records effective
+settings and source checksums in new runs' `observer_sampling.json`.
+
+New forms default to loaded source selections. Source choices and road/trail types
+are explained separately, and source URLs use concise USFS labels in the sampling
+panel. Missing selections without reviewed acquisition fail before plan submission.
+No historical engine, target masks, obstruction terrain or manual coordinates changed.
+
+Seven targeted filter/network tests pass, including fresh acquisition with an empty
+road response and a usable trail response, zero-download cache reuse, seal failures,
+source binding, a qualifying near-line point, and worker preparation/run integration
+using a stub owner engine. Full `./gui/check` passed; diagnostics:
+`/tmp/huntmaps-check-xdo5_m2z`. Elapsed **7m45.12s**, peak backend RSS **1,002.2 MiB**
+across the whole suite. All **7,555 protected files** were unchanged. The browser
+checks assert loaded source checkboxes are selected in a new sampling form; desktop
+and 900-pixel scouting screenshots were inspected. No live acquisition or owner
+analysis was rerun by this correction; failed partial runs remain available for
+explicit refreshed-plan recovery.

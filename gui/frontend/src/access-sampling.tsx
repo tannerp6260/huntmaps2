@@ -35,7 +35,10 @@ export default function AccessSampling({
       })
       .then(networkResponse)
       .then((v) => {
-        if (alive) setNetworks(v);
+        if (alive) {
+          setNetworks(v);
+          if (!initialSampling) setIds(v.map((n) => n.id));
+        }
       })
       .catch((e) => {
         if (alive) setNetworkError(String(e));
@@ -72,12 +75,20 @@ export default function AccessSampling({
         <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
         Constrain new observer sampling by loaded network proximity
       </label>
+      {enabled && !ids.length && (
+        <p className={includeNetwork ? 'hint' : 'error'}>
+          {includeNetwork
+            ? 'Sampling will use networks acquired or reused by this reviewed plan.'
+            : 'Select at least one source dataset, or include the reviewed USFS acquisition.'}
+        </p>
+      )}
       {enabled && (
         <>
           <p>
             Only observer eligibility changes. Original polygon, targets and obstruction terrain
-            stay intact. Unknown network/elevation does not qualify. Import or acquire networks in
-            review first.
+            stay intact. Unknown network/elevation does not qualify. Select source datasets below;
+            roads/trails are separate type choices. With no source selected, this run uses its
+            reviewed acquired networks.
           </p>
           {networks.map((n) => (
             <label key={n.id}>
@@ -88,7 +99,10 @@ export default function AccessSampling({
                   setIds((v) => (e.target.checked ? [...v, n.id] : v.filter((id) => id !== n.id)))
                 }
               />
-              {n.kind}: {n.source}
+              {n.kind}:{' '}
+              {n.source.startsWith('https://apps.fs.usda.gov/')
+                ? 'USFS mapped inventory'
+                : n.source}
             </label>
           ))}
           {['roads', 'trails'].map((k) => (

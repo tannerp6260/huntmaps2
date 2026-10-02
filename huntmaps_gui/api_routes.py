@@ -352,6 +352,10 @@ def api_router(jobs: Jobs):
             if body.get("access_sampling") is not None
             else None
         )
+        if sampling and not sampling["network_ids"] and not body.get("include_network"):
+            raise ValueError(
+                "Select road/trail source datasets or include the reviewed USFS network acquisition"
+            )
         imp = body.get("import_id", "")
         if not re.fullmatch("[a-f0-9]{32}", imp):
             raise ValueError("Import your observer polygon first")

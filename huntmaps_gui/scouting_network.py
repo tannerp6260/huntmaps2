@@ -28,7 +28,7 @@ def checked_id(ident):
     return ident
 
 
-def parse_lines(data, extension):
+def parse_lines(data, extension, allow_empty=False):
     if extension in (".json", ".geojson"):
         value = json.loads(data)
         features = (
@@ -85,7 +85,7 @@ def parse_lines(data, extension):
             ):
                 raise ValueError("Network imports must use WGS84 longitude/latitude")
             lines.append(LineString([(x, y) for x, y, *_ in line.coords]))
-    if not lines:
+    if not lines and not allow_empty:
         raise ValueError("No road/trail lines found; missing coverage remains unknown")
     if sum(len(l.coords) for l in lines) > 100000:
         raise ValueError("Network too large; narrow the import")
@@ -97,7 +97,7 @@ def save_network(data, extension, kind, source, date="unknown", coverage=None):
         raise ValueError("Choose roads or trails")
     if len(data) > LIMIT:
         raise ValueError("Network import exceeds 10 MB")
-    lines = parse_lines(data, extension)
+    lines = parse_lines(data, extension, allow_empty=coverage is not None)
     ident = uuid.uuid4().hex
     folder = STATE / "networks" / ident
     with locked(STATE / "maintenance"):
@@ -130,7 +130,12 @@ def load_networks(ids, epsg, kinds=("roads", "trails")):
         raw = original.read_bytes()
         if hashlib.sha256(raw).hexdigest() != v["sha256"]:
             raise ValueError("Network source changed; prior scenarios preserved")
-        actual = [mapping(g) for g in parse_lines(raw, original.suffix)]
+        actual = [
+            mapping(g)
+            for g in parse_lines(
+                raw, original.suffix, allow_empty=v.get("coverage") is not None
+            )
+        ]
         if v.get("version") != 1 or json.dumps(actual, sort_keys=True) != json.dumps(
             v["lines"], sort_keys=True
         ):
@@ -176,6 +181,13 @@ def network_plan(bounds, budget_mb):
             for k, v in SERVICES.items()
         ],
     )
+    cached = covering_networks(bounds)
+    if cached:
+        value["cached_network_ids"] = [n["id"] for n in cached]
+        value["estimated_bytes"] = 0
+        value["note"] = (
+            "Reuse checksum-verified cached roads/trails covering these bounds; no network download."
+        )
     write(STATE / "network-plans" / f"{ident}.json", value)
     return value
 
@@ -187,6 +199,17 @@ def acquire(ident, remaining_bytes):
     cap = min(p["max_download_mb"] * 1000000, remaining_bytes)
     if p["estimated_bytes"] > cap:
         raise ValueError("Network plan exceeds remaining shared download budget")
+    if p.get("cached_network_ids"):
+        records = [
+            read_json(STATE / "networks" / checked_id(i) / "network.json")
+            for i in p["cached_network_ids"]
+        ]
+        load_networks(p["cached_network_ids"], 4326)
+        write(
+            STATE / "network-plans" / f"{ident}-result.json",
+            dict(networks=records, downloaded_bytes=0),
+        )
+        return records
     responses = []
     used = 0
     for item in p["items"]:
@@ -234,7 +257,12 @@ def display_network(value):
     raw = original.read_bytes()
     if hashlib.sha256(raw).hexdigest() != value["sha256"]:
         raise ValueError("Network source changed; re-import to display it")
-    geometries = [mapping(g) for g in parse_lines(raw, original.suffix)]
+    geometries = [
+        mapping(g)
+        for g in parse_lines(
+            raw, original.suffix, allow_empty=value.get("coverage") is not None
+        )
+    ]
     if json.dumps(geometries, sort_keys=True) != json.dumps(
         value["lines"], sort_keys=True
     ):
@@ -333,3 +361,56 @@ def display_network(value):
             )
         )
     return dict(value, display_features=features)
+
+
+def covering_networks(bounds):
+    """Only complete, checksum-verified inventories whose recorded query contains the AOI."""
+    choices = {kind: [] for kind in SERVICES}
+    for path in (STATE / "networks").glob("*/network.json"):
+        value = read_json(path)
+        coverage = value.get("coverage")
+        if (
+            value.get("kind") not in choices
+            or not isinstance(coverage, list)
+            or len(coverage) != 4
+        ):
+            continue
+        if not (
+            coverage[0] <= bounds[0]
+            and coverage[1] <= bounds[1]
+            and coverage[2] >= bounds[2]
+            and coverage[3] >= bounds[3]
+        ):
+            continue
+        try:
+            load_networks([value["id"]], 4326)
+        except (ValueError, OSError, StopIteration):
+            continue
+        choices[value["kind"]].append(value)
+    if not all(choices.values()):
+        return []
+    return [
+        sorted(
+            choices[kind], key=lambda v: (v["retrieved_utc"], v["id"]), reverse=True
+        )[0]
+        for kind in SERVICES
+    ]
+
+
+def sampling_networks(settings, inventory=None):
+    """Resolve explicitly selected sources, or this reviewed plan's network inventory."""
+    effective = dict(settings)
+    if not effective["network_ids"] and inventory:
+        effective["network_ids"] = [
+            n["id"] for n in inventory["networks"] if n["kind"] in effective["kinds"]
+        ]
+    if not effective["network_ids"]:
+        raise ValueError(
+            "Select mapped network sources for observer sampling, or include a reviewed network acquisition"
+        )
+    lines, sources = load_networks(effective["network_ids"], 4326, effective["kinds"])
+    if not lines:
+        raise ValueError(
+            "Selected mapped inventories contain no road/trail lines; choose available sources or import checked lines"
+        )
+    return effective, sources

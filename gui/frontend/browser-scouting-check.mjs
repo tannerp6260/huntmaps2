@@ -39,7 +39,12 @@ await page.getByText('Visible terrain elevation band (feet)',{exact:true}).locat
 await page.getByLabel('Minimum target elevation feet',{exact:true}).fill('10000');await page.getByLabel('Maximum target elevation feet',{exact:true}).fill('10500');
 await page.getByRole('button',{name:'Apply review filters',exact:true}).click();await page.getByText('Applied matching-area order',{exact:false}).waitFor();
 await page.getByRole('button',{name:'2 · Review and keep setups',exact:true}).click();
-await page.getByRole('button',{name:'1 · Create results',exact:true}).click();await page.getByLabel('New run name',{exact:true}).fill('unsubmitted-scouting-check');await page.getByLabel('Maximum download size (MB)',{exact:true}).fill('1901');
+await page.getByRole('button',{name:'1 · Create results',exact:true}).click();
+await page.getByText('Observer access sampling and network acquisition',{exact:true}).click();
+await page.getByLabel('Constrain new observer sampling by loaded network proximity',{exact:true}).check();
+await page.getByLabel('trails: synthetic-network.geojson',{exact:true}).waitFor();
+assert.equal(await page.getByLabel('trails: synthetic-network.geojson',{exact:true}).isChecked(),true);
+await page.getByLabel('New run name',{exact:true}).fill('unsubmitted-scouting-check');await page.getByLabel('Maximum download size (MB)',{exact:true}).fill('1901');
 assert.equal(await page.getByRole('button',{name:'Prepare acquisition plan',exact:true}).isDisabled(),true);
 assert.equal(await controls.getByLabel('Trails', {exact:false}).isChecked(), true);
 await page.screenshot({path:out+'/22-network-create-900.png',fullPage:true});

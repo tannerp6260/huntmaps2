@@ -10,11 +10,160 @@ from huntmaps_gui.scouting_network import (
     save_network,
     load_networks,
     network_plan,
+    acquire,
+    covering_networks,
+    sampling_networks,
 )
 from huntmaps_gui.config import AppConfig, configured
 
 
 class ScoutingFilterTests(unittest.TestCase):
+    def test_empty_inventory_cache_reuse_and_sampling_binding(self):
+        import json
+        from unittest.mock import patch
+        from huntmaps_gui.storage import read_json
+
+        bounds = [-107.1, 37.9, -106.9, 38.1]
+        with tempfile.TemporaryDirectory() as temp, configured(
+            AppConfig(state_dir=Path(temp))
+        ):
+            empty = b'{"type":"FeatureCollection","features":[]}'
+            import io
+
+            fresh = network_plan(bounds, 600)
+            nonempty = b'{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"LineString","coordinates":[[-107,38],[-107.01,38.01]]},"properties":{}}]}'
+            with patch(
+                "urllib.request.urlopen",
+                side_effect=[io.BytesIO(empty), io.BytesIO(nonempty)],
+            ):
+                result = acquire(fresh["id"], 20000000)
+            self.assertEqual([len(n["lines"]) for n in result], [0, 1])
+            with self.assertRaises(ValueError):
+                save_network(empty, ".geojson", "roads", "empty import")
+            roads = save_network(
+                empty, ".geojson", "roads", "bounded query", coverage=bounds
+            )
+            trail = save_network(
+                b'{"type":"LineString","coordinates":[[-107,38],[-107.01,38.01]]}',
+                ".geojson",
+                "trails",
+                "bounded query",
+                coverage=bounds,
+            )
+            self.assertEqual(
+                display_network(
+                    read_json(Path(temp) / "networks" / roads["id"] / "network.json")
+                )["display_features"],
+                [],
+            )
+            self.assertEqual(len(covering_networks(bounds)), 2)
+            plan = network_plan(bounds, 600)
+            self.assertEqual(plan["estimated_bytes"], 0)
+            with patch(
+                "urllib.request.urlopen", side_effect=AssertionError("No redownload")
+            ):
+                inventories = acquire(plan["id"], 0)
+            inventory = dict(networks=inventories, downloaded_bytes=0)
+            settings = validate(dict(distance_m=0.5 * 1609.344))
+            resolved, sources = sampling_networks(settings, inventory)
+            self.assertEqual(settings["network_ids"], [])
+            self.assertEqual(len(resolved["network_ids"]), 2)
+            lines, _ = load_networks(resolved["network_ids"], 32613)
+            self.assertEqual(len(lines), 1)
+            from glassing.transfer import project
+
+            point = project(4326, 32613)(-107.005, 38.005)
+            self.assertEqual(
+                access_evidence(
+                    point, lines, np.zeros((1, 1)), (0, 1, 0, 1, 0, -1), settings
+                )["status"],
+                "qualifies",
+            )
+            with self.assertRaisesRegex(ValueError, "Select mapped network"):
+                sampling_networks(settings)
+            with self.assertRaisesRegex(ValueError, "contain no"):
+                sampling_networks(dict(settings, network_ids=[roads["id"]]))
+            selected, _ = sampling_networks(
+                dict(settings, network_ids=[trail["id"]]), inventory
+            )
+            self.assertEqual(selected["network_ids"], [trail["id"]])
+            (Path(temp) / "networks" / trail["id"] / "original.geojson").write_bytes(
+                b"changed"
+            )
+            self.assertNotIn(trail["id"], [n["id"] for n in covering_networks(bounds)])
+
+    def test_worker_binds_reviewed_cached_inventory_before_sampling(self):
+        import json
+        from unittest.mock import patch
+        from huntmaps_gui.storage import write, read_json
+        from huntmaps_gui import worker
+
+        with tempfile.TemporaryDirectory() as temp, configured(
+            AppConfig(state_dir=Path(temp) / "state", workspace=Path(temp))
+        ):
+            bbox = [-107.02, 38, -107, 38.02]
+            for kind in ("roads", "trails"):
+                save_network(
+                    b'{"type":"LineString","coordinates":[[-107.01,38.005],[-107.01,38.015]]}',
+                    ".geojson",
+                    kind,
+                    "fixture",
+                    coverage=bbox,
+                )
+            ident = "a" * 32
+            p = dict(
+                name="fixture",
+                area="fixture.geojson",
+                polygon="1",
+                max_download_mb=600,
+                config="fixture-config.json",
+                include_network=True,
+                access_sampling=validate(dict(distance_m=804.672)),
+            )
+            path = Path(temp) / "state/plans" / (ident + ".json")
+            write(path, p)
+            root = Path(temp) / "results/fixture"
+            root.mkdir(parents=True)
+            area = dict(
+                type="Polygon",
+                coordinates=[
+                    [
+                        [-107.015, 38.005],
+                        [-107.005, 38.005],
+                        [-107.005, 38.015],
+                        [-107.015, 38.015],
+                        [-107.015, 38.005],
+                    ]
+                ],
+            )
+
+            def prepare(args):
+                if args[0] == "prepare":
+                    write(
+                        root / "download_plan.json", dict(estimated_bytes=0, items=[])
+                    )
+                    write(root / "observer.geojson", area)
+                    write(
+                        root / "scouting.json",
+                        dict(epsg=32613, observer_polygon="fixture.geojson"),
+                    )
+                return 0
+
+            with patch.object(worker, "run", side_effect=prepare), patch(
+                "sys.argv", ["worker", "prepare", ident]
+            ):
+                self.assertEqual(worker.main(), 0)
+            reviewed = read_json(path)
+            self.assertEqual(reviewed["acquisition"]["estimated_bytes"], 0)
+            with patch.object(worker, "run", side_effect=prepare), patch(
+                "huntmaps_gui.scouting_filters.sampling_exclusion", return_value=None
+            ) as sample, patch("sys.argv", ["worker", "run", ident]):
+                self.assertEqual(worker.main(), 0)
+                self.assertEqual(len(sample.call_args.args[1]["network_ids"]), 2)
+            evidence = read_json(root / "observer_sampling.json")
+            self.assertEqual(len(evidence["sources"]), 2)
+            self.assertEqual(read_json(path)["access_sampling"]["network_ids"], [])
+
     def test_display_attributes_preserve_sealed_geometry(self):
         import json
 

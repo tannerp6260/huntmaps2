@@ -64,7 +64,22 @@ def main():
                 "id"
             ]
         net = read(STATE / "network-plans" / (p["network_plan"] + ".json"))
+        if a.action == "prepare" and not net.get("cached_network_ids"):
+            from .scouting_network import covering_networks
+
+            if covering_networks(net["bounds"]):
+                p["network_plan"] = network_plan(net["bounds"], p["max_download_mb"])[
+                    "id"
+                ]
+                net = read(STATE / "network-plans" / (p["network_plan"] + ".json"))
         cached = read(STATE / "network-plans" / (p["network_plan"] + "-result.json"))
+        if cached is None and net.get("cached_network_ids"):
+            from .scouting_network import acquire
+
+            acquire(p["network_plan"], 0)
+            cached = read(
+                STATE / "network-plans" / (p["network_plan"] + "-result.json")
+            )
         reservation = net["estimated_bytes"]
         acquisition = dict(
             acquisition,
@@ -125,6 +140,11 @@ def main():
             )
         )
     if p.get("access_sampling"):
+        from .scouting_network import sampling_networks
+
+        sampling, sampling_sources = sampling_networks(
+            p["access_sampling"], cached if p.get("include_network") else None
+        )
         if code != 0:
             if not a.download:
                 raise ValueError("Sampling eligibility requires approved DEM sources")
@@ -160,7 +180,7 @@ def main():
                 signal.alarm(900)
                 excluded = sampling_exclusion(
                     c,
-                    p["access_sampling"],
+                    sampling,
                     STATE / "plans" / (a.plan + "-observer-exclusion.geojson"),
                 )
             finally:
@@ -170,6 +190,14 @@ def main():
             if excluded:
                 c["observer_exclusions"] = c.get("observer_exclusions", []) + [excluded]
             write(root / "scouting.json", c)
+            write(
+                root / "observer_sampling.json",
+                dict(
+                    settings=sampling,
+                    sources=sampling_sources,
+                    notice="Observer eligibility only; original polygon, targets and obstruction terrain preserved",
+                ),
+            )
             p["sampling_applied"] = True
             write(path, p)
     if not a.download and code != 0:

@@ -292,3 +292,16 @@ older backend's line-only response: roads/trails still display, with unknown sub
 labels until the backend is restarted. Empty overlays explicitly say no data is
 loaded. Invalid network responses and loading failures appear inside the controls
 without replacing the scouting screen.
+
+Observer proximity uses the source datasets selected in the sampling panel, not the
+map visibility toggles. New forms select currently loaded sources by default. If
+none are selected, enable reviewed USFS acquisition: sampling then uses that plan's
+acquired or checksum-verified covering cached inventories. Source kinds (roads and
+trails) remain independent type choices. An empty road response does not discard
+available trail lines. Effective source IDs/checksums and limits are recorded in
+new runs' `observer_sampling.json`. No selected usable lines is a data/source error,
+not evidence that a distance threshold found no qualifying terrain.
+
+For an existing failed preparation, restart the GUI, use **Refresh plan / recover
+partial preparation**, review the updated estimate and start/resume. Covering cached
+networks are reused without another download; prior completed runs are preserved.
