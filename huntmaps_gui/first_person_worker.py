@@ -22,7 +22,6 @@ from glassing.acquire import digest
 
 
 def deps():
-    sys.path.insert(0, str(ROOT / ".cache/vegetation-deps"))
     try:
         import laspy, pyproj
     except ImportError as e:

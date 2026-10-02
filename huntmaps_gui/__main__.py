@@ -14,6 +14,11 @@ from .config import AppConfig, configured, PROJECT
 
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument(
+        "--preflight",
+        action="store_true",
+        help="Check setup without starting the server",
+    )
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--no-browser", action="store_true")
     ap.add_argument("--state-dir", type=Path, default=PROJECT / ".gui")
@@ -21,6 +26,22 @@ def main():
     a = ap.parse_args()
     config = AppConfig(state_dir=a.state_dir, workspace=a.test_workspace or PROJECT)
     os.environ.update(config.environment())
+    if a.preflight:
+        from .preflight import check
+        import json
+
+        report = check(a.port)
+        print(json.dumps(report, indent=2))
+        return 0 if report["ok"] else 2
+    if not 1 <= a.port <= 65535:
+        raise SystemExit("Use a port from 1 to 65535")
+    try:
+        with socket.socket() as sock:
+            sock.bind(("127.0.0.1", a.port))
+    except OSError as error:
+        raise SystemExit(
+            f"Cannot bind 127.0.0.1:{a.port}: {error}. Choose --port with a free port."
+        )
     ROOT = config.source_dir
     STATE = config.state_dir
     os.chdir(ROOT)
@@ -67,4 +88,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

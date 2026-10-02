@@ -19,9 +19,6 @@ class BudgetError(ValueError):
 
 
 def marching():
-    sys.path.insert(
-        0, str(Path(__file__).resolve().parents[1] / ".cache/vegetation-deps")
-    )
     try:
         from skimage.measure import marching_cubes
 

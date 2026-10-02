@@ -1,5 +1,12 @@
 # HuntMaps2 local scouting desk
 
+Current guides: [setup](SETUP.md), this user guide, and
+[maintenance/testing](MAINTENANCE.md). Experimental protocols and `*_VERIFICATION.md`
+files in this folder record historical evidence; their original claims and limits
+remain unchanged. [Cleanup verification](CLEANUP_VERIFICATION.md) records the current
+acceptance checks.
+
+
 From this Ubuntu workspace, launch the installed application:
 
 ```sh
@@ -182,3 +189,11 @@ waypoints, exports and the simplified controls.
 
 Waypoint updates: [working locations and terrain shading](WORKING_WAYPOINTS.md).
 Verification: [working waypoint evidence](WORKING_WAYPOINTS_VERIFICATION.md).
+
+## Storage and recovery
+
+Use the Storage and recovery panel below the workspace to make a record backup,
+restore a selected backup, or preview and execute cache cleanup. Cleanup keeps ready
+scenes and referenced waypoint masks available offline. It does not reset notes or
+waypoints. Reset has a separate typed confirmation and retains a backup. The panel
+shows damaged-record diagnostics instead of silently emptying your records.
