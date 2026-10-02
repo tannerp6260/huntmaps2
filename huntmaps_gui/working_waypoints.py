@@ -112,7 +112,7 @@ def cached(folder, key, r):
 
 def reconcile(folder, ident, jobs):
     data = state(folder)
-    records = {j["id"]: j for j in jobs.list()}
+    records = {j["id"]: j for j in jobs.list(include_logs=False)}
     changed = False
     for key, pending in list(data["pending"].items()):
         j = records.get(pending["job_id"])
@@ -172,7 +172,7 @@ def start(ident, key, body, jobs):
     )
     with file_locked(STATE / "maintenance"), jobs.lock, locked(ident) as folder:
         with jobs.lock:
-            if any(j["status"] in ACTIVE for j in jobs.list()):
+            if any(j["status"] in ACTIVE for j in jobs.list(include_logs=False)):
                 raise ValueError(
                     "Another job is running. Wait or cancel it, then Update waypoint."
                 )
@@ -228,7 +228,14 @@ def restore(ident, key, jobs):
         data = state(folder)
         pending = data["pending"].pop(key, None)
         if pending:
-            j = next((j for j in jobs.list() if j["id"] == pending["job_id"]), None)
+            j = next(
+                (
+                    j
+                    for j in jobs.list(include_logs=False)
+                    if j["id"] == pending["job_id"]
+                ),
+                None,
+            )
             if j and j["status"] == "running":
                 jobs.cancel(j["id"])
         data["overrides"].pop(key, None)

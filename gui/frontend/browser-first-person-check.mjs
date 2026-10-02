@@ -1,7 +1,8 @@
+if(!process.env.HUNTMAPS_URL||!process.env.HUNTMAPS_SCREENSHOTS)throw Error('Run through ./gui/check with an isolated server and screenshot directory');
 import {chromium} from 'playwright';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
-const base=process.env.HUNTMAPS_URL||'http://127.0.0.1:8765',out=process.env.HUNTMAPS_SCREENSHOTS||'/tmp/huntmaps-first-person';fs.mkdirSync(out,{recursive:true});
+const base=process.env.HUNTMAPS_URL,out=process.env.HUNTMAPS_SCREENSHOTS;fs.mkdirSync(out,{recursive:true});
 const browser=await chromium.launch({executablePath:process.env.HUNTMAPS_BROWSER||'/usr/bin/google-chrome',headless:true,args:['--no-sandbox','--enable-unsafe-swiftshader','--use-gl=angle','--use-angle=swiftshader']});
 try{
  const page=await browser.newPage({viewport:{width:1450,height:1050}});page.setDefaultTimeout(45000);const errors=[],mutations=[],external=[];
@@ -23,7 +24,7 @@ try{
  await page.getByLabel('Inferred vegetation',{exact:true}).uncheck();await page.waitForFunction(()=>!JSON.parse(document.querySelector('.fp-scene').getAttribute('data-camera')).vegetationVisible);await page.screenshot({path:out+'/08-foliage-off.png',fullPage:true});
  await page.getByLabel('Inferred vegetation',{exact:true}).check();await page.waitForFunction(()=>JSON.parse(document.querySelector('.fp-scene').getAttribute('data-camera')).vegetationVisible);await page.screenshot({path:out+'/09-foliage-on.png',fullPage:true});
  const map=page.getByLabel('Choose inspection target on plan map',{exact:true});await map.scrollIntoViewIfNeeded();let b=await map.boundingBox();await page.mouse.click(b.x+b.width*.65,b.y+b.height*.5);await page.locator('.fp-profile').waitFor();await page.locator('.fp-vegetation table').waitFor();assert.equal(await page.locator('.fp-vegetation tbody tr').count(),3);await page.getByLabel('Inspection target height',{exact:true}).fill('2.5');await page.waitForTimeout(700);await page.screenshot({path:out+'/04-terrain-profile.png',fullPage:true});
- await page.getByLabel('Inspection map radius',{exact:true}).selectOption('2000');b=await map.boundingBox();await page.mouse.click(b.x+b.width*.65,b.y+b.height*.5);await page.getByText('Separate baseline-only profile; both endpoints use baseline ground',{exact:false}).waitFor();await page.getByText('Vegetation screening requires fine observer ground and a target within 300 m.',{exact:true}).waitFor();
+ await page.getByLabel('Inspection map radius',{exact:true}).selectOption('2000');await map.scrollIntoViewIfNeeded();b=await map.boundingBox();await page.mouse.click(b.x+b.width*.65,b.y+b.height*.5);await page.getByText('Separate baseline-only profile; both endpoints use baseline ground',{exact:false}).waitFor();await page.getByText('Vegetation screening requires fine observer ground and a target within 300 m.',{exact:true}).waitFor();
  const scene=page.locator('.fp-scene');await scene.scrollIntoViewIfNeeded();await scene.focus();await page.keyboard.press('ArrowRight');const start=Date.now();await page.getByLabel('First-person heading',{exact:true}).fill('200');await page.waitForFunction(()=>JSON.parse(document.querySelector('.fp-scene').getAttribute('data-camera')).heading===200);const interactionMs=Date.now()-start;assert.ok(interactionMs<2000);
  await page.setViewportSize({width:900,height:800});await page.screenshot({path:out+'/05-smaller-screen.png',fullPage:true});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  await scene.evaluate(el=>el.querySelector('canvas').dispatchEvent(new Event('webglcontextlost',{cancelable:true,bubbles:true})));await page.getByText('Graphics context lost.',{exact:false}).waitFor();

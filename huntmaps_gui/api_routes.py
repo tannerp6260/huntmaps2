@@ -1,24 +1,17 @@
 """Local FastAPI application. Optional browser basemap; no arbitrary commands or historical run writes."""
 
-import io
-import json
 import re
 import sys
 import threading
 import uuid
 import xml.etree.ElementTree as ET
-from contextlib import asynccontextmanager
 from pathlib import Path
-from urllib.parse import urlparse
 from fastapi import APIRouter, UploadFile, File
 from fastapi.responses import Response, FileResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.exceptions import RequestValidationError
-from starlette.middleware.trustedhost import TrustedHostMiddleware
 from shapely.geometry import mapping
 from .catalog import ROOT, STATE, Run, runs, read, collection, feature
 from .jobs import Jobs, write
-from .config import current, configured, WORKSPACE
+from .config import WORKSPACE
 from .storage import transaction
 from .requests import (
     Annotation,
@@ -44,7 +37,7 @@ def valid_name(name):
     return name
 
 
-def api_router(jobs):
+def api_router(jobs: Jobs):
     router = APIRouter()
     from . import first_person as fp
 

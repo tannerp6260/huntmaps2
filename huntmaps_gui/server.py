@@ -55,6 +55,15 @@ def create_app(config=None):
             status_code=400, content={"detail": "Invalid request: " + str(error)}
         )
 
+    @app.exception_handler(OSError)
+    async def file_unavailable(request, error):
+        return JSONResponse(
+            status_code=400,
+            content={
+                "detail": f"Local file unavailable: {error}. Preserve existing records; restore the named file or a record backup."
+            },
+        )
+
     @app.exception_handler(ValueError)
     async def invalid(request, error):
         return JSONResponse(status_code=400, content={"detail": str(error)})

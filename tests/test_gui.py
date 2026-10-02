@@ -9,8 +9,18 @@ from huntmaps_gui.catalog import ROOT,STATE,Run
 from huntmaps_gui.tiles import tile,sources
 from huntmaps_gui.jobs import Jobs,write
 from huntmaps_gui.server import create_app
+from huntmaps_gui.config import AppConfig, configured, current
 
 class GuiTests(unittest.TestCase):
+ def setUp(self):
+     base = current()
+     temporary = tempfile.TemporaryDirectory(prefix="huntmaps-test-")
+     self.addCleanup(temporary.cleanup)
+     root = Path(temporary.name)
+     context = configured(AppConfig(base.source_dir, root / "state", root / "workspace"))
+     context.__enter__()
+     self.addCleanup(context.__exit__, None, None, None)
+
  def test_real_visibility_alignment_cover_and_tiles(self):
   r=Run('soap-creek-decision-review-v2')
   self.assertEqual(r.groups['West'][:3],['A0075','V010','V008'])

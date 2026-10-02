@@ -1,7 +1,8 @@
-const base=process.env.HUNTMAPS_URL||'http://127.0.0.1:8765';
+if(!process.env.HUNTMAPS_URL||!process.env.HUNTMAPS_SCREENSHOTS)throw Error('Run through ./gui/check with an isolated server and screenshot directory');
+const base=process.env.HUNTMAPS_URL;
 import {chromium} from 'playwright';
 import fs from 'node:fs';
-const out=process.env.HUNTMAPS_SCREENSHOTS||'/tmp/huntmaps-gui-browser';fs.mkdirSync(out,{recursive:true});
+const out=process.env.HUNTMAPS_SCREENSHOTS;fs.mkdirSync(out,{recursive:true});
 const browser=await chromium.launch({executablePath:process.env.HUNTMAPS_BROWSER||'/usr/bin/google-chrome',headless:true,args:['--no-sandbox','--enable-unsafe-swiftshader','--use-gl=angle','--use-angle=swiftshader']});
 const page=await browser.newPage({viewport:{width:1500,height:1050}});const errors=[],external=[];page.on('pageerror',e=>errors.push(e.message));page.on('response',r=>{if(r.status()>=400)errors.push(`${r.status()} ${r.url()}`)});page.on('request',r=>{if(r.url().startsWith('http')&&!r.url().startsWith(base))external.push(r.url())});
 await page.addInitScript(()=>localStorage.setItem('huntmaps-online-imagery','off'));await page.goto(base);

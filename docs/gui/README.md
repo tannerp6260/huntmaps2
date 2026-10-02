@@ -117,19 +117,18 @@ synthetic verification run, whose source descriptors refer there.
 
 ## Verification and limits
 
-See [verification evidence](VERIFICATION.md). Repeat engineering checks with:
+Run the isolated offline acceptance suite:
 
 ```sh
-.venv/bin/python -m unittest discover -s tests -v
-# With the app running:
-node gui/frontend/browser-check.mjs
-.venv/bin/python gui/verify_jobs.py
-node gui/frontend/browser-plan-check.mjs
+./gui/check
 ```
 
-The browser checks use installed `/usr/bin/google-chrome` through Playwright. Fixture
-jobs are clearly named **synthetic-gui-...** and are engineering tests, never hunting
-recommendations. Each live fixture test creates a fresh run to preserve prior results.
+The suite starts dedicated localhost servers, uses temporary GUI state and writable
+workspaces, and audits protected sources and the owner's records. It can run while
+the normal app is open. Diagnostics and screenshots remain in the printed temporary
+directory. See [maintenance and testing](MAINTENANCE.md) and
+[cleanup acceptance evidence](CLEANUP_VERIFICATION.md). Earlier
+[prototype verification evidence](VERIFICATION.md) remains historical.
 
 Supported result adapters are completed normal `results/*/scouting.json` owner runs
 and the specific saved Soap Creek decision review. Older research archives under

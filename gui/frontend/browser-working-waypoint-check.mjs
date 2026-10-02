@@ -1,7 +1,8 @@
+if(!process.env.HUNTMAPS_URL||!process.env.HUNTMAPS_SCREENSHOTS)throw Error('Run through ./gui/check with an isolated server and screenshot directory');
 import {chromium} from 'playwright';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
-const base=process.env.HUNTMAPS_URL||'http://127.0.0.1:8765',api=base+'/api/runs/soap-creek-decision-review-v2',out=process.env.HUNTMAPS_SCREENSHOTS||'/tmp/huntmaps-working-waypoint';fs.mkdirSync(out,{recursive:true});
+const base=process.env.HUNTMAPS_URL,api=base+'/api/runs/soap-creek-decision-review-v2',out=process.env.HUNTMAPS_SCREENSHOTS;fs.mkdirSync(out,{recursive:true});
 const browser=await chromium.launch({executablePath:process.env.HUNTMAPS_BROWSER||'/usr/bin/google-chrome',headless:true,args:['--no-sandbox','--enable-unsafe-swiftshader','--use-gl=angle','--use-angle=swiftshader']});
 let page,updated=false;
 try{

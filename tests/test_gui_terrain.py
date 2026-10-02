@@ -8,12 +8,22 @@ from osgeo import gdal,osr
 from fastapi.testclient import TestClient
 from huntmaps_gui.catalog import Run,STATE
 from huntmaps_gui.server import create_app
+from huntmaps_gui.config import AppConfig, configured, current
 from huntmaps_gui.terrain import metadata,elevation_tile
 
 def decode(data):
     a=np.array(Image.open(io.BytesIO(data))).astype('float64');return a[:,:,0]*256+a[:,:,1]+a[:,:,2]/256-32768
 
 class TerrainTests(unittest.TestCase):
+    def setUp(self):
+        base = current()
+        temporary = tempfile.TemporaryDirectory(prefix="huntmaps-test-")
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        context = configured(AppConfig(base.source_dir, root / "state", root / "workspace"))
+        context.__enter__()
+        self.addCleanup(context.__exit__, None, None, None)
+
     def test_real_dem_encoding_and_api(self):
         r=Run('soap-creek-decision-review-v2');info=metadata(r);self.assertTrue(info['available']);self.assertEqual(info['exaggeration'],1)
         p=r.candidate('A0075');z=info['maxzoom'];x=int((p['longitude']+180)/360*2**z);y=int((1-math.asinh(math.tan(math.radians(p['latitude'])))/math.pi)/2*2**z)

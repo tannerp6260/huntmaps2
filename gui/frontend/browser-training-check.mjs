@@ -1,12 +1,13 @@
+if(!process.env.HUNTMAPS_URL||!process.env.HUNTMAPS_SCREENSHOTS)throw Error('Run through ./gui/check with an isolated server and screenshot directory');
 import {chromium} from 'playwright';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
-const out=process.env.HUNTMAPS_SCREENSHOTS||'/tmp/huntmaps-training-v2';fs.mkdirSync(out,{recursive:true});
+const out=process.env.HUNTMAPS_SCREENSHOTS;fs.mkdirSync(out,{recursive:true});
 const browser=await chromium.launch({executablePath:process.env.HUNTMAPS_BROWSER||'/usr/bin/google-chrome',headless:true,args:['--no-sandbox','--enable-unsafe-swiftshader','--use-gl=angle','--use-angle=swiftshader']});
 try{
  const page=await browser.newPage({viewport:{width:1500,height:1050}}),errors=[],responses=[],mutations=[],external=[];page.setDefaultTimeout(45000);
  page.on('pageerror',e=>errors.push(e.message));page.on('response',r=>{if(r.status()>=400)responses.push(`${r.status()} ${r.url()}`)});page.on('request',r=>{if(['PUT','POST','DELETE'].includes(r.method()))mutations.push(r.url());if(r.url().startsWith('http')&&!r.url().startsWith(base))external.push(r.url())});
- const base=process.env.HUNTMAPS_URL||'http://127.0.0.1:8765',id='soap-creek-decision-review-v2';
+ const base=process.env.HUNTMAPS_URL,id='soap-creek-decision-review-v2';
  const annotations=await (await page.request.get(`${base}/api/runs/${id}/annotations`)).text(),jobs=await (await page.request.get(base+'/api/jobs')).json();
  await page.addInitScript(()=>localStorage.setItem('huntmaps-online-imagery','off'));await page.goto(base);await page.getByRole('button',{name:'Learn',exact:true}).click();await page.getByRole('button',{name:'Start lesson 1',exact:true}).waitFor();await page.screenshot({path:out+'/01-learning-path.png'});
  await page.getByText('Understand the visible-ground overlay',{exact:true}).click();await page.locator('.visibility-explainer figure').nth(0).screenshot({path:out+'/02-side-view.png'});await page.locator('.visibility-explainer figure').nth(1).screenshot({path:out+'/02-map-view.png'});

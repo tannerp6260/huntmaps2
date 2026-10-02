@@ -41,6 +41,7 @@ class Jobs:
         self.lock = threading.RLock()
         self.process = None
         self.kill_threads = []
+        self.wait_threads = []
         self.storage_errors = []
         for p in self.folder.glob("*.json"):
             try:
@@ -120,7 +121,7 @@ class Jobs:
             j.setdefault("stage", "Stage unavailable; inspect the job log")
             j["elapsed_s"] = round((j.get("finished") or time.time()) - j["started"], 1)
             log = self.folder / (j["id"] + ".log")
-            if log.exists():
+            if log.exists() and (include_logs or j["status"] in ACTIVE):
                 with log.open("rb") as f:
                     f.seek(max(0, log.stat().st_size - 64000))
                     j["logs"] = f.read().decode(errors="replace")
@@ -189,7 +190,7 @@ class Jobs:
         with configured(self.config), file_locked(
             self.config.state_dir / "maintenance"
         ), self.lock:
-            if any(j["status"] in ACTIVE for j in self.list()):
+            if any(j["status"] in ACTIVE for j in self.list(include_logs=False)):
                 raise ValueError("Another job is running. Wait or cancel it first.")
             ident = uuid.uuid4().hex
             j = dict(
@@ -223,9 +224,11 @@ class Jobs:
             proc = self.process
             j.update(pid=proc.pid, ticks=start_ticks(proc.pid), boot_id=BOOT_ID)
             write(self.folder / (ident + ".json"), j)
-            threading.Thread(
+            waiter = threading.Thread(
                 target=self._wait, args=(ident, proc, log), daemon=True
-            ).start()
+            )
+            self.wait_threads.append(waiter)
+            waiter.start()
             return j
 
     def _wait(self, ident, proc, log):
@@ -352,8 +355,8 @@ class Jobs:
                 pass
 
     def shutdown(self):
-        for j in self.list():
+        for j in self.list(include_logs=False):
             if j["status"] == "running":
                 self.cancel(j["id"])
-        for thread in self.kill_threads:
+        for thread in self.kill_threads + self.wait_threads:
             thread.join(timeout=3)
