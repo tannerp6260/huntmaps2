@@ -1,10 +1,10 @@
 import {chromium} from 'playwright';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
-const base=process.env.HUNTMAPS_URL||'http://127.0.0.1:8765',out='/tmp/huntmaps-nearby-foliage';fs.mkdirSync(out,{recursive:true});
+const base=process.env.HUNTMAPS_URL||'http://127.0.0.1:8765',out=process.env.HUNTMAPS_SCREENSHOTS||'/tmp/huntmaps-nearby-foliage';fs.mkdirSync(out,{recursive:true});
 const current=await (await fetch(base+'/api/runs/soap-creek-decision-review-v2/first-person/A0075')).json();
 if(current.vegetation?.meshes){await import('./browser-clusters-check.mjs');process.exit(0)}
-const browser=await chromium.launch({executablePath:'/usr/bin/google-chrome',headless:true,args:['--no-sandbox','--enable-unsafe-swiftshader','--use-gl=angle','--use-angle=swiftshader']});
+const browser=await chromium.launch({executablePath:process.env.HUNTMAPS_BROWSER||'/usr/bin/google-chrome',headless:true,args:['--no-sandbox','--enable-unsafe-swiftshader','--use-gl=angle','--use-angle=swiftshader']});
 try{
  const page=await browser.newPage({viewport:{width:1900,height:1050}});page.setDefaultTimeout(45000);const errors=[],external=[];page.on('pageerror',e=>errors.push(e.message));
  page.on('request',r=>{if(r.url().startsWith('http')&&!r.url().startsWith(base))external.push(r.url())});

@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 import numpy as np
 from huntmaps_gui import first_person as fp
+from huntmaps_gui.config import AppConfig, configured
 from huntmaps_gui import first_person_worker as worker
 
 class GroundDiagnostics(unittest.TestCase):
@@ -87,8 +88,8 @@ class GroundDiagnostics(unittest.TestCase):
         import re
         from unittest.mock import MagicMock
         data=b'12345678'*(1024*1024+1)
-        with tempfile.TemporaryDirectory() as d,patch.object(fp,'HOME',Path(d)):
-            folder=Path(d)/'sources';folder.mkdir()
+        with tempfile.TemporaryDirectory() as d,configured(AppConfig(state_dir=Path(d))):
+            folder=Path(d)/'first-person/sources';folder.mkdir(parents=True)
             part=folder/'source.partial';part.write_bytes(data[:100])
             src=dict(key='source.laz',bytes=len(data),url='https://rockyweb.usgs.gov/a.laz',cached=False,title='test')
             def open_range(req,timeout):
@@ -124,17 +125,17 @@ class GroundDiagnostics(unittest.TestCase):
             self.assertEqual(next(v for v in restarted.list() if v['id']=='interrupted')['status'],'interrupted')
             jobs.shutdown();restarted.shutdown()
     def test_download_budget_and_cached_only(self):
-        with tempfile.TemporaryDirectory() as d,patch.object(fp,'HOME',Path(d)):
+        with tempfile.TemporaryDirectory() as d,configured(AppConfig(state_dir=Path(d))):
             src=dict(key='a.laz',bytes=20,url='https://rockyweb.usgs.gov/a.laz',cached=False,title='test')
             self.assertEqual(worker.acquire(src,False),(None,None))
-            folder=Path(d)/'sources';folder.mkdir(exist_ok=True);worker.write(folder/'ledger.json',dict(received_bytes=fp.LIMIT-1))
+            folder=Path(d)/'first-person/sources';folder.mkdir(parents=True,exist_ok=True);worker.write(folder/'ledger.json',dict(received_bytes=fp.LIMIT-1))
             stream=io.BytesIO(b'abc');stream.url=src['url'];stream.status=200;stream.headers={}
             with patch('urllib.request.urlopen',return_value=stream):
                 with self.assertRaisesRegex(ValueError,'transfer cap'):worker.acquire(src,True)
             self.assertEqual(worker.read(folder/'ledger.json')['received_bytes'],fp.LIMIT-1)
     def test_resume_requires_range_identity(self):
-        with tempfile.TemporaryDirectory() as d,patch.object(fp,'HOME',Path(d)):
-            folder=Path(d)/'sources';folder.mkdir();(folder/'a.partial').write_bytes(b'abc')
+        with tempfile.TemporaryDirectory() as d,configured(AppConfig(state_dir=Path(d))):
+            folder=Path(d)/'first-person/sources';folder.mkdir(parents=True);(folder/'a.partial').write_bytes(b'abc')
             src=dict(key='a.laz',bytes=20,url='https://rockyweb.usgs.gov/a.laz',cached=False,title='test')
             stream=io.BytesIO(b'def');stream.url=src['url'];stream.status=200;stream.headers={}
             with patch('urllib.request.urlopen',return_value=stream):

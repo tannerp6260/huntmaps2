@@ -2,6 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from huntmaps_gui.config import AppConfig, configured
 import numpy as np
 from huntmaps_gui import foliage_clusters as c,vegetation_screen as v,first_person as fp
 
@@ -102,8 +103,8 @@ class Clusters(unittest.TestCase):
             self.assertEqual(prior.read_text(),'prior validated scene');self.assertTrue(partial.exists())
             jobs.shutdown();second.shutdown()
     def test_asset_references_and_screening_scope(self):
-        with tempfile.TemporaryDirectory() as folder,patch.object(fp,'HOME',Path(folder)):
-            base='a'*32;target=Path(folder)/'bundles'/base;target.mkdir(parents=True)
+        with tempfile.TemporaryDirectory() as folder,configured(AppConfig(state_dir=Path(folder))):
+            base='a'*32;target=Path(folder)/'first-person/bundles'/base;target.mkdir(parents=True)
             a,f,_=self.mesh([[5.5,.5,.5]])
             a.tofile(target/'v.bin');f.tofile(target/'i.bin')
             entry=dict(vertices_file='v.bin',indices_file='i.bin')

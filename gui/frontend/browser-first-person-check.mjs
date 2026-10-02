@@ -1,8 +1,8 @@
 import {chromium} from 'playwright';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
-const base=process.env.HUNTMAPS_URL||'http://127.0.0.1:8765',out='/tmp/huntmaps-first-person';fs.mkdirSync(out,{recursive:true});
-const browser=await chromium.launch({executablePath:'/usr/bin/google-chrome',headless:true,args:['--no-sandbox','--enable-unsafe-swiftshader','--use-gl=angle','--use-angle=swiftshader']});
+const base=process.env.HUNTMAPS_URL||'http://127.0.0.1:8765',out=process.env.HUNTMAPS_SCREENSHOTS||'/tmp/huntmaps-first-person';fs.mkdirSync(out,{recursive:true});
+const browser=await chromium.launch({executablePath:process.env.HUNTMAPS_BROWSER||'/usr/bin/google-chrome',headless:true,args:['--no-sandbox','--enable-unsafe-swiftshader','--use-gl=angle','--use-angle=swiftshader']});
 try{
  const page=await browser.newPage({viewport:{width:1450,height:1050}});page.setDefaultTimeout(45000);const errors=[],mutations=[],external=[];
  page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(['POST','PUT','DELETE'].includes(r.method()))mutations.push(r.url());if(r.url().startsWith('http')&&!r.url().startsWith(base))external.push(r.url())});

@@ -1,8 +1,8 @@
 import {chromium} from 'playwright';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
-const base=process.env.HUNTMAPS_URL||'http://127.0.0.1:8765',api=base+'/api/runs/soap-creek-decision-review-v2',out='/tmp/huntmaps-working-waypoint';fs.mkdirSync(out,{recursive:true});
-const browser=await chromium.launch({executablePath:'/usr/bin/google-chrome',headless:true,args:['--no-sandbox','--enable-unsafe-swiftshader','--use-gl=angle','--use-angle=swiftshader']});
+const base=process.env.HUNTMAPS_URL||'http://127.0.0.1:8765',api=base+'/api/runs/soap-creek-decision-review-v2',out=process.env.HUNTMAPS_SCREENSHOTS||'/tmp/huntmaps-working-waypoint';fs.mkdirSync(out,{recursive:true});
+const browser=await chromium.launch({executablePath:process.env.HUNTMAPS_BROWSER||'/usr/bin/google-chrome',headless:true,args:['--no-sandbox','--enable-unsafe-swiftshader','--use-gl=angle','--use-angle=swiftshader']});
 let page,updated=false;
 try{
  page=await browser.newPage({viewport:{width:1900,height:1050}});page.setDefaultTimeout(60000);const errors=[],tiles=[];page.on('pageerror',e=>errors.push(e.message));page.on('response',r=>{if(r.url().includes('/working-tiles/visible/A0075/')&&r.ok())tiles.push(r.url())});

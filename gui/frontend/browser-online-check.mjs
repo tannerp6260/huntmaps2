@@ -1,14 +1,14 @@
 import {chromium} from 'playwright';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
-const out='/tmp/huntmaps-online';fs.mkdirSync(out,{recursive:true});
-const browser=await chromium.launch({executablePath:'/usr/bin/google-chrome',headless:true,args:['--no-sandbox','--enable-unsafe-swiftshader','--use-gl=angle','--use-angle=swiftshader']});
+const out=process.env.HUNTMAPS_SCREENSHOTS||'/tmp/huntmaps-online';fs.mkdirSync(out,{recursive:true});
+const browser=await chromium.launch({executablePath:process.env.HUNTMAPS_BROWSER||'/usr/bin/google-chrome',headless:true,args:['--no-sandbox','--enable-unsafe-swiftshader','--use-gl=angle','--use-angle=swiftshader']});
 try{
  const page=await browser.newPage({viewport:{width:1500,height:1050}}),errors=[],tiles=new Set(),successful=new Set();
  page.on('pageerror',e=>errors.push(e.message));
  page.on('request',r=>{if(r.url().includes('basemap.nationalmap.gov'))tiles.add(r.url())});
  page.on('response',r=>{if(r.url().includes('basemap.nationalmap.gov')&&r.ok())successful.add(r.url())});
- const base='http://127.0.0.1:8765',id='soap-creek-decision-review-v2';
+ const base=process.env.HUNTMAPS_URL||'http://127.0.0.1:8765',id='soap-creek-decision-review-v2';
  const annotations=await (await page.request.get(base+'/api/runs/'+id+'/annotations')).text(),jobs=await (await page.request.get(base+'/api/jobs')).json();
  const idle=()=>page.waitForFunction(()=>{const s=JSON.parse(document.querySelector('.map').getAttribute('data-map-state')||'{}');return s.loaded},{timeout:45000});
  await page.goto(base);await page.getByLabel('Online imagery — fill gaps',{exact:true}).waitFor();assert.ok(await page.getByLabel('Online imagery — fill gaps',{exact:true}).isChecked());

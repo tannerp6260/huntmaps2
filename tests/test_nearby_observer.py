@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from huntmaps_gui.config import AppConfig, configured
 import numpy as np
 from shapely.geometry import mapping,box
 from huntmaps_gui import first_person as fp,manual_observers as manual
@@ -22,10 +23,12 @@ class NearbyObservers(unittest.TestCase):
         rows,cols=np.indices((41,41));self.a=100+cols*.2+rows*.1
         np.savez(self.folder/'fine.npz',heights=self.a,res=1,x0=-20,y0=20)
         self.meta=dict(ground_m=106,fine_observer_available=True,key='test',hashes={'fine.npz':'unused'})
-        self.patches=[patch.object(fp,'Run',FakeRun),patch.object(manual,'Run',FakeRun),patch.object(fp,'bundle',return_value=(self.folder,self.meta)),patch.object(manual,'STATE',self.folder)]
-        for p in self.patches:p.start()
+        self.patches=[patch.object(fp,'Run',FakeRun),patch.object(manual,'Run',FakeRun),patch.object(fp,'bundle',return_value=(self.folder,self.meta)),configured(AppConfig(state_dir=self.folder))]
+        for p in self.patches:
+            p.start() if hasattr(p,'start') else p.__enter__()
     def tearDown(self):
-        for p in reversed(self.patches):p.stop()
+        for p in reversed(self.patches):
+            p.stop() if hasattr(p,'stop') else p.__exit__(None,None,None)
         self.temp.cleanup()
     def pose(self,x,y):return fp.observer(fp.RUN,'A0075',dict(observer_east_m=x,observer_north_m=y))
     def test_support_and_exact_render_triangle(self):
@@ -81,7 +84,7 @@ class NearbyObservers(unittest.TestCase):
         from fastapi.testclient import TestClient
         from huntmaps_gui import server
         import xml.etree.ElementTree as ET
-        with patch.object(server,'STATE',self.folder),patch.object(server,'Jobs'):
+        with configured(AppConfig(state_dir=self.folder)),patch.object(server,'Jobs'):
             with TestClient(server.create_app()) as client:
                 url='/api/runs/'+fp.RUN+'/manual-observers';body=dict(anchor='A0075',observer_east_m=1.25,observer_north_m=-2.4,name='<Field & observer>',notes='Check brush')
                 self.assertEqual(client.post(url,json=body).status_code,403)

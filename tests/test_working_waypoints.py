@@ -7,6 +7,7 @@ from osgeo import gdal
 from fastapi.testclient import TestClient
 from huntmaps_gui import working_waypoints as w,server,manual_observers as manual
 from huntmaps_gui.catalog import Run
+from huntmaps_gui.config import AppConfig, configured
 from huntmaps_gui.jobs import Jobs,write,ACTIVE
 
 RUN='soap-creek-decision-review-v2'
@@ -14,8 +15,8 @@ BODY=dict(observer_east_m=1,observer_north_m=-2,name='A0075 working',notes='Insp
 
 class WorkingWaypoints(unittest.TestCase):
     def setUp(self):
-        self.tmp=tempfile.TemporaryDirectory();self.root=Path(self.tmp.name);self.patch=patch.object(w,'STATE',self.root);self.patch.start();self.jobs=Jobs(self.root)
-    def tearDown(self):self.jobs.shutdown();self.patch.stop();self.tmp.cleanup()
+        self.tmp=tempfile.TemporaryDirectory();self.root=Path(self.tmp.name);self.configured=configured(AppConfig(state_dir=self.root));self.configured.__enter__();self.jobs=Jobs()
+    def tearDown(self):self.jobs.shutdown();self.configured.__exit__(None,None,None);self.tmp.cleanup()
     def wait(self,ident):
         end=time.monotonic()+15
         while time.monotonic()<end:
@@ -46,7 +47,7 @@ class WorkingWaypoints(unittest.TestCase):
         edit=w.review(RUN,'A0075',dict(name='Edited',notes='Question',status='keep'),self.jobs);self.assertEqual(edit['longitude'],point['longitude']);self.assertEqual(edit['revision'],point['revision'])
         w.restore(RUN,'A0075',self.jobs);self.assertEqual(w.snapshot(RUN,self.jobs)['overrides'],{});self.assertEqual(w.DisplayRun(RUN,self.jobs).candidate('A0075')['longitude'],Run(RUN).candidate('A0075')['longitude'])
     def test_legacy_manual_waypoint_keeps_identity_and_gets_own_mask(self):
-        with patch.object(manual,'STATE',self.root):
+        with configured(AppConfig(state_dir=self.root)):
             old=manual.create(RUN,dict(BODY,anchor='A0075'))
             before=manual.records(RUN)
             response=w.start(RUN,old['id'],dict(BODY,observer_east_m=2),self.jobs)
@@ -80,8 +81,8 @@ class WorkingWaypoints(unittest.TestCase):
         path=w.DisplayRun(RUN,self.jobs).visibility_path('A0075');path.write_bytes(b'tampered')
         with self.assertRaises(ValueError):w.DisplayRun(RUN,self.jobs).mask('A0075')
     def test_api_guards_exports_historical_read_and_restoration(self):
-        with patch.object(server,'Jobs',return_value=self.jobs):
-            with TestClient(server.create_app()) as client:
+        with configured(AppConfig(state_dir=self.root)):
+            with TestClient(server.create_app(AppConfig(state_dir=self.root))) as client:
                 url='/api/runs/'+RUN;headers={'X-HuntMaps':'local'}
                 self.assertEqual(client.post(url+'/working-waypoints/A0075',json=BODY).status_code,403)
                 response=client.post(url+'/working-waypoints/A0075',json=BODY,headers=headers);self.assertEqual(response.status_code,200);j=response.json()['job'];self.assertEqual(self.wait(j['id'])['status'],'complete')

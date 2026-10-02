@@ -2,8 +2,8 @@ import {chromium} from 'playwright';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-const base=process.env.HUNTMAPS_URL||'http://127.0.0.1:8765',out='/tmp/huntmaps-clusters';fs.mkdirSync(out,{recursive:true});
-const browser=await chromium.launch({executablePath:'/usr/bin/google-chrome',headless:true,args:['--no-sandbox','--enable-unsafe-swiftshader','--use-gl=angle','--use-angle=swiftshader']});
+const base=process.env.HUNTMAPS_URL||'http://127.0.0.1:8765',out=process.env.HUNTMAPS_SCREENSHOTS||'/tmp/huntmaps-clusters';fs.mkdirSync(out,{recursive:true});
+const browser=await chromium.launch({executablePath:process.env.HUNTMAPS_BROWSER||'/usr/bin/google-chrome',headless:true,args:['--no-sandbox','--enable-unsafe-swiftshader','--use-gl=angle','--use-angle=swiftshader']});
 try{
  const page=await browser.newPage({viewport:{width:1900,height:1050}});page.setDefaultTimeout(60000);const errors=[],external=[];page.on('pageerror',e=>errors.push(e.message));
  page.on('request',r=>{if(r.url().startsWith('http')&&!r.url().startsWith(base))external.push(r.url())});
@@ -11,7 +11,7 @@ try{
  const api=base+'/api/runs/soap-creek-decision-review-v2';
  const annotations=await (await page.request.get(api+'/annotations')).text(),jobs=await (await page.request.get(base+'/api/jobs')).json();
  const currentMeta=await (await page.request.get(api+'/first-person/A0075')).json();
- const legacy=JSON.parse(fs.readFileSync('../../.gui/first-person/bundles/'+currentMeta.reused_base_bundle+'/scene.json','utf8'));
+ const legacy=JSON.parse(fs.readFileSync((process.env.HUNTMAPS_STATE_DIR||'../../.gui')+'/first-person/bundles/'+currentMeta.reused_base_bundle+'/scene.json','utf8'));
  const legacyRoute=route=>route.fulfill({json:{...legacy,initial_bearing_deg:currentMeta.initial_bearing_deg,initial_facing_note:currentMeta.initial_facing_note}});
  await page.route(api+'/first-person/A0075',legacyRoute);
  await page.goto(base);await page.getByLabel('Select A0075',{exact:true}).click();await page.getByRole('button',{name:'View from this setup',exact:true}).click();
