@@ -28,6 +28,7 @@ class AppConfig:
             Path(os.environ.get("HUNTMAPS_SOURCE_DIR", PROJECT)),
             Path(os.environ.get("HUNTMAPS_STATE_DIR", PROJECT / ".gui")),
             Path(os.environ.get("HUNTMAPS_WORKSPACE", PROJECT)),
+            int(os.environ.get("HUNTMAPS_DISPLAY_BUDGET_MB", "256")) * 1024 * 1024,
         )
 
     def environment(self):
@@ -35,6 +36,7 @@ class AppConfig:
             HUNTMAPS_SOURCE_DIR=str(self.source_dir),
             HUNTMAPS_STATE_DIR=str(self.state_dir),
             HUNTMAPS_WORKSPACE=str(self.workspace),
+            HUNTMAPS_DISPLAY_BUDGET_MB=str(self.display_budget_bytes // (1024 * 1024)),
         )
 
 

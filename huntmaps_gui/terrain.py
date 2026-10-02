@@ -1,3 +1,5 @@
+from .display_cache import bounded, touch
+
 """Display-only local DEM adapter. Never changes analysis elevations or masks."""
 
 import io
@@ -70,6 +72,7 @@ def metadata(run):
     return _metadata(str(run.dem_path), fingerprint([run.dem_path]))
 
 
+@bounded
 def elevation_tile(run, z, x, y):
     info = metadata(run)
     if not info["available"]:
@@ -85,6 +88,7 @@ def elevation_tile(run, z, x, y):
             / f"{z}-{x}-{y}.png"
         )
         if cache.exists():
+            touch(cache)
             return cache.read_bytes()
         half = 20037508.342789244
         size = 2 * half / 2**z

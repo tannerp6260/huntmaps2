@@ -1,3 +1,5 @@
+from .display_cache import bounded, touch
+
 """GDAL EPSG:3857 XYZ raster adapter. Nearest sampling for saved categorical cells."""
 
 import hashlib
@@ -123,15 +125,19 @@ def sources(run, layer, ident, color):
     return [path], key
 
 
+@bounded
 def tile(run, layer, ident, z, x, y, color=0):
     if not (0 <= z <= 20 and 0 <= x < 2**z and 0 <= y < 2**z and 0 <= color <= 2):
         raise ValueError("Invalid tile coordinate")
     with LOCK:
         paths, key = sources(run, layer, ident, color)
+        for path in paths:
+            touch(path)
         if not paths:
             return transparent()
         cache = STATE / "cache" / "tiles" / fingerprint(paths) / f"{z}-{x}-{y}.png"
         if cache.exists():
+            touch(cache)
             return cache.read_bytes()
         half = 20037508.342789244
         size = half * 2 / 2**z
