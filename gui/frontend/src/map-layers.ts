@@ -4,6 +4,7 @@ import { onlineSource } from './online';
 const colors = ['#00c0e8', '#ff6782', '#aa6fff'];
 type LayerState = {
   run: Run;
+  filterId?: string;
   working: Record<string, { revision: string }>;
   imagery: boolean;
   imageOpacity: number;
@@ -21,6 +22,7 @@ export function updateMapLayers(
   m: Map,
   {
     run,
+    filterId,
     working,
     imagery,
     imageOpacity,
@@ -48,7 +50,7 @@ export function updateMapLayers(
     m.addSource(key, {
       type: 'raster',
       tiles: [
-        `${location.origin}/api/runs/${run.id}/${useWorking ? 'working-tiles' : 'tiles'}/${layer}/${id}/{z}/{x}/{y}.png?color=${color}&revision=${working[id]?.revision || 'original'}`,
+        `${location.origin}/api/runs/${run.id}/${filterId && ['visible', 'classes'].includes(layer) ? `filtered-tiles/${filterId}` : useWorking ? 'working-tiles' : 'tiles'}/${layer}/${id}/{z}/{x}/{y}.png?color=${color}&revision=${working[id]?.revision || 'original'}`,
       ],
       tileSize: 256,
       maxzoom: 20,

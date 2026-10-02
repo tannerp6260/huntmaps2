@@ -52,6 +52,8 @@ class Preparation(Payload):
     observation_minutes: int = Field(default=30, ge=5, le=120)
     max_download_mb: int = Field(default=600, ge=1, le=1900)
     candidate_count: int = Field(default=150, ge=12, le=200)
+    access_sampling: dict | None = None
+    include_network: StrictBool = False
 
 
 class Start(Payload):

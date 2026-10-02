@@ -46,6 +46,33 @@ def main():
     print("STAGE Checking area and validated sources", flush=True)
     code = run(["prepare", *args, "--source-config", p["config"]])
     acquisition = read(root / "download_plan.json")
+    original_acquisition = acquisition
+    if acquisition is not None and p.get("include_network"):
+        from .scouting_network import network_plan
+
+        if not p.get("network_plan"):
+            from shapely.geometry import shape
+
+            boundary = read(root / "observer.geojson")
+            if boundary["type"] == "FeatureCollection":
+                from shapely.ops import unary_union
+
+                area = unary_union([shape(f["geometry"]) for f in boundary["features"]])
+            else:
+                area = shape(boundary.get("geometry", boundary))
+            p["network_plan"] = network_plan(list(area.bounds), p["max_download_mb"])[
+                "id"
+            ]
+        net = read(STATE / "network-plans" / (p["network_plan"] + ".json"))
+        cached = read(STATE / "network-plans" / (p["network_plan"] + "-result.json"))
+        reservation = net["estimated_bytes"]
+        acquisition = dict(
+            acquisition,
+            estimated_bytes=acquisition["estimated_bytes"] + reservation,
+            items=acquisition.get("items", [])
+            + [dict(key="USFS roads/trails", estimated_bytes=reservation)],
+            network_plan=net,
+        )
     if acquisition is None:
         return code or 2
     if a.action == "prepare":
@@ -58,7 +85,8 @@ def main():
                 if (root / "DATA_REQUIRED.md").exists()
                 else ""
             ),
-            sources_ready=code == 0,
+            sources_ready=code == 0
+            and (not p.get("include_network") or cached is not None),
         )
         write(path, p)
         print(
@@ -72,6 +100,78 @@ def main():
         raise ValueError(
             "Acquisition plan changed. Prepare again and review the new estimate before starting."
         )
+    if acquisition["estimated_bytes"] > p["max_download_mb"] * 1000000:
+        raise ValueError(
+            "Combined reviewed acquisition exceeds the shared download cap"
+        )
+    if p.get("include_network") and cached is None:
+        if not a.download:
+            raise ValueError("Explicitly allow this plan’s network bulk downloads")
+        from .scouting_network import acquire
+
+        acquire(
+            p["network_plan"],
+            p["max_download_mb"] * 1000000 - original_acquisition["estimated_bytes"],
+        )
+        cached = read(STATE / "network-plans" / (p["network_plan"] + "-result.json"))
+    if p.get("include_network"):
+        args[args.index("--max-download-mb") + 1] = str(
+            max(
+                1,
+                int(
+                    (p["max_download_mb"] * 1000000 - cached["downloaded_bytes"])
+                    // 1000000
+                ),
+            )
+        )
+    if p.get("access_sampling"):
+        if code != 0:
+            if not a.download:
+                raise ValueError("Sampling eligibility requires approved DEM sources")
+            if run(["prepare", *args, "--download"]) != 0:
+                raise ValueError("Could not prepare approved DEM for observer sampling")
+        from .scouting_filters import sampling_exclusion
+
+        c = read(root / "scouting.json")
+        if not p.get("sampling_applied"):
+            import resource, signal
+
+            previous_memory = resource.getrlimit(resource.RLIMIT_AS)
+            previous_handler = signal.getsignal(signal.SIGALRM)
+
+            def timed_out(signum, frame):
+                raise ValueError(
+                    "Observer eligibility exceeded 900 seconds; narrow the area/network"
+                )
+
+            try:
+                resource.setrlimit(
+                    resource.RLIMIT_AS,
+                    (
+                        (
+                            min(1536 * 1024**2, previous_memory[0])
+                            if previous_memory[0] > 0
+                            else 1536 * 1024**2
+                        ),
+                        previous_memory[1],
+                    ),
+                )
+                signal.signal(signal.SIGALRM, timed_out)
+                signal.alarm(900)
+                excluded = sampling_exclusion(
+                    c,
+                    p["access_sampling"],
+                    STATE / "plans" / (a.plan + "-observer-exclusion.geojson"),
+                )
+            finally:
+                signal.alarm(0)
+                signal.signal(signal.SIGALRM, previous_handler)
+                resource.setrlimit(resource.RLIMIT_AS, previous_memory)
+            if excluded:
+                c["observer_exclusions"] = c.get("observer_exclusions", []) + [excluded]
+            write(root / "scouting.json", c)
+            p["sampling_applied"] = True
+            write(path, p)
     if not a.download and code != 0:
         raise ValueError(
             "Sources missing. Review the plan and explicitly enable downloads, or provide supported checked sources."

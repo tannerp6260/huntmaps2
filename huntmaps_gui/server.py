@@ -71,6 +71,9 @@ def create_app(config=None):
     from .api_routes import api_router
 
     app.include_router(api_router(jobs))
+    from .scouting_api import router as scouting_router
+
+    app.include_router(scouting_router(jobs))
 
     dist = ROOT / "gui/frontend/dist"
     if dist.exists():

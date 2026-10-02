@@ -72,7 +72,9 @@ def sources(run, layer, ident, color):
             inputs += [run.analysis / "tree.tif"]
             saved = (
                 run.vegetation / (ident + "_target_classes.tif")
-                if run.experimental and ident not in getattr(run, "working_ids", set())
+                if run.experimental
+                and not hasattr(run, "profile")
+                and ident not in getattr(run, "working_ids", set())
                 else None
             )
             if saved and saved.exists():
@@ -81,6 +83,8 @@ def sources(run, layer, ident, color):
     elif layer != "hillshade":
         raise ValueError("Unknown map layer")
     key = fingerprint(inputs)
+    if hasattr(run, "profile"):
+        key += "-" + run.profile["id"]
     path = STATE / "cache" / key / f"{layer}-{ident}-{color}.tif"
     if not path.exists():
         if layer == "hillshade":

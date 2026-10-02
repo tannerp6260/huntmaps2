@@ -2,6 +2,7 @@ import type { Candidate, Review } from './types';
 const num = (value: unknown) => (typeof value === 'number' ? value.toFixed(3) : 'Not saved');
 export default function CandidateCard({
   p,
+  matching,
   selected,
   activeManual,
   compare,
@@ -12,6 +13,7 @@ export default function CandidateCard({
   toggleExport,
 }: {
   p: Candidate;
+  matching?: number;
   selected: string;
   activeManual: boolean;
   compare: string[];
@@ -38,12 +40,13 @@ export default function CandidateCard({
         </strong>
         <span>{p.parent ? 'Alternative to ' + p.parent : p.neighborhood || 'Original setup'}</span>
         <small>
-          {num(p.metrics.raw_km2)} km² terrain view{' '}
+          {num(p.metrics.raw_km2)} km² original terrain view{' '}
           {p.working_revision ? '· working location ' : ''}
           {annotations[p.id]?.status && annotations[p.id].status !== 'unmarked'
             ? '· ' + annotations[p.id].status
             : ''}
         </small>
+        {matching !== undefined && <small>{num(matching)} km² matching visible terrain</small>}
       </button>
       <div className="candidate-actions">
         <label>

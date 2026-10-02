@@ -21,6 +21,9 @@ def records():
             *(STATE / "annotations").glob("*.json"),
             *(STATE / "manual-observers").glob("*.json"),
             *(STATE / "working-waypoints").glob("*/state.json"),
+            *(STATE / "filter-profiles").glob("*.json"),
+            *(STATE / "approaches").glob("*/*.json"),
+            *(STATE / "networks").glob("*/*"),
         ]
     )
 
@@ -49,7 +52,10 @@ def status(request: Request = None):
     problems = (
         list(request.app.state.jobs.storage_errors) if request is not None else []
     )
-    for path in [*records(), *(STATE / "jobs").glob("*.json")]:
+    for path in [
+        *(p for p in records() if p.suffix == ".json"),
+        *(STATE / "jobs").glob("*.json"),
+    ]:
         try:
             read_json(path)
         except ValueError as error:
@@ -82,6 +88,12 @@ def reset(body: Reset):
         ensure_idle()
         key = backup()
         for path in records():
+            if (
+                path.is_relative_to(STATE / "approaches")
+                or path.is_relative_to(STATE / "networks")
+                or path.is_relative_to(STATE / "filter-profiles")
+            ):
+                continue
             # Explicit reset is also available for damaged records; retain exact bytes.
             atomic_write(
                 path,
@@ -119,6 +131,12 @@ def restore(body: Restore):
                 folder.resolve()
             ) or not target.resolve().is_relative_to(STATE.resolve()):
                 raise ValueError("Invalid backup path")
+            if any(
+                part in ("approaches", "networks", "filter-profiles")
+                for part in target.relative_to(STATE.resolve()).parts
+            ):
+                restored[target] = source.read_bytes()
+                continue
             value = read_json(source)
             validate(target, value)
             if target.name == "state.json":
@@ -127,7 +145,11 @@ def restore(body: Restore):
         key = backup()
         for target, value in restored.items():
             # Restore may replace malformed current records, with their bytes backed up.
-            atomic_write(target, dict(_store_version=1, records=value))
+            if isinstance(value, bytes):
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(value)
+            else:
+                atomic_write(target, dict(_store_version=1, records=value))
         return dict(restored=len(restored), backup=key)
 
 
@@ -218,6 +240,12 @@ def inventory():
         add(path, "mask", (path.parent.parent.name, path.name) in revisions)
     for path in (STATE / "working-waypoints").glob("*/partials/*"):
         add(path, "partial", False)
+    for path in (STATE / "approaches").glob("*"):
+        add(path, "saved approach scenario and referenced results", True)
+    for path in (STATE / "networks").glob("*"):
+        add(path, "referenced network source", True)
+    for path in (STATE / "filter-profiles").glob("*.json"):
+        add(path, "saved filter profile", True)
     return dict(
         items=items,
         total_bytes=sum(v["bytes"] for v in items),

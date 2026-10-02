@@ -345,6 +345,13 @@ def api_router(jobs: Jobs):
     def prepare(body: Preparation):
         body = body.model_dump(exclude_unset=True)
         name = valid_name(body.get("name"))
+        from .scouting_filters import validate as validate_filters
+
+        sampling = (
+            validate_filters(body["access_sampling"])
+            if body.get("access_sampling") is not None
+            else None
+        )
         imp = body.get("import_id", "")
         if not re.fullmatch("[a-f0-9]{32}", imp):
             raise ValueError("Import your observer polygon first")
@@ -399,6 +406,8 @@ def api_router(jobs: Jobs):
             config=str(config),
             max_download_mb=budget,
             prepared=False,
+            access_sampling=sampling,
+            include_network=body.get("include_network", False),
         )
         write(folder / (ident + ".json"), p)
         return jobs.start(
@@ -431,6 +440,17 @@ def api_router(jobs: Jobs):
         p = plan(ident)
         if not p.get("prepared"):
             raise ValueError("Prepare and review the acquisition plan first")
+        if p.get("acquisition", {}).get("errors"):
+            raise ValueError("Fix acquisition plan errors before starting")
+        if (
+            p.get("acquisition", {}).get("estimated_bytes", 0)
+            > p["max_download_mb"] * 1000000
+        ):
+            raise ValueError("Reviewed estimate exceeds the shared download cap")
+        if not p.get("sources_ready") and not body.get("download"):
+            raise ValueError(
+                "Review and explicitly allow this plan’s bulk downloads first"
+            )
         return jobs.start(
             [sys.executable, "-u", "-m", "huntmaps_gui.worker", "run", ident]
             + (["--download"] if body.get("download") is True else []),
@@ -442,6 +462,11 @@ def api_router(jobs: Jobs):
     @router.post("/api/plans/{ident}/prepare")
     def reprepare(ident):
         p = plan(ident)
+        p["prepared"] = False
+        write(
+            STATE / "plans" / (ident + ".json"),
+            {k: v for k, v in p.items() if k not in ("boundary", "settings")},
+        )
         return jobs.start(
             [sys.executable, "-u", "-m", "huntmaps_gui.worker", "prepare", ident],
             "prepare",

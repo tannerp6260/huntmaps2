@@ -1173,3 +1173,29 @@ summary:focus-visible {
 .manual-list .candidate-select strong {
   overflow-wrap: anywhere;
 }
+
+.workflow-stages {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.6rem;
+  background: #17221d;
+}
+.scouting-tools {
+  border-bottom: 1px solid #526358;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+}
+.scouting-tools small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.scouting-tools figure {
+  margin: 0;
+}
+.scouting-tools a {
+  color: #91dccc;
+}

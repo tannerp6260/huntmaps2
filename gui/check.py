@@ -35,6 +35,9 @@ def owner_records():
     for folder in (
         "annotations",
         "manual-observers",
+        "networks",
+        "approaches",
+        "filter-profiles",
         "first-person/ready",
         "first-person/bundles",
     ):
@@ -96,6 +99,8 @@ def main():
     try:
         patterns = [
             "test_gui*.py",
+            "test_approach*.py",
+            "test_scouting_filters.py",
             "test_first_person.py",
             "test_vegetation_screen.py",
             "test_nearby_foliage.py",
@@ -234,6 +239,7 @@ def main():
                 "browser-first-person-check.mjs",
                 "browser-working-waypoint-check.mjs",
                 "browser-storage-check.mjs",
+                "browser-scouting-check.mjs",
                 "browser-performance-check.mjs",
                 "browser-clusters-check.mjs",
                 "browser-nearby-observer-check.mjs",

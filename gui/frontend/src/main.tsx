@@ -1,3 +1,5 @@
+import AccessSampling, { type Sampling } from './access-sampling';
+import ScoutingTools, { type AppliedFilter } from './scouting-tools';
 import { updateMapLayers } from './map-layers';
 import AreaSettings from './area-creation';
 import StoragePanel from './storage-panel';
@@ -65,6 +67,12 @@ async function api(path: string, options: RequestInit = {}) {
 const num = (v: unknown, d = 3) => (typeof v === 'number' ? v.toFixed(d) : 'Not saved');
 function App() {
   const jobs = useJobs();
+  const [appliedFilter, setAppliedFilter] = useState<AppliedFilter | null>(null);
+  const [planningApproaches, setPlanningApproaches] = useState(false);
+  const filterId = appliedFilter?.profile.id || '';
+  const [sampling, setSampling] = useState<Sampling | null>(null);
+  const [includeNetwork, setIncludeNetwork] = useState(false);
+  const [preparedOptions, setPreparedOptions] = useState('');
   const [runList, setRunList] = useState<RunSummary[]>([]),
     [runId, setRunId] = useState(''),
     [run, setRun] = useState<Run | null>(null),
@@ -221,6 +229,32 @@ function App() {
     [download, setDownload] = useState(false),
     [unusedJobs, unusedSetJobs] = useState<Job[]>([]),
     [busy, setBusy] = useState(false);
+  const selectedFilter = appliedFilter?.candidates.find((row) => row.id === selected);
+  const settingsValid =
+    /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(name) &&
+    Number.isInteger(count) &&
+    count >= 12 &&
+    count <= 200 &&
+    Number.isInteger(budget) &&
+    budget >= 1 &&
+    budget <= 1900 &&
+    Number.isInteger(minutes) &&
+    minutes >= 5 &&
+    minutes <= 120;
+  const planDirty =
+    !!plan &&
+    (name !== plan.name ||
+      radius !== plan.settings?.radius_m ||
+      minutes !== plan.settings?.observation_minutes ||
+      count !== plan.settings?.candidate_count ||
+      budget !== plan.max_download_mb ||
+      (!!preparedOptions && preparedOptions !== JSON.stringify({ sampling, includeNetwork })));
+  const planJob = jobs.find((j) => j.plan === planId);
+  const planFailed = planJob && ['failed', 'cancelled', 'interrupted'].includes(planJob.status);
+  const planComplete = planJob?.kind === 'baseline' && planJob.status === 'complete';
+  useEffect(() => {
+    setDownload(false);
+  }, [name, radius, minutes, count, budget]);
   const [areaMode, setAreaMode] = useState<'draw' | 'import'>('draw'),
     [drawing, setDrawing] = useState(false),
     [goLat, setGoLat] = useState(''),
@@ -379,7 +413,9 @@ function App() {
         ),
       ),
       api(
-        `/runs/${runId}/${training.active ? 'overlap' : 'working-overlap'}?ids=${compare.join(',')}`,
+        filterId && !training.active
+          ? `/runs/${runId}/filtered-overlap/${filterId}?ids=${compare.join(',')}`
+          : `/runs/${runId}/${training.active ? 'overlap' : 'working-overlap'}?ids=${compare.join(',')}`,
       ),
     ])
       .then(([d, o]) => {
@@ -392,7 +428,7 @@ function App() {
     return () => {
       alive = false;
     };
-  }, [compare, runId, workingStamp, training.active]);
+  }, [compare, runId, workingStamp, training.active, filterId]);
   useEffect(() => {
     if (!planId) return;
     let alive = true;
@@ -634,6 +670,7 @@ function App() {
       {
         run,
         working,
+        filterId,
         imagery,
         imageOpacity,
         newRun,
@@ -664,6 +701,7 @@ function App() {
     hiddenViews,
     activeManual?.id,
     workingGeometryStamp,
+    filterId,
   ]);
   useEffect(() => {
     if (
@@ -772,7 +810,7 @@ function App() {
     if (training.active) training.setDraft(feature.geometry);
   }
   async function prepare() {
-    if (training.active) return;
+    if (training.active || !settingsValid) return;
     try {
       setBusy(true);
       setError('');
@@ -786,9 +824,12 @@ function App() {
           observation_minutes: minutes,
           candidate_count: count,
           max_download_mb: budget,
+          ...(sampling ? { access_sampling: sampling } : {}),
+          ...(includeNetwork ? { include_network: true } : {}),
         }),
       });
       setPlanId(j.plan);
+      setPreparedOptions(JSON.stringify({ sampling, includeNetwork }));
       setPlan(null);
       setDownload(false);
     } catch (e: unknown) {
@@ -798,7 +839,7 @@ function App() {
     }
   }
   async function startPlan() {
-    if (training.active) return;
+    if (training.active || planDirty || !settingsValid) return;
     try {
       setError('');
       await api(`/plans/${planId}/start`, { method: 'POST', body: JSON.stringify({ download }) });
@@ -820,6 +861,19 @@ function App() {
         setMinutes(p.settings.observation_minutes);
         setCount(p.settings.candidate_count);
         setBudget(p.max_download_mb);
+        const recoveredSampling = p.access_sampling
+          ? {
+              network_ids: p.access_sampling.network_ids,
+              kinds: p.access_sampling.kinds,
+              distance_m: p.access_sampling.distance_m,
+              height_m: p.access_sampling.height_m,
+            }
+          : null;
+        setSampling(recoveredSampling);
+        setIncludeNetwork(!!p.include_network);
+        setPreparedOptions(
+          JSON.stringify({ sampling: recoveredSampling, includeNetwork: !!p.include_network }),
+        );
         setPlanId(j.plan);
         setNewRun(true);
         setPlan(p);
@@ -838,9 +892,18 @@ function App() {
             : group === 'ungrouped'
               ? !p.neighborhood
               : p.neighborhood === group)) &&
-        `${p.id} ${p.parent} ${p.neighborhood || ''}`.toLowerCase().includes(search.toLowerCase()),
+        `${p.id} ${p.parent} ${p.neighborhood || ''}`
+          .toLowerCase()
+          .includes(search.toLowerCase()) &&
+        (!appliedFilter ||
+          appliedFilter.candidates.find((row) => row.id === p.id)?.qualifies === true),
     ) || [];
   const sorted = [...visibleCandidates].sort((a, b) => {
+    if (appliedFilter)
+      return (
+        appliedFilter.candidates.findIndex((p) => p.id === a.id) -
+        appliedFilter.candidates.findIndex((p) => p.id === b.id)
+      );
     const special = ['A0075', 'V010', 'V008'];
     return (
       (special.includes(a.id) ? special.indexOf(a.id) - 10 : 0) -
@@ -852,6 +915,7 @@ function App() {
     <CandidateCard
       key={p.id}
       p={p}
+      matching={appliedFilter?.candidates.find((row) => row.id === p.id)?.matching_km2}
       selected={selected}
       activeManual={!!activeManual}
       compare={compare}
@@ -985,6 +1049,77 @@ function App() {
           setSaved('');
         }}
       />
+      <nav className="workflow-stages" aria-label="Scouting workflow">
+        <button className={newRun ? 'primary' : ''} onClick={() => setNewRun(true)}>
+          1 · Create results
+        </button>
+        <button
+          className={!newRun && !planningApproaches ? 'primary' : ''}
+          disabled={!run}
+          onClick={() => {
+            setNewRun(false);
+            setPlanningApproaches(false);
+          }}
+        >
+          2 · Review and keep setups
+        </button>
+        <button
+          className={planningApproaches ? 'primary' : ''}
+          disabled={
+            newRun ||
+            training.active ||
+            ![...Object.values(annotations), ...Object.values(working), ...manualPoints].some(
+              (p) => p.status === 'keep',
+            )
+          }
+          onClick={() => {
+            setNewRun(false);
+            setPlanningApproaches(true);
+          }}
+        >
+          3 · Plan approaches
+        </button>
+        {newRun && (
+          <button
+            className="primary"
+            disabled={
+              running ||
+              busy ||
+              !settingsValid ||
+              planDirty ||
+              (!plan && (!imported || !polygon)) ||
+              (!!plan?.prepared &&
+                !planComplete &&
+                ((!plan.sources_ready && !download) ||
+                  !!plan.acquisition?.errors?.length ||
+                  (plan.acquisition?.estimated_bytes || 0) > plan.max_download_mb * 1e6))
+            }
+            onClick={
+              planComplete
+                ? () => {
+                    refreshRuns();
+                    setRunId(plan!.name);
+                    setNewRun(false);
+                  }
+                : plan?.prepared
+                  ? startPlan
+                  : planFailed
+                    ? () => document.querySelector('.plan')?.scrollIntoView({ block: 'start' })
+                    : prepare
+            }
+          >
+            {planComplete
+              ? 'Open results'
+              : plan?.prepared
+                ? !plan.sources_ready && !download
+                  ? 'Review download consent below'
+                  : 'Start / resume baseline'
+                : planFailed
+                  ? 'Review failed preparation below'
+                  : 'Prepare plan · next action'}
+          </button>
+        )}
+      </nav>
       {error && (
         <div className="error" role="alert">
           {error}
@@ -1478,9 +1613,18 @@ function App() {
                 setBudget={setBudget}
                 setMinutes={setMinutes}
               />
+              <AccessSampling
+                key={planId || 'new'}
+                initialSampling={sampling}
+                onChange={setSampling}
+                includeNetwork={includeNetwork}
+                onNetwork={setIncludeNetwork}
+              />
               <button
                 className="primary wide"
-                disabled={training.active || busy || running || !imported || !polygon || !name}
+                disabled={
+                  training.active || busy || running || !imported || !polygon || !settingsValid
+                }
                 onClick={prepare}
               >
                 Prepare acquisition plan
@@ -1490,6 +1634,23 @@ function App() {
                   ? 'Practice stops at the boundary preview. Exit the lesson to prepare a real acquisition plan.'
                   : 'May request bounded catalog metadata; no bulk downloads.'}
               </small>
+              {!settingsValid && (
+                <p className="error">
+                  Use a valid new run name, 12–200 locations, 5–120 inspection minutes and a 1–1900
+                  MB download cap.
+                </p>
+              )}
+              {error && (
+                <p className="error" role="alert">
+                  {error}
+                </p>
+              )}
+              {planDirty && (
+                <p className="notice">
+                  Settings are unapplied. Prepare a new plan with a new run name to use changed
+                  inputs; unchanged partial runs can still resume.
+                </p>
+              )}
               {plan && (
                 <div className="plan">
                   <h3>{plan.name} acquisition plan</h3>
@@ -1499,6 +1660,13 @@ function App() {
                     {plan.settings?.candidate_count} initial locations to evaluate. Starting this
                     plan uses these saved settings.
                   </p>
+                  {planFailed && (
+                    <p className="error" role="alert">
+                      {planJob.status}:{' '}
+                      {planJob.error ||
+                        'Partial files retained; review or refresh the unchanged plan.'}
+                    </p>
+                  )}
                   {plan.prepared ? (
                     <>
                       <b>
@@ -1544,6 +1712,8 @@ function App() {
                         className="primary wide"
                         disabled={
                           running ||
+                          planDirty ||
+                          !settingsValid ||
                           (!plan.sources_ready && !download) ||
                           !!plan.acquisition?.errors?.length ||
                           (plan.acquisition?.estimated_bytes || 0) > plan.max_download_mb * 1e6
@@ -1554,10 +1724,14 @@ function App() {
                       </button>
                     </>
                   ) : (
-                    <p>Preparing plan… check the job panel below.</p>
+                    <p className={planFailed ? 'error' : ''}>
+                      {planFailed
+                        ? `${planJob.status}: ${planJob.error || 'Partial preparation retained; refresh unchanged plan to recover.'}`
+                        : 'Preparing plan… check the job panel below.'}
+                    </p>
                   )}
                   <button
-                    disabled={running}
+                    disabled={running || planDirty}
                     onClick={() =>
                       api(`/plans/${planId}/prepare`, { method: 'POST' }).catch((e) =>
                         setError(e instanceof Error ? e.message : String(e)),
@@ -1575,6 +1749,20 @@ function App() {
             </>
           ) : (
             <>
+              {!training.active && runId && (
+                <ScoutingTools
+                  key={runId}
+                  runId={runId}
+                  map={ready ? map.current : null}
+                  api={api}
+                  onFilter={setAppliedFilter}
+                  stamp={JSON.stringify(annotations) + workingStamp + JSON.stringify(manualPoints)}
+                  analysisPlan={planId}
+                  budget={budget}
+                  planning={planningApproaches}
+                  onPlanning={setPlanningApproaches}
+                />
+              )}
               {workingSelected ? (
                 <WorkingWaypoint
                   key={workingSelected.revision}
@@ -1637,13 +1825,35 @@ function App() {
                       )}
                       <div className="metric">
                         <strong>{num(detail.metrics.raw_km2)}</strong>
-                        <span>km² terrain-visible target area</span>
+                        <span>km² original terrain-visible target area</span>
+                        {appliedFilter && (
+                          <p>
+                            {num(
+                              appliedFilter.candidates.find((p) => p.id === selected)?.matching_km2,
+                            )}{' '}
+                            km² matching saved visible terrain
+                          </p>
+                        )}
                       </div>
                       <p className="hint">
                         Terrain alone permits these sightlines. Trees, branches, animal concealment
                         and ground footing still need inspection.
                       </p>
-                      <h3>Cover across the visible terrain</h3>
+                      {selectedFilter && (
+                        <p className="hint">
+                          Nearest mapped network:{' '}
+                          {selectedFilter.access.distance_m == null
+                            ? 'unknown'
+                            : (selectedFilter.access.distance_m / 1609.344).toFixed(2) + ' mi'}{' '}
+                          · positive height above it:{' '}
+                          {selectedFilter.access.height_m == null
+                            ? 'unknown'
+                            : (selectedFilter.access.height_m / 0.3048).toFixed(0) + ' ft'}
+                          . {selectedFilter.access.status} under the applied access limits; not
+                          cumulative approach gain.
+                        </p>
+                      )}
+                      <h3>Cover across {appliedFilter ? 'original ' : ''}visible terrain</h3>
                       <div className="breakdown">
                         {[
                           ['Tree cover under 10%', 'tree_lt10_km2'],
@@ -1804,7 +2014,12 @@ function App() {
                   {p.parent ? ' · alternative to ' + p.parent : ''}
                 </button>
                 <span>
-                  {num(p.metrics.raw_km2)} km² terrain · {num(p.metrics.tree_lt10_km2)} km² under
+                  {num(
+                    appliedFilter?.candidates.find((row) => row.id === p.id)?.matching_km2 ??
+                      p.metrics.raw_km2,
+                  )}{' '}
+                  km² {appliedFilter ? 'matching terrain' : 'terrain'} ·{' '}
+                  {num(p.metrics.tree_lt10_km2)} km² {appliedFilter ? 'original terrain ' : ''}under
                   10% trees
                 </span>
                 <small>
@@ -1818,7 +2033,9 @@ function App() {
               .map((o) => `${o.a} / ${o.b}: ${num(o.shared_km2)} km² shared terrain`)
               .join(' · ') || 'Add another setup to compare shared terrain.'}
           </p>
-          <small>Saved neighborhood groupings only; no automatic optimizer or route planner.</small>
+          <small>
+            Saved neighborhood groupings only; approaches are independent of coverage comparisons.
+          </small>
         </section>
       )}
       <JobMonitor

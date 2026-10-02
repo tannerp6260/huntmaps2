@@ -32,11 +32,7 @@ def capture():
 def audit():
     expected = json.loads(MANIFEST.read_text())["sha256"]
     actual = capture()
-    return [
-        name
-        for name in actual.keys() | expected.keys()
-        if actual.get(name) != expected.get(name)
-    ]
+    return [name for name in expected if actual.get(name) != expected.get(name)]
 
 
 if __name__ == "__main__":

@@ -300,6 +300,11 @@ class Jobs:
                     )
                     + "Previous waypoint and terrain shading retained. Retry Update waypoint after fixing the named source or budget issue."
                 )
+            if status == "failed" and j["kind"] in ("approach", "network-acquisition"):
+                j["error"] = (
+                    (diagnostics[-1] if diagnostics else "Scouting job failed.")
+                    + " Prior scenarios and sources retained; inspect the job log and explicitly recompute after correcting the named constraint or source."
+                )
             write(path, j)
             errors_before = len(self.storage_errors)
             self.reconcile()

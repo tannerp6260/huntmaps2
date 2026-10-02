@@ -138,8 +138,9 @@ new-area acquisition still has the existing single-tile DEM/Colorado seasonal-so
 limits; mosaics/custom sources need assistance outside this simple form. Imagery,
 legal entry, permissions, current restrictions and safe approach are not acquired
 by normal runs. Cached 2019 imagery/2023 vegetation can differ from present conditions.
-No new scoring model, automatic grouping, optimizer, timed itinerary or field
-validation is claimed. Map tiles resample for display; saved cell counts, not screen
+No new coverage scoring model, automatic grouping, timed itinerary or field
+validation is claimed. Optional independent approach comparisons use the separately
+documented cost service below. Map tiles resample for display; saved cell counts, not screen
 pixels or Web Mercator surface area, define reported terrain-visible area.
 
 ## In-app training
@@ -196,3 +197,72 @@ restore a selected backup, or preview and execute cache cleanup. Cleanup keeps r
 scenes and referenced waypoint masks available offline. It does not reset notes or
 waypoints. Reset has a separate typed confirmation and retains a backup. The panel
 shows damaged-record diagnostics instead of silently emptying your records.
+
+## Create results → review and keep → plan approaches
+
+The workflow bar stays visible above the map. Preparation reviews sources and budgets;
+bulk downloads require the displayed consent. Edited run settings are marked unapplied:
+use a new plan and name for changed inputs. Unchanged partial jobs can still resume.
+Preparation failures show their job status and error beside the plan. Download caps
+above 1900 MB are rejected before submission.
+
+**Observer access and visible-terrain filters** starts off. Enable maximum proximity
+(default 0.5 miles, roads and trails) or maximum height above the nearest mapped line
+(default 1,000 feet). Distances project onto actual segments. Height is positive
+observer elevation minus elevation at that nearest point, never cumulative climbing.
+Unknown network/elevation does not qualify for an enabled requirement. Sources and
+mapped lines remain visible; a missing mapped line does not establish lack of access.
+
+Import WGS84 road/trail lines as GeoJSON, KML/KMZ or GPX tracks/routes. Alternatively,
+include bounded USFS roads/trails in a new run's reviewed acquisition plan, or draw a
+travel area and review its USFS plan in the approach panel. Responses are capped at
+10 MB per network, 20 MB combined, with no provider substitution. Combined terrain
+and network acquisition must fit the displayed cap. USFS dates remain unknown unless
+source attributes supply them; retrieval dates do not establish current conditions.
+Network queries over 0.05 square degrees require a smaller explicit area.
+
+Optional new-run access sampling uses loaded networks and the engine's existing
+observer-exclusion interface. It preserves the imported polygon, target support and
+obstruction terrain. It changes which observer cells can be sampled, not coverage
+scores. Review filters also apply to saved setups without running analysis again.
+
+Elevation bands, slope ranges and eight compass aspects apply to saved visible
+**target** terrain. Apply to update matching areas, map shading and shared overlap.
+Original area and scores stay visible. Matching-area sorting uses original order for
+ties. Aspect restrictions exclude flats and unknown aspect; unrestricted aspect keeps
+flats. Edited filters remain unapplied until Apply. Coordinates remain exact.
+
+Save at least one **Keep** decision to enable **Plan approaches**. Draw or import a
+separate travel polygon, optionally add exclusion polygons, and select loaded networks.
+The travel polygon is a search domain, not inferred permission. Departures within one
+mile are compared independently for each kept setup. **Include trail walk** adds a
+network start; use **Choose network start on map** or exact longitude,latitude.
+**Pin a departure on map** inspects another mapped departure. Map picks project onto
+the nearest selected segment within 100 m, and display the resulting coordinates.
+Shared supplied vertices connect network travel; arbitrary crossings and gaps do not.
+
+Distance always contributes. The four 0–5 avoidance preferences control steepness,
+climbing, trees and shrubs; balanced defaults are one each. The separate 30° default
+maximum modeled slope is a desktop screening threshold. Unknown vegetation receives
+maximum avoidance penalties. The new deterministic 20 m grid service reports modeled
+ascent/descent, separate mapped/off-trail distance, maximum slope, average known
+cover, unknown coverage, cost components and a ground profile. It retains coverage
+scores; coverage does not reward detours or affect path cost.
+
+Review Recommended, Shortest distance and Brush avoidance alternatives; identical
+geometry is collapsed. **Show this alternative on map** fits that path. Solid yellow
+is mapped travel, dashed pink is off-trail. No-path results describe constraints and
+coverage rather than proving inaccessibility. Every endpoint connector and exported
+segment stays inside travel geometry and outside exclusions; paths are not smoothed.
+
+Exports are explicitly **provisional approach** GeoJSON and GPX tracks with unchanged
+destination waypoints. Fences, deadfall, sub-grid cliffs, water crossings, snow,
+permissions and parking remain unmodeled. There is no time prediction, itinerary,
+legal certification or field validation. Changed destinations/sources mark scenarios
+stale; changed preferences/boundaries require explicit recomputation. Previous scenarios
+remain available in the selector, which loads their recorded definitions for review.
+
+Versioned profiles, source originals and sealed approach definitions/results live in
+configured GUI state, are included in record backups, and are protected during cache
+cleanup. Future intermediate grids are regenerable cache, not source evidence.
+See [implementation and acceptance evidence](SCOUTING_VERIFICATION.md).
