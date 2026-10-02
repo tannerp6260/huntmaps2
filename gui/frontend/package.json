@@ -13,7 +13,9 @@
     "test:nearby-foliage": "node browser-nearby-foliage-check.mjs",
     "test:clusters": "node browser-clusters-check.mjs",
     "test:nearby-observer": "node browser-nearby-observer-check.mjs",
-    "test:working-waypoint": "node browser-working-waypoint-check.mjs"
+    "test:working-waypoint": "node browser-working-waypoint-check.mjs",
+    "format": "prettier --write src",
+    "format:check": "prettier --check src"
   },
   "dependencies": {
     "@types/three": "0.180.0",
@@ -28,6 +30,7 @@
     "@types/react": "19.1.8",
     "@types/react-dom": "19.1.6",
     "playwright": "1.63.0",
+    "prettier": "3.5.3",
     "typescript": "5.8.3",
     "vite": "6.4.3"
   }
