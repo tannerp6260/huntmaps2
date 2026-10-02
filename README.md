@@ -46,3 +46,5 @@ Launch the installed browser GUI with `./huntmaps-gui`. Review saved terrain vie
 compare setups, annotate and export observer waypoints, or prepare a new baseline.
 See [GUI first-use and setup guide](docs/gui/README.md) and
 [verification evidence](docs/gui/VERIFICATION.md). Existing `./scout` commands are unchanged.
+
+The first-person Soap Creek pilot now includes [connected inferred foliage](docs/gui/FIRST_PERSON.md#inferred-vegetation-screening); [verification and limits](docs/gui/FOLIAGE_CLUSTERS_VERIFICATION.md).

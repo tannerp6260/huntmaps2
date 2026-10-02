@@ -64,9 +64,47 @@ def create_app():
     def fp_asset(ident,cid,name):
         fp.candidate(ident,cid);folder,meta=fp.bundle(cid)
         if name not in meta['hashes'] or name.endswith('.npz'):raise ValueError('Unknown scene asset')
-        return FileResponse(folder/name,headers={'Cache-Control':'private, max-age=3600'})
+        return FileResponse(fp.asset_path(folder,meta,name),headers={'Cache-Control':'private, max-age=3600'})
     @app.post('/api/runs/{ident}/first-person/{cid}/profile')
     def fp_profile(ident,cid,body:dict):return fp.profile(ident,cid,body)
+
+    @app.post('/api/runs/{ident}/first-person/{cid}/observer')
+    def fp_observer(ident,cid,body:dict):return fp.observer(ident,cid,body)
+    from . import manual_observers as manual
+    @app.get('/api/runs/{ident}/manual-observers')
+    def manual_list(ident):return list(manual.records(ident).values())
+    @app.post('/api/runs/{ident}/manual-observers')
+    def manual_create(ident,body:dict):
+        with STORE_LOCK:return manual.create(ident,body)
+    @app.put('/api/runs/{ident}/manual-observers/{key}')
+    def manual_update(ident,key,body:dict):
+        with STORE_LOCK:return manual.update(ident,key,body)
+    @app.delete('/api/runs/{ident}/manual-observers/{key}')
+    def manual_delete(ident,key):
+        with STORE_LOCK:
+            working.restore(ident,key,jobs)
+            return manual.delete(ident,key)
+
+    from . import working_waypoints as working
+    @app.get('/api/runs/{ident}/working-waypoints')
+    def working_list(ident):return working.snapshot(ident,jobs)
+    @app.post('/api/runs/{ident}/working-waypoints/{key}')
+    def working_update(ident,key,body:dict):return working.start(ident,key,body,jobs)
+    @app.delete('/api/runs/{ident}/working-waypoints/{key}')
+    def working_restore(ident,key):return working.restore(ident,key,jobs)
+    @app.put('/api/runs/{ident}/working-waypoints/{key}/review')
+    def working_review(ident,key,body:dict):return working.review(ident,key,body,jobs)
+    @app.get('/api/runs/{ident}/working-candidates/{key}')
+    def working_candidate(ident,key):return working.DisplayRun(ident,jobs).candidate(key,True)
+    @app.get('/api/runs/{ident}/working-tiles/{layer}/{key}/{z}/{x}/{y}.png')
+    def working_tile(ident,layer,key,z:int,x:int,y:int,color:int=0):
+        return Response(tile(working.DisplayRun(ident,jobs),layer,key,z,x,y,color),media_type='image/png',headers={'Cache-Control':'private, max-age=3600'})
+    @app.get('/api/runs/{ident}/working-overlap')
+    def working_overlap(ident,ids:str):
+        r=working.DisplayRun(ident,jobs);selected=ids.split(',')
+        if not 1<=len(selected)<=3 or len(set(selected))!=len(selected):raise ValueError('Compare one to three distinct setups')
+        masks={i:r.mask(i)[0] for i in selected};area=abs(r.dem.GetGeoTransform()[1]*r.dem.GetGeoTransform()[5])/1e6
+        return [dict(a=a,b=b,shared_km2=float((masks[a]&masks[b]).sum()*area)) for n,a in enumerate(selected) for b in selected[n+1:]]
 
     @app.get('/api/runs')
     def get_runs():return runs()
@@ -111,9 +149,17 @@ def create_app():
         notes=read(STATE/'annotations'/(ident+'.json'),{})
         if fmt=='gpx':root=ET.Element('gpx',version='1.1',creator='HuntMaps2 local GUI',xmlns='http://www.topografix.com/GPX/1/1');doc=root
         else:root=ET.Element('kml',xmlns='http://www.opengis.net/kml/2.2');doc=ET.SubElement(root,'Document')
+        working_points=working.snapshot(ident,jobs)['overrides']
+        manual_points=manual.records(ident)
         for i in selected:
-            p=r.candidate(i);name=f'{p["neighborhood"]+" / " if p["neighborhood"] else ""}{i}'+(f' (alternative to {p["parent"]})' if p['parent'] else '')
-            desc='Provisional observer setup; legal access and sightlines unresolved. '+notes.get(i,{}).get('notes','')
+            if i in working_points:
+                p=working_points[i];name=p['name'];desc=f"Updated working observer {i}; calculated terrain-only view; access and field sightlines unverified. "+p['notes']
+            elif i.startswith('manual-'):
+                if i not in manual_points:raise ValueError('Unknown provisional waypoint.')
+                p=manual_points[i];name=p['name'];desc=f"Provisional manual observer near {p['anchor']}; no full-area analysis calculated; access and sightlines unverified. "+p['notes']
+            else:
+                p=r.candidate(i);name=f'{p["neighborhood"]+" / " if p["neighborhood"] else ""}{i}'+(f' (alternative to {p["parent"]})' if p['parent'] else '')
+                desc='Provisional observer setup; legal access and sightlines unresolved. '+notes.get(i,{}).get('notes','')
             if fmt=='gpx':
                 w=ET.SubElement(doc,'wpt',lat=str(p['latitude']),lon=str(p['longitude']));ET.SubElement(w,'name').text=name;ET.SubElement(w,'desc').text=desc
             else:
@@ -177,4 +223,3 @@ def create_app():
         @app.get('/')
         def index():return FileResponse(dist/'index.html')
     return app
-

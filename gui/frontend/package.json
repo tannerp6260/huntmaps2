@@ -8,7 +8,12 @@
     "test:browser": "node browser-check.mjs",
     "test:training": "node browser-training-check.mjs",
     "test:online": "node browser-online-check.mjs",
-    "test:first-person": "node browser-first-person-check.mjs"
+    "test:first-person": "node browser-first-person-check.mjs",
+    "test:vegetation": "node browser-vegetation-screen-check.mjs",
+    "test:nearby-foliage": "node browser-nearby-foliage-check.mjs",
+    "test:clusters": "node browser-clusters-check.mjs",
+    "test:nearby-observer": "node browser-nearby-observer-check.mjs",
+    "test:working-waypoint": "node browser-working-waypoint-check.mjs"
   },
   "dependencies": {
     "@types/three": "0.180.0",

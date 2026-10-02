@@ -34,7 +34,7 @@ def sources(run,layer,ident,color):
         inputs += [run.visibility_path(ident),run.analysis/'target.tif']
         if layer=='classes':
             inputs += [run.analysis/'tree.tif']
-            saved = run.vegetation/(ident+'_target_classes.tif') if run.experimental else None
+            saved = run.vegetation/(ident+'_target_classes.tif') if run.experimental and ident not in getattr(run,'working_ids',set()) else None
             if saved and saved.exists():run.validate(saved);inputs.append(saved)
     elif layer!='hillshade':raise ValueError('Unknown map layer')
     key=fingerprint(inputs)

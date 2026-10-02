@@ -163,7 +163,22 @@ Online map regression: with the GUI running, use `cd gui/frontend && npm run tes
 ## First-person terrain pilot
 
 For the four prepared Soap Creek review setups, **View from this setup** opens a
-fixed-position terrain preview, measured lidar points and an interactive sightline
+terrain preview, measured lidar points and an interactive sightline
 profile. See [usage and limits](FIRST_PERSON.md) and
 [verification evidence](FIRST_PERSON_VERIFICATION.md). Fine ground covers 300 m;
 this is not a photorealistic or vegetation-validated field view.
+
+The current view uses connected, image-colored foliage with **Dense** screening
+and the unchanged saved **120 m** patch. **Explore nearby positions** lets you try
+stances within 30 feet and update the current working waypoint with its own
+terrain shading. Original results remain preserved; updated coordinates can be exported.
+See [nearby observer instructions and scope](NEARBY_OBSERVER.md). Saved neighborhood
+alternatives are expandable; their individual saved masks remain available.
+
+Scenes stop drawing while idle. The original
+[cluster verification](FOLIAGE_CLUSTERS_VERIFICATION.md) describes cached geometry;
+[nearby-position verification](NEARBY_OBSERVER_VERIFICATION.md) covers movement,
+waypoints, exports and the simplified controls.
+
+Waypoint updates: [working locations and terrain shading](WORKING_WAYPOINTS.md).
+Verification: [working waypoint evidence](WORKING_WAYPOINTS_VERIFICATION.md).

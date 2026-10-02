@@ -185,7 +185,7 @@ def acquire(s,allow):
     h=digest(part);part.replace(path);manifest[s['key']]=dict(s,sha256=h);write(folder/'manifest.json',manifest)
     return path,h
 
-def crop_points(run,cid,sources):
+def crop_points(run,cid,sources,radius=308):
     laspy,pyproj=deps();p=run.points[cid];parts=[];references=set();hist={};total=0
     for s,path,h in sources:
         if cid not in s['candidates']:continue
@@ -204,7 +204,7 @@ def crop_points(run,cid,sources):
                 x,y=tr.transform(np.asarray(chunk.x),np.asarray(chunk.y));z=np.asarray(chunk.z)*unit
                 classes=np.asarray(chunk.classification)
                 # Include 8 m support halo; display remains a 300 m circle.
-                keep=(np.hypot(x-p['x'],y-p['y'])<=308)&~np.asarray(chunk.withheld,dtype=bool)&~np.isin(classes,[7,18])&np.isfinite(z)
+                keep=(np.hypot(x-p['x'],y-p['y'])<=radius)&~np.asarray(chunk.withheld,dtype=bool)&~np.isin(classes,[7,18])&np.isfinite(z)
                 a=np.column_stack([x[keep]-p['x'],y[keep]-p['y'],z[keep],classes[keep]]).astype(np.float64)
                 total+=len(a)
                 if total>8_000_000:raise ValueError('Local point count exceeds bounded preparation memory; no silent processing thinning.')
@@ -293,6 +293,96 @@ def above_ground(points,ground):
     z=fp.sample(ground,1,-300,300,points[:,0],points[:,1])
     return points[(points[:,3]!=2)&np.isfinite(z)&(points[:,2]-z>.5)]
 
+def enrich_foliage(folder,meta):
+    from . import vegetation_screen as veg
+    from PIL import Image
+    centres=np.fromfile(folder/meta['vegetation']['centres_file'],dtype='<f4').reshape(-1,3)
+    kinds=np.fromfile(folder/meta['vegetation']['kinds_file'],dtype='u1')
+    rgba=np.asarray(Image.open(folder/meta['texture']['file']).convert('RGBA')) if meta.get('texture') else np.zeros((1,1,4),dtype=np.uint8)
+    colors,used=veg.foliage_colors(centres,kinds,rgba)
+    colors.tofile(folder/'vegetation-colors.bin');write(folder/'foliage-primitive.json',veg.primitive())
+    meta['vegetation'].update(colors_file='vegetation-colors.bin',primitive_file='foliage-primitive.json',
+        geometry_identifier=veg.GEOMETRY,color_sampled_cell_count=int(used.sum()),
+        nearby_counts={str(r):int((np.hypot(centres[:,0],centres[:,2])<=r).sum()) for r in veg.RANGES},
+        default_radius_m=veg.DEFAULT_RADIUS,ranges_m=list(veg.RANGES),display_cap=veg.DISPLAY_CAP,
+        color_note='75% median valid aerial RGB beneath each centre +25% green, in sRGB; missing imagery uses green. Appearance, not classification.',
+        warning='Inferred opaque rounded clumps; support, shape and screening thickness are assumptions, not validated vegetation opacity.')
+
+def publish_copy(run,cid,key,prior,target,started):
+    import shutil
+    meta=read(prior/'scene.json')
+    for name,h in meta['hashes'].items():fp.verify_file(prior/name,h)
+    for image in run.images:run.validate(image['path'])
+    existing=sum(f.stat().st_size for area in ['bundles','partial'] for f in (fp.HOME/area).rglob('*') if f.is_file())
+    needed=sum((prior/name).stat().st_size for name in meta['hashes'])+10_000_000
+    if existing+needed>800_000_000:raise ValueError('800 MB derived-asset cap lacks room; prior bundles retained.')
+    folder=fp.HOME/'partial'/(key+'-'+__import__('uuid').uuid4().hex);folder.mkdir(parents=True)
+    for name in meta['hashes']:shutil.copyfile(prior/name,folder/name)
+    enrich_foliage(folder,meta)
+    meta.update(version=fp.VERSION,key=key,preparation_wall_s=round(time.monotonic()-started,3),
+                peak_process_rss_mib=round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024,2),reused_cell_bundle=prior.name)
+    meta['hashes']={f.name:digest(f) for f in folder.iterdir() if f.is_file()}
+    write(folder/'scene.json',meta);target.parent.mkdir(parents=True,exist_ok=True);folder.replace(target)
+    write(fp.HOME/'ready'/(cid+'.json'),dict(key=key));fp.stage(cid+' nearby foliage ready; verified cells and photographs reused')
+
+def enrich_clusters(folder,meta,points,ground_grid):
+    from . import vegetation_screen as veg,foliage_clusters as clusters
+    from PIL import Image
+    # Fresh terrain preparation also reads the full 300 m fine-ground circle.
+    # Foliage admission needs only the supported 120 m range plus its halo.
+    local=points[np.hypot(points[:,0],points[:,1])<=122]
+    centres,kinds,counts,eligible=veg.cells(local,ground_grid,meta['ground_m'],neighbor_support=True)
+    selected=np.hypot(centres[:,0],centres[:,2])<=120
+    centres=centres[selected];kinds=kinds[selected];counts=counts[selected]
+    centres.tofile(folder/'cluster-centres.bin');kinds.tofile(folder/'cluster-kinds.bin');counts.tofile(folder/'cluster-counts.bin')
+    image_path=fp.asset_path(folder,meta,meta['texture']['file']) if meta.get('texture') else None
+    rgba=np.asarray(Image.open(image_path).convert('RGBA')) if image_path else np.zeros((1,1,4),dtype='u1')
+    meshes={}
+    for radius in veg.RANGES:
+        fp.stage(meta['candidate']+' building connected foliage · '+str(radius)+' m')
+        try:step,surfaces,total=clusters.build_range(centres,radius)
+        except clusters.BudgetError as e:
+            meshes[str(radius)]=dict(unavailable=True,reason=str(e));continue
+        entries={}
+        for name,(vertices,faces) in surfaces.items():
+            prefix='cluster-'+str(radius)+'-'+name
+            # Nearest admitted cell retains classification provenance for fallback color.
+            from scipy.spatial import cKDTree
+            nearest=cKDTree(centres).query(vertices)[1] if len(vertices) else np.empty(0,int)
+            colors,used=veg.foliage_colors(vertices,kinds[nearest],rgba)
+            vertices.tofile(folder/(prefix+'-vertices.bin'));faces.tofile(folder/(prefix+'-indices.bin'));colors.tofile(folder/(prefix+'-colors.bin'))
+            entries[name]=dict(vertices_file=prefix+'-vertices.bin',indices_file=prefix+'-indices.bin',colors_file=prefix+'-colors.bin',triangle_count=len(faces),vertex_count=len(vertices),color_sampled_vertex_count=int(used.sum()))
+        meshes[str(radius)]=dict(sampling_interval_m=step,cell_count=total,scenarios=entries)
+    if all(info.get('unavailable') for info in meshes.values()):raise ValueError('No nearby range fits the cluster budget; prior scene retained.')
+    meta['vegetation']=dict(centres_file='cluster-centres.bin',kinds_file='cluster-kinds.bin',counts_file='cluster-counts.bin',
+        cell_count=len(centres),inferred_cell_count=int(kinds.sum()),classified_cell_count=int((kinds==0).sum()),
+        strong_cell_count=int((counts>=4).sum()),neighbor_supported_cell_count=int((counts<4).sum()),eligible_distinct_returns=eligible,
+        cell_size_m=1,minimum_distinct_returns=2,strong_minimum_distinct_returns=4,required_strong_neighbors=2,recursive_support=False,
+        scenarios=veg.SCENARIOS,geometry_identifier=clusters.IDENTIFIER,meshes=meshes,triangle_cap=clusters.TRIANGLE_CAP,
+        nearby_counts={str(r):int((np.hypot(centres[:,0],centres[:,2])<=r).sum()) for r in veg.RANGES},
+        default_radius_m=veg.DEFAULT_RADIUS,ranges_m=list(veg.RANGES),
+        warning='Connected opaque foliage inferred from measured support. Two/three-return cells require two original strong neighbors. Shape, thickness and opacity are assumptions, not validated vegetation.')
+
+def publish_clusters(run,cid,key,prior,target,started,sources):
+    meta=read(prior/'scene.json')
+    for name,h in meta['hashes'].items():fp.verify_file(fp.asset_path(prior,meta,name),h)
+    for image in run.images:run.validate(image['path'])
+    points,_,_=crop_points(run,cid,sources,radius=122)
+    path=fp.asset_path(prior,meta,'fine.npz')
+    with np.load(path) as grid:ground_grid=grid['heights']
+    folder=fp.HOME/'partial'/(key+'-'+__import__('uuid').uuid4().hex);folder.mkdir(parents=True)
+    # Immutable base assets are referenced and verified, never duplicated or moved.
+    meta['asset_bundles']={name:meta.get('asset_bundles',{}).get(name,prior.name) for name in meta['hashes']}
+    enrich_clusters(folder,meta,points,ground_grid)
+    meta.update(version=fp.VERSION,key=key,reused_base_bundle=prior.name,preparation_wall_s=round(time.monotonic()-started,3),
+                peak_process_rss_mib=round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024,2))
+    meta['hashes'].update({f.name:digest(f) for f in folder.iterdir() if f.is_file()})
+    write(folder/'scene.json',meta)
+    size=sum(f.stat().st_size for area in ['bundles','partial'] for f in (fp.HOME/area).rglob('*') if f.is_file())
+    if size>800_000_000:raise ValueError('800 MB derived-asset cap exceeded; prior scene retained.')
+    target.parent.mkdir(parents=True,exist_ok=True);folder.replace(target)
+    write(fp.HOME/'ready'/(cid+'.json'),dict(key=key));fp.stage(cid+' connected foliage ready')
+
 def publish(run,cid,sources):
     signal.alarm(900) if __name__=='__main__' else None
     started=time.monotonic()
@@ -300,13 +390,20 @@ def publish(run,cid,sources):
     p=run.candidate(cid)
     signature=dict(version=fp.VERSION,observer=[p['longitude'],p['latitude']],sources=[h for s,path,h in sources if cid in s['candidates']],
                    baseline=digest(run.dem_path),radius=300)
+    from .foliage_clusters import IDENTIFIER
+    signature['foliage_geometry']=IDENTIFIER
     key=hashlib.sha256(json.dumps(signature,sort_keys=True).encode()).hexdigest()[:32]
     target=fp.HOME/'bundles'/key
     if target.exists():
         # Verify before reuse; stale/corrupt immutable assets are never overwritten.
         meta=read(target/'scene.json')
-        for name,h in meta['hashes'].items():fp.verify_file(target/name,h)
+        for name,h in meta['hashes'].items():fp.verify_file(fp.asset_path(target,meta,name),h)
         write(fp.HOME/'ready'/(cid+'.json'),dict(key=key));fp.stage(cid+' cached bundle verified and reused');return
+    previous_signature={k:v for k,v in dict(signature,version=5).items() if k!='foliage_geometry'}
+    previous_key=hashlib.sha256(json.dumps(previous_signature,sort_keys=True).encode()).hexdigest()[:32]
+    prior=fp.HOME/'bundles'/previous_key
+    if (prior/'scene.json').exists():
+        publish_clusters(run,cid,key,prior,target,started,sources);return
     points,vref,hist=crop_points(run,cid,sources)
     a,support=fine_grid(points)
     fine_ground=float(fp.sample(a,1,-300,300,np.array([0.]),np.array([0.]))[0])
@@ -335,6 +432,16 @@ def publish(run,cid,sources):
     step=max(1,math.ceil(len(eligible)/500000));display=eligible[::step]
     pv=np.column_stack([display[:,0],display[:,2]-ground-fp.CURVATURE*np.hypot(display[:,0],display[:,1])**2/(2*fp.EARTH),-display[:,1]]).astype('<f4')
     pv.tofile(folder/'points.bin');display[:,3].astype('u1').tofile(folder/'classes.bin')
+    from . import vegetation_screen as veg
+    if hasfine:
+        centres,kinds,counts,eligible_count=veg.cells(points,a,ground)
+    else:
+        centres=np.empty((0,3),dtype='<f4');kinds=np.empty(0,dtype='u1');counts=np.empty(0,dtype='<u4');eligible_count=0
+    centres.tofile(folder/'vegetation-centres.bin');kinds.tofile(folder/'vegetation-kinds.bin');counts.tofile(folder/'vegetation-counts.bin')
+    vegetation=dict(centres_file='vegetation-centres.bin',kinds_file='vegetation-kinds.bin',counts_file='vegetation-counts.bin',
+        cell_count=len(centres),inferred_cell_count=int(kinds.sum()),classified_cell_count=int((kinds==0).sum()),eligible_distinct_returns=eligible_count,
+        cell_size_m=1,minimum_distinct_returns=4,scenarios=veg.SCENARIOS,
+        warning='Inferred opaque foliage volumes; four-return support and expansion are assumptions, not confidence or validated opacity.')
     image=texture(run,cid,folder)
     context_image=texture(run,cid,folder,2000,2048,'context-imagery.png')
     valid=np.isfinite(a);circle=np.hypot(*np.indices(a.shape)-300)<=300
@@ -349,9 +456,11 @@ def publish(run,cid,sources):
          vertical_note='Local sources share the same recorded vertical CRS. Coarse NAVD88 context may differ in realization; the 300–320 m transition is deliberately not joined.',
          classification_counts=hist,raw_local_point_count=len(within),above_ground_point_count=len(eligible),
          point_filter="Non-ground returns >0.5 m above supported fine ground; unknown ground excluded",display_point_count=len(display),display_stride=step,
-         triangle_count=len(faces)+len(bf),texture=image,context_texture=context_image,hashes=hashes,sources=[dict(title=s['title'],sha256=h,bytes=path.stat().st_size,acquisition_date=s['acquisition_date']) for s,path,h in sources if cid in s['candidates']],
+         vegetation=vegetation,triangle_count=len(faces)+len(bf),texture=image,context_texture=context_image,hashes=hashes,sources=[dict(title=s['title'],sha256=h,bytes=path.stat().st_size,acquisition_date=s['acquisition_date']) for s,path,h in sources if cid in s['candidates']],
          preparation_wall_s=round(time.monotonic()-started,3),peak_process_rss_mib=round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024,2),
          warning='Terrain-model preview, not a photograph or verified sightline. Lidar points are incomplete measured returns, not reconstructed trees. Fine-data holes remain unknown.')
+    enrich_clusters(folder,meta,points,a)
+    meta['hashes']={f.name:digest(f) for f in folder.iterdir() if f.is_file()}
     write(folder/'scene.json',meta)
     size=sum(f.stat().st_size for area in ['bundles','partial'] for f in (fp.HOME/area).rglob('*') if f.is_file())
     if size>800_000_000:raise ValueError('800 MB derived-asset cap exceeded')

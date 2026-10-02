@@ -26,11 +26,11 @@ class Jobs:
         for p in self.folder.glob('*.json'):
             j=read(p)
             if j['status'] in ACTIVE:
+                j.update(status='interrupted',stage='Interrupted after app restart',finished=time.time(),error='The app stopped during this job. Partial files were retained; review the plan before resuming.');write(p,j)
                 # A stale child may survive a server crash. Kill only its recorded process identity.
                 if j.get('boot_id')==BOOT_ID and j.get('pid') and j.get('ticks') and start_ticks(j['pid'])==j['ticks']:
                     try:os.killpg(j['pid'],signal.SIGKILL)
                     except ProcessLookupError:pass
-                j.update(status='interrupted',stage='Interrupted after app restart',finished=time.time(),error='The app stopped during this job. Partial files were retained; review the plan before resuming.');write(p,j)
 
     def list(self):
         result=[]
@@ -82,17 +82,23 @@ class Jobs:
         code=proc.wait();log.close()
         with self.lock:
             path=self.folder/(ident+'.json');j=read(path)
+            # A restarted manager may already have recorded interruption. A late
+            # waiter must not overwrite that durable diagnosis with generic failure.
+            if j['status'] not in ACTIVE:return
             if j['status']=='cancelling':
                 try:os.killpg(j['pid'],signal.SIGKILL)
                 except ProcessLookupError:pass
             status='cancelled' if j['status']=='cancelling' else ('complete' if code==0 else 'failed')
             j.update(status=status,exit_code=code,finished=time.time(),stage={'complete':'Finished','cancelled':'Cancelled; partial files retained','failed':'Failed; see details and log'}[status])
+            if status=='complete':j.pop('error',None)
             if status=='failed':
                 lines=(self.folder/(ident+'.log')).read_text(errors='replace').splitlines()
                 diagnostics=[line for line in lines if line.startswith(('SCOUT:','GUI JOB:','ValueError:','FileNotFoundError:'))]
                 j['error']=(diagnostics[-1]+' ' if diagnostics else 'Job failed. ')+'Review the acquisition plan and log below. Fix the named source, area or budget, then refresh the plan or use a new run name. Partial files were retained.'
             if status=='failed' and j['kind'].startswith('first-person'):
                 j['error']=(diagnostics[-1]+' ' if diagnostics else 'First-person preparation failed. ')+'Review the source plan and preparation log in the first-person viewer. Valid bundles and partial source files were retained.'
+            if status=='failed' and j['kind']=='waypoint-update':
+                j['error']=(diagnostics[-1]+' ' if diagnostics else 'Waypoint update failed. ')+'Previous waypoint and terrain shading retained. Retry Update waypoint after fixing the named source or budget issue.'
             write(path,j)
 
     def cancel(self,ident):
