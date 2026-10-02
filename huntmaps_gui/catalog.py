@@ -13,9 +13,7 @@ from glassing.review_maps import visible_mask
 from .config import SOURCE as ROOT, STATE
 
 
-def read(path, default=None):
-    p = Path(path)
-    return json.loads(p.read_text()) if p.exists() else default
+from .storage import read_json as read
 
 
 def safe_path(value):

@@ -22,6 +22,7 @@ from osgeo import gdal
 from glassing import core
 from .catalog import STATE, Run, read, check_hash, collection
 from .jobs import write, ACTIVE
+from .storage import locked as file_locked
 from . import first_person as fp, manual_observers as manual
 
 VERSION = 1
@@ -35,13 +36,8 @@ def home(ident):
 @contextmanager
 def locked(ident):
     folder = home(ident)
-    folder.mkdir(parents=True, exist_ok=True)
-    with (folder / "state.lock").open("a") as handle:
-        fcntl.flock(handle, fcntl.LOCK_EX)
-        try:
-            yield folder
-        finally:
-            fcntl.flock(handle, fcntl.LOCK_UN)
+    with file_locked(folder / "state.json"):
+        yield folder
 
 
 def state(folder):
@@ -136,6 +132,7 @@ def reconcile(folder, ident, jobs):
             changed = True
         elif j and j["status"] not in ACTIVE:
             # Retain an actionable failure record, never its uncommitted coordinates.
+            changed = changed or pending.get("status") != j["status"]
             pending["status"] = j["status"]
             pending["error"] = "Waypoint unchanged. Retry Update waypoint; " + j.get(
                 "error", j["stage"]
@@ -146,8 +143,8 @@ def reconcile(folder, ident, jobs):
 
 
 def snapshot(ident, jobs):
-    with locked(ident) as folder:
-        return reconcile(folder, ident, jobs)
+    # Reading never publishes a completed job or creates a state directory.
+    return state(home(ident))
 
 
 def start(ident, key, body, jobs):
@@ -173,7 +170,7 @@ def start(ident, key, body, jobs):
         foliage_assumption="dense",
         foliage_radius_m=120,
     )
-    with locked(ident) as folder:
+    with file_locked(STATE / "maintenance"), jobs.lock, locked(ident) as folder:
         with jobs.lock:
             if any(j["status"] in ACTIVE for j in jobs.list()):
                 raise ValueError(
@@ -227,7 +224,7 @@ def start(ident, key, body, jobs):
 
 def restore(ident, key, jobs):
     original(ident, key)
-    with locked(ident) as folder:
+    with file_locked(STATE / "maintenance"), jobs.lock, locked(ident) as folder:
         data = state(folder)
         pending = data["pending"].pop(key, None)
         if pending:
@@ -240,7 +237,7 @@ def restore(ident, key, jobs):
 
 
 def review(ident, key, body, jobs):
-    with locked(ident) as folder:
+    with file_locked(STATE / "maintenance"), jobs.lock, locked(ident) as folder:
         data = reconcile(folder, ident, jobs)
         if key not in data["overrides"]:
             raise ValueError("This setup has no working waypoint.")
@@ -437,13 +434,11 @@ def calculate(ident, token):
 
 
 def main():
-    global STATE
     ap = argparse.ArgumentParser()
     ap.add_argument("run")
     ap.add_argument("token")
     ap.add_argument("--state", type=Path, default=STATE)
     args = ap.parse_args()
-    STATE = args.state
     resource.setrlimit(resource.RLIMIT_AS, (1536 * 1024**2, 1536 * 1024**2))
     signal.signal(
         signal.SIGALRM,
@@ -455,7 +450,11 @@ def main():
     )
     signal.alarm(900)
     try:
-        calculate(args.run, args.token)
+        from dataclasses import replace
+        from .config import configured, current
+
+        with configured(replace(current(), state_dir=Path(args.state))):
+            calculate(args.run, args.token)
     except Exception as e:
         print("GUI JOB:", e, flush=True)
         return 2
@@ -464,3 +463,16 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+def publish_completed(jobs):
+    """Called at startup/completion under maintenance then job locks."""
+    with file_locked(STATE / "maintenance"), jobs.lock:
+        for path in (STATE / "working-waypoints").glob("*/state.json"):
+            try:
+                with locked(path.parent.name) as folder:
+                    reconcile(folder, path.parent.name, jobs)
+            except (ValueError, OSError, KeyError) as error:
+                message = f"Waypoint publication needs recovery ({path}): {error}"
+                if message not in jobs.storage_errors:
+                    jobs.storage_errors.append(message)

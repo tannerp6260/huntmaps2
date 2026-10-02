@@ -3,6 +3,7 @@
 import uuid
 from .catalog import STATE, Run, read
 from .jobs import write
+from .storage import transaction
 from . import first_person as fp
 
 
@@ -41,25 +42,23 @@ def create(ident, body):
         foliage_assumption="dense",
         foliage_radius_m=120
     )
-    data = records(ident)
-    data[record["id"]] = record
-    write(path(ident), data)
+    with transaction(path(ident), {}) as data:
+        data[record["id"]] = record
     return record
 
 
 def update(ident, key, body):
-    data = records(ident)
-    if key not in data:
-        raise ValueError("Unknown provisional waypoint.")
-    data[key].update(fields(body))
-    write(path(ident), data)
-    return data[key]
+    with transaction(path(ident), {}) as data:
+        if key not in data:
+            raise ValueError("Unknown provisional waypoint.")
+        data[key].update(fields(body))
+        result = data[key]
+    return result
 
 
 def delete(ident, key):
-    data = records(ident)
-    if key not in data:
-        raise ValueError("Unknown provisional waypoint.")
-    del data[key]
-    write(path(ident), data)
+    with transaction(path(ident), {}) as data:
+        if key not in data:
+            raise ValueError("Unknown provisional waypoint.")
+        del data[key]
     return dict(deleted=key)

@@ -8,6 +8,7 @@ import sys
 import threading
 import time
 import uuid
+from dataclasses import replace
 from .catalog import ROOT, STATE, read
 from .config import current, configured
 
@@ -17,11 +18,7 @@ BOOT_ID = (
 )
 
 
-def write(path, value):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps(value, indent=2))
-    tmp.replace(path)
+from .storage import write, locked as file_locked
 
 
 def start_ticks(pid):
@@ -37,15 +34,26 @@ def start_ticks(pid):
 
 class Jobs:
     def __init__(self, state=None):
-        self.config = current()
-        state = state if state is not None else self.config.state_dir
+        state = state if state is not None else current().state_dir
+        self.config = replace(current(), state_dir=state)
         self.folder = state / "jobs"
         self.folder.mkdir(parents=True, exist_ok=True)
         self.lock = threading.RLock()
         self.process = None
         self.kill_threads = []
+        self.storage_errors = []
         for p in self.folder.glob("*.json"):
-            j = read(p)
+            try:
+                j = read(p)
+                if not isinstance(j, dict) or not all(
+                    k in j for k in ("id", "status", "started", "kind")
+                ):
+                    raise ValueError(
+                        f"Damaged job record: {p}. Preserve it and restore a backup."
+                    )
+            except ValueError as error:
+                self.storage_errors.append(str(error))
+                continue
             if j["status"] in ACTIVE:
                 j.update(
                     status="interrupted",
@@ -66,10 +74,50 @@ class Jobs:
                     except ProcessLookupError:
                         pass
 
-    def list(self):
+        self.reconcile()
+
+    def logs(self, ident, limit=64000):
+        if not __import__("re").fullmatch(r"[a-f0-9]{32}", ident):
+            raise ValueError("Unknown job")
+        if not (self.folder / (ident + ".json")).exists():
+            raise ValueError("Unknown job")
+        path = self.folder / (ident + ".log")
+        if not path.exists():
+            return ""
+        with path.open("rb") as handle:
+            handle.seek(max(0, path.stat().st_size - min(64000, max(0, limit))))
+            return handle.read(min(64000, max(0, limit))).decode(errors="replace")
+
+    def list(self, include_logs=True):
+        with configured(self.config), file_locked(
+            self.config.state_dir / "maintenance"
+        ), self.lock:
+            return self._list(include_logs)
+
+    def _list(self, include_logs=True):
         result = []
         for p in self.folder.glob("*.json"):
-            j = read(p)
+            try:
+                j = read(p)
+                if not isinstance(j, dict) or not all(
+                    k in j for k in ("id", "status", "started", "kind")
+                ):
+                    raise ValueError(
+                        f"Damaged job record: {p}. Preserve it and restore a backup."
+                    )
+            except ValueError as error:
+                result.append(
+                    dict(
+                        id=p.stem,
+                        kind="damaged-record",
+                        status="damaged",
+                        stage="Record needs recovery",
+                        elapsed_s=0,
+                        error=str(error),
+                    )
+                )
+                continue
+            j.setdefault("stage", "Stage unavailable; inspect the job log")
             j["elapsed_s"] = round((j.get("finished") or time.time()) - j["started"], 1)
             log = self.folder / (j["id"] + ".log")
             if log.exists():
@@ -85,7 +133,7 @@ class Jobs:
             if stages and j["status"] == "running":
                 j["stage"] = stages[-1]
             if j.get("name") and j["status"] == "running" and j["kind"] == "baseline":
-                analysis = ROOT / "results" / j["name"] / "analysis"
+                analysis = self.config.workspace / "results" / j["name"] / "analysis"
 
                 def fresh(filename):
                     p = analysis / filename
@@ -115,7 +163,12 @@ class Jobs:
                 if fresh("review_packet.pdf"):
                     j["stage"] = "Analysis packet saved; creating owner handoff"
             if j.get("name") and j["status"] == "running":
-                ex = ROOT / "results" / j["name"] / "analysis/execution.jsonl"
+                ex = (
+                    self.config.workspace
+                    / "results"
+                    / j["name"]
+                    / "analysis/execution.jsonl"
+                )
                 if ex.exists():
                     lines = ex.read_text().splitlines()
                     if lines:
@@ -124,11 +177,18 @@ class Jobs:
                             j["engine_event"] = event
                         except ValueError:
                             pass
+            if not include_logs:
+                j.pop("logs", None)
+                j.pop("command", None)
+                for key in ("pid", "ticks", "boot_id"):
+                    j.pop(key, None)
             result.append(j)
-        return sorted(result, key=lambda j: j["started"], reverse=True)
+        return sorted(result, key=lambda j: j.get("started", 0), reverse=True)
 
     def start(self, command, kind, name=None, plan=None, cwd=None):
-        with self.lock:
+        with configured(self.config), file_locked(
+            self.config.state_dir / "maintenance"
+        ), self.lock:
             if any(j["status"] in ACTIVE for j in self.list()):
                 raise ValueError("Another job is running. Wait or cancel it first.")
             ident = uuid.uuid4().hex
@@ -147,6 +207,7 @@ class Jobs:
                 os.environ,
                 **self.config.environment(),
                 PYTHONUNBUFFERED="1",
+                PYTHONPATH=str(self.config.source_dir),
                 OPENBLAS_NUM_THREADS="1",
                 OMP_NUM_THREADS="1",
                 MPLCONFIGDIR=str(self.config.state_dir / "mpl"),
@@ -170,7 +231,9 @@ class Jobs:
     def _wait(self, ident, proc, log):
         code = proc.wait()
         log.close()
-        with self.lock:
+        with configured(self.config), file_locked(
+            self.config.state_dir / "maintenance"
+        ), self.lock:
             path = self.folder / (ident + ".json")
             j = read(path)
             # A restarted manager may already have recorded interruption. A late
@@ -235,9 +298,30 @@ class Jobs:
                     + "Previous waypoint and terrain shading retained. Retry Update waypoint after fixing the named source or budget issue."
                 )
             write(path, j)
+            errors_before = len(self.storage_errors)
+            self.reconcile()
+            if (
+                j["kind"] == "waypoint-update"
+                and len(self.storage_errors) > errors_before
+            ):
+                j.update(
+                    status="failed",
+                    stage="Waypoint publication needs recovery",
+                    error=self.storage_errors[-1],
+                )
+                write(path, j)
+                self.reconcile()
+
+    def reconcile(self):
+        from .working_waypoints import publish_completed
+
+        with configured(self.config):
+            publish_completed(self)
 
     def cancel(self, ident):
-        with self.lock:
+        with configured(self.config), file_locked(
+            self.config.state_dir / "maintenance"
+        ), self.lock:
             path = self.folder / (ident + ".json")
             j = read(path)
             if not j or j["status"] not in ACTIVE:
@@ -256,7 +340,9 @@ class Jobs:
 
     def _kill(self, j):
         time.sleep(2)
-        with self.lock:
+        with configured(self.config), file_locked(
+            self.config.state_dir / "maintenance"
+        ), self.lock:
             current = read(self.folder / (j["id"] + ".json"))
             if current["status"] not in ACTIVE:
                 return
