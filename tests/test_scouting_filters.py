@@ -6,6 +6,7 @@ from shapely.geometry import LineString
 from huntmaps_gui.scouting_filters import terrain_mask, access_evidence, validate
 from huntmaps_gui.scouting_network import (
     parse_lines,
+    display_network,
     save_network,
     load_networks,
     network_plan,
@@ -14,6 +15,74 @@ from huntmaps_gui.config import AppConfig, configured
 
 
 class ScoutingFilterTests(unittest.TestCase):
+    def test_display_attributes_preserve_sealed_geometry(self):
+        import json
+
+        with tempfile.TemporaryDirectory() as temp, configured(
+            AppConfig(state_dir=Path(temp))
+        ):
+            geometry = {
+                "type": "MultiLineString",
+                "coordinates": [
+                    [[-107, 38], [-107.01, 38.01]],
+                    [[-107.02, 38], [-107.03, 38.01]],
+                ],
+            }
+            raw = json.dumps(
+                {
+                    "type": "Feature",
+                    "geometry": geometry,
+                    "properties": {
+                        "surface_type": "AGG - AGGREGATE",
+                        "name": "<script>test</script>",
+                        "oper_maint_level": "2 - HIGH CLEARANCE",
+                    },
+                }
+            ).encode()
+            value = save_network(raw, ".geojson", "roads", "fixture")
+            before = (
+                Path(temp) / "networks" / value["id"] / "network.json"
+            ).read_bytes()
+            display = display_network(json.loads(before))
+            self.assertEqual(len(display["display_features"]), 2)
+            self.assertTrue(
+                all(
+                    f["properties"]["subtype"] == "gravel"
+                    for f in display["display_features"]
+                )
+            )
+            self.assertEqual(json.dumps(display["lines"]), json.dumps(value["lines"]))
+            self.assertEqual(
+                before,
+                (Path(temp) / "networks" / value["id"] / "network.json").read_bytes(),
+            )
+            load_networks([value["id"]], 32613)
+            for flag, expected in [
+                ("N", "nonmotorized"),
+                ("Y", "motorized"),
+                (None, "unknown"),
+            ]:
+                raw = json.dumps(
+                    {
+                        "type": "Feature",
+                        "geometry": geometry,
+                        "properties": {"terra_motorized": flag},
+                    }
+                ).encode()
+                value = save_network(raw, ".geojson", "trails", "fixture")
+                self.assertEqual(
+                    display_network(value)["display_features"][0]["properties"][
+                        "subtype"
+                    ],
+                    expected,
+                )
+            kml = b'<kml><Placemark><name>Fixture</name><ExtendedData><Data name="surface_type"><value>NAT</value></Data></ExtendedData><LineString><coordinates>-107,38 -107.01,38.01</coordinates></LineString></Placemark></kml>'
+            value = save_network(kml, ".kml", "roads", "fixture")
+            self.assertEqual(
+                display_network(value)["display_features"][0]["properties"]["subtype"],
+                "natural",
+            )
+
     def test_segment_proximity_units_and_height(self):
         dem = np.tile(np.arange(10), (10, 1)).astype(float) * 10
         gt = (0, 20, 0, 200, 0, -20)

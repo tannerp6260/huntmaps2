@@ -266,3 +266,21 @@ Versioned profiles, source originals and sealed approach definitions/results liv
 configured GUI state, are included in record backups, and are protected during cache
 cleanup. Future intermediate grids are regenerable cache, not source evidence.
 See [implementation and acceptance evidence](SCOUTING_VERIFICATION.md).
+
+Roads and trails appear by default in both area creation and result review when
+cached or imported networks are available. The map controls are independent of
+network selections used for access filters and approaches. Solid roads distinguish
+recorded paved, gravel, natural, other and unknown surfaces; dashed trails distinguish
+recorded motorized, nonmotorized and unknown use. Click a line for name, maintenance
+level, trail classification, source and dates. Unknown attributes stay unknown;
+these records do not certify current vehicle suitability, legal access or safety.
+
+Draw/import an observer area or open a run to use **Review road/trail download**
+when coverage is unconfirmed. Review the bounded USFS query, then explicitly approve
+its download. Existing 20 MB network response limits, 1900 MB maximum shared cap,
+single active job, cancellation and no-provider-fallback rules apply. Large areas
+must be narrowed. Saved lines work offline; line presence does not establish full
+coverage, and missing lines do not establish absence of access.
+The compact type legend lists classifications present in loaded networks. Layer
+controls scroll when needed on smaller screens; setup markers and proposed
+approaches remain above the road/trail overlay.

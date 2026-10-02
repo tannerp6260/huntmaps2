@@ -279,6 +279,8 @@ header {
   box-shadow: 0 2px 10px #182a2820;
   border-radius: 8px;
   font-size: 12px;
+  max-height: calc(100% - 205px);
+  overflow: auto;
 }
 .layers summary {
   font-weight: 650;
@@ -1198,4 +1200,29 @@ summary:focus-visible {
 }
 .scouting-tools a {
   color: #91dccc;
+}
+
+.network-map-controls {
+  margin-top: 10px;
+  border-top: 1px solid #d7dfd0;
+  padding-top: 8px;
+}
+.network-map-controls .legend {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px 6px;
+}
+.network-map-controls .legend span {
+  margin: 0;
+}
+.network-map-controls small {
+  display: block;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.network-popup .maplibregl-popup-content {
+  overflow-wrap: anywhere;
+  max-height: 300px;
+  overflow-y: auto;
 }

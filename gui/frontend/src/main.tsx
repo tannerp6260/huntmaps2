@@ -1,3 +1,4 @@
+import NetworkMap from './network-map';
 import AccessSampling, { type Sampling } from './access-sampling';
 import ScoutingTools, { type AppliedFilter } from './scouting-tools';
 import { updateMapLayers } from './map-layers';
@@ -61,6 +62,7 @@ async function api(path: string, options: RequestInit = {}) {
     throw Error(text || r.statusText);
   }
   const value = await r.json();
+  if (path === '/networks/import') window.dispatchEvent(new Event('huntmaps-networks-changed'));
   if (options.method && options.method !== 'GET') void refreshPolling();
   return value;
 }
@@ -1448,6 +1450,29 @@ function App() {
                 onChange={(e) => setOpacity(+e.target.value)}
               />
             </label>
+            {!training.active && (
+              <NetworkMap
+                map={ready ? map.current : null}
+                api={api}
+                bounds={!newRun ? run?.bounds : undefined}
+                geometry={
+                  newRun && imported
+                    ? {
+                        type: 'MultiPolygon',
+                        coordinates: imported.choices
+                          .filter((c) => polygon === 'all' || c.number === polygon)
+                          .flatMap((c) =>
+                            c.geometry.type === 'Polygon'
+                              ? [c.geometry.coordinates]
+                              : c.geometry.coordinates,
+                          ),
+                      }
+                    : null
+                }
+                budget={budget}
+                analysisPlan={planId}
+              />
+            )}
             <div className="legend">
               {(newRun
                 ? []

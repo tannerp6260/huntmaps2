@@ -34,7 +34,10 @@ def router(jobs):
 
     @r.get("/networks")
     def networks():
-        return [read_json(p) for p in (STATE / "networks").glob("*/network.json")]
+        return [
+            network.display_network(read_json(p))
+            for p in (STATE / "networks").glob("*/network.json")
+        ]
 
     @r.post("/network-plans")
     def network_plan(body: dict = Body(...)):

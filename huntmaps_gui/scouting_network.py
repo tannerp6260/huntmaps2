@@ -225,3 +225,111 @@ def acquire(ident, remaining_bytes):
         dict(networks=results, downloaded_bytes=used),
     )
     return results
+
+
+def display_network(value):
+    """Read-time display enrichment; never mutate the sealed analysis inventory."""
+    folder = STATE / "networks" / checked_id(value["id"])
+    original = next(folder.glob("original.*"))
+    raw = original.read_bytes()
+    if hashlib.sha256(raw).hexdigest() != value["sha256"]:
+        raise ValueError("Network source changed; re-import to display it")
+    geometries = [mapping(g) for g in parse_lines(raw, original.suffix)]
+    if json.dumps(geometries, sort_keys=True) != json.dumps(
+        value["lines"], sort_keys=True
+    ):
+        raise ValueError("Network derived geometry changed")
+    properties = []
+    if original.suffix in (".geojson", ".json"):
+        document = json.loads(raw)
+        features = (
+            document.get("features", [])
+            if document.get("type") == "FeatureCollection"
+            else [document]
+        )
+        for feature in features:
+            geometry = (
+                feature.get("geometry") if feature.get("type") == "Feature" else feature
+            )
+            count = (
+                len(geometry["coordinates"])
+                if geometry["type"] == "MultiLineString"
+                else 1
+            )
+            properties.extend([feature.get("properties") or {}] * count)
+    else:
+        if original.suffix == ".kmz":
+            with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+                raw = archive.read(
+                    next(n for n in archive.namelist() if n.lower().endswith(".kml"))
+                )
+        root = ET.fromstring(raw)
+        local = lambda element: element.tag.split("}")[-1]
+        for parent in root.iter():
+            if local(parent) not in ("Placemark", "trk", "rte"):
+                continue
+            attrs = {}
+            for element in parent:
+                if local(element) in ("name", "type", "desc"):
+                    attrs[local(element)] = element.text or ""
+            for element in parent.iter():
+                if local(element) in ("Data", "SimpleData") and element.get("name"):
+                    attrs[element.get("name")] = (
+                        element.text
+                        if local(element) == "SimpleData"
+                        else next((v.text for v in element if local(v) == "value"), "")
+                    )
+            count = sum(
+                local(element) in ("LineString", "trkseg") for element in parent.iter()
+            )
+            if local(parent) == "rte":
+                count = 1
+            properties.extend([attrs] * count)
+    features = []
+    for index, geometry in enumerate(geometries):
+        attrs = {
+            str(k).lower(): v
+            for k, v in (properties[index] if index < len(properties) else {}).items()
+        }
+        get = lambda *keys: next(
+            (str(attrs[k]) for k in keys if attrs.get(k) is not None), "unknown"
+        )
+        surface = get("surface_type", "surfacetype", "trail_surface", "surface")
+        code = surface.upper().split(" - ")[0]
+        subtype = "unknown"
+        if value["kind"] == "roads":
+            if code in ("AC", "BST", "PCC", "ASPHALT", "CONCRETE", "PAVED"):
+                subtype = "paved"
+            elif code in ("AGG", "GRAVEL", "AGGREGATE"):
+                subtype = "gravel"
+            elif code in ("NAT", "NATIVE MATERIAL", "DIRT", "EARTH"):
+                subtype = "natural"
+            elif surface != "unknown":
+                subtype = "other"
+        else:
+            motorized = get("terra_motorized", "motorized").upper()
+            if motorized in ("Y", "YES", "TRUE"):
+                subtype = "motorized"
+            elif motorized in ("N", "NO", "FALSE"):
+                subtype = "nonmotorized"
+        features.append(
+            dict(
+                type="Feature",
+                geometry=geometry,
+                properties=dict(
+                    kind=value["kind"],
+                    subtype=subtype,
+                    name=get("name", "trail_name"),
+                    number=get("id", "trail_no", "field_id"),
+                    surface=surface,
+                    maintenance=get("oper_maint_level", "operationalmaintlevel"),
+                    classification=get(
+                        "trail_class", "trailclass", "trail_type", "type"
+                    ),
+                    source=value["source"],
+                    source_date=value["source_date"],
+                    retrieved_utc=value["retrieved_utc"],
+                ),
+            )
+        )
+    return dict(value, display_features=features)

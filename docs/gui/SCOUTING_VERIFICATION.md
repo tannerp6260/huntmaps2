@@ -105,3 +105,22 @@ coverage, dates and current conditions remain unresolved until an approved user 
 is acquired. No parking, rights, walking-time, safety, ecological or field-validation
 claims follow from these engineering checks. Fences, deadfall, water crossings, snow
 and sub-grid cliffs remain unmodeled and are stated beside results and exports.
+
+## Default network map overlay — 2026-10-01
+
+Available networks now display by default during creation and review, independently
+of filter and approach source selections. Surface/use classification is derived at
+read time from preserved original GeoJSON/KML/KMZ/GPX sources; saved geometry,
+checksums, IDs and scenarios are unchanged. Unknown classification stays unknown.
+The compact legend shows loaded types, and source popups wrap long URLs.
+
+Two full `./gui/check` runs passed. Final diagnostics:
+`/tmp/huntmaps-check-yx4oqm_u`. Final elapsed time **7m38.57s**, peak backend RSS
+**1,100.7 MiB** across the complete existing regression suite, including first-person
+scenes; this is not incremental network-overlay memory. All **7,537 protected files**
+were unchanged. Type metadata/multipart imports and seal reuse pass the backend
+checks. Browser checks verify default toggles in creation/review, unaffected approach
+exports after display toggles, reviewed download consent and a simulated acquisition
+failure beside its control. Desktop/900-pixel screenshots were inspected, including
+`20-scouting-desktop.png`, `21-scouting-900.png`, and `23-network-download-900.png`.
+Live USFS acquisition remains untested in this pass; no bulk downloads occurred.

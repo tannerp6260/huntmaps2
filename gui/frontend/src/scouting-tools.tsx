@@ -284,15 +284,7 @@ export default function ScoutingTools({
   useEffect(() => {
     if (!map) return;
     const name = 'approach-context';
-    const features: GeoJSON.Feature[] = networks
-      .filter((n) => selectedNetworks.includes(n.id) && kinds.includes(n.kind))
-      .flatMap((n) =>
-        n.lines.map((g) => ({
-          type: 'Feature' as const,
-          geometry: g,
-          properties: { kind: n.kind },
-        })),
-      );
+    const features: GeoJSON.Feature[] = [];
     if (planning && area)
       features.push({ type: 'Feature', geometry: area, properties: { kind: 'travel' } });
     if (planning)
