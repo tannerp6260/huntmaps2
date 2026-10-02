@@ -20,8 +20,8 @@ export function Drawing({
   onClear,
 }: {
   map: Map;
-  geometry: any;
-  onSave: (feature: any) => Promise<void>;
+  geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon | null;
+  onSave: (feature: GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>) => Promise<void>;
   onInvalidate: () => void;
   onRestore: () => void;
   onEditing: (value: boolean) => void;
@@ -29,7 +29,7 @@ export function Drawing({
 }) {
   const instance = useRef<TerraDraw | null>(null),
     polygonMode = useRef<TerraDrawPolygonMode | null>(null),
-    backup = useRef<any>(null);
+    backup = useRef<GeoJSON.Polygon | GeoJSON.MultiPolygon | null>(null);
   const [, setMapRevision] = useState(0);
   const [editing, setEditing] = useState(false),
     [closed, setClosed] = useState(false),
@@ -108,6 +108,12 @@ export function Drawing({
     setPoints(0);
     setClosed(editExisting);
     if (editExisting && geometry) {
+      if (geometry.type !== 'Polygon') {
+        setError('Draw a new polygon to replace this imported multi-polygon.');
+        draw.stop();
+        return;
+      }
+
       const id = crypto.randomUUID();
       const added = draw.addFeatures([
         { type: 'Feature', id, geometry, properties: { mode: 'polygon' } },
@@ -119,7 +125,7 @@ export function Drawing({
       }
       draw.selectFeature(id);
       const bounds = new LngLatBounds();
-      geometry.coordinates[0].forEach((c: [number, number]) => bounds.extend(c));
+      geometry.coordinates[0].forEach((c) => bounds.extend([c[0], c[1]]));
       map.fitBounds(bounds, {
         padding: {
           left: Math.min(240, map.getContainer().clientWidth * 0.4),
@@ -155,24 +161,27 @@ export function Drawing({
     }
     setSaving(true);
     try {
-      await onSave(feature);
+      if (feature.geometry.type !== 'Polygon') throw Error('Finish a polygon first');
+      await onSave(feature as GeoJSON.Feature<GeoJSON.Polygon>);
       if (instance.current?.enabled) instance.current.stop();
       setEditing(false);
       onEditing(false);
       setError('');
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setSaving(false);
     }
   }
+  const outline = geometry || backup.current;
+  const ring = outline?.type === 'Polygon' ? outline.coordinates[0] : outline?.coordinates[0]?.[0];
   return (
     <div
       className="drawing-tools"
       data-tour="drawing"
       data-vertices={JSON.stringify(
-        (geometry || backup.current)?.coordinates?.[0]?.slice(0, -1).map((c: any) => {
-          const p = map.project(c);
+        ring?.slice(0, -1).map((c) => {
+          const p = map.project([c[0], c[1]]);
           return [p.x, p.y];
         }) || [],
       )}

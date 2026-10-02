@@ -79,7 +79,13 @@ const areaSteps = [
       'Analysis jobs show actual stages, elapsed time and logs. You can cancel a running subprocess and review partial runs. New-area runs use the terrain baseline; Soap Creek vegetation experiments do not generalize automatically.',
   },
 ];
-function load() {
+type TrainingState = {
+  notes: Notes;
+  lessons: Partial<Record<Lesson, Progress>>;
+  current: Lesson | null;
+  draft: GeoJSON.Polygon | GeoJSON.MultiPolygon | null;
+};
+function load(): TrainingState {
   try {
     const v = JSON.parse(localStorage.getItem(key) || 'null');
     if (v) return v;
@@ -109,7 +115,9 @@ export function useTraining() {
     [lessons, setLessons] = useState<Partial<Record<Lesson, Progress>>>(initial.lessons || {}),
     [current, setCurrent] = useState<Lesson | null>(initial.current || null),
     [notes, setNotes] = useState<Notes>(initial.notes || {}),
-    [draft, setDraft] = useState<any>(initial.draft || null),
+    [draft, setDraft] = useState<GeoJSON.Polygon | GeoJSON.MultiPolygon | null>(
+      initial.draft || null,
+    ),
     [open, setOpen] = useState(false),
     [exported, setExported] = useState(false);
   const progress = current ? lessons[current] || null : null,
@@ -272,7 +280,7 @@ export function Learning({
   status: string;
   note: string;
   saved: string;
-  geometry: any;
+  geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon | null;
   onStart: (l: Lesson) => boolean;
   onExit: () => void;
 }) {

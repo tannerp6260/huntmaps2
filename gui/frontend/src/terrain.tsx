@@ -1,10 +1,11 @@
+import type { ErrorEvent as MapErrorEvent } from 'maplibre-gl';
 import { useEffect, useRef, useState } from 'react';
 import type { Map, GeoJSONSource } from 'maplibre-gl';
 type TerrainInfo = {
   available: boolean;
   reason: string;
   bounds: [number, number, number, number];
-  coverage: any;
+  coverage: GeoJSON.Polygon;
   minzoom: number;
   maxzoom: number;
   encoding: 'terrarium';
@@ -82,7 +83,7 @@ export function TerrainControls({
     };
   }, [map, info]);
   useEffect(() => {
-    const failed = (e: any) => {
+    const failed = (e: MapErrorEvent & { sourceId?: string }) => {
       if (activeRef.current && e.sourceId === 'local-elevation') {
         flatRef.current();
         setMessage('3D elevation could not load. Returned to 2D; saved results are unchanged.');
@@ -121,11 +122,11 @@ export function TerrainControls({
           [-180, -85],
         ],
         hole = info.coverage.coordinates[0];
-      const coverage = {
+      const coverage: GeoJSON.Feature<GeoJSON.Polygon> = {
         type: 'Feature',
         properties: {},
         geometry: { type: 'Polygon', coordinates: [outer, hole] },
-      } as any;
+      };
       if (!map.getSource('terrain-coverage')) {
         map.addSource('terrain-coverage', { type: 'geojson', data: coverage });
         map.addLayer({

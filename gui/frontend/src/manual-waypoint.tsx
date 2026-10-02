@@ -1,3 +1,4 @@
+import type { ManualWaypoint, WorkingWaypointRecord, Candidate, Review } from './types';
 import { useState } from 'react';
 export default function ManualWaypoint({
   point,
@@ -5,8 +6,8 @@ export default function ManualWaypoint({
   onDelete,
   onView,
 }: {
-  point: any;
-  onSave: (v: any) => Promise<void>;
+  point: ManualWaypoint | WorkingWaypointRecord;
+  onSave: (v: Review) => Promise<void>;
   onDelete: () => Promise<void>;
   onView: () => void;
 }) {
@@ -21,8 +22,8 @@ export default function ManualWaypoint({
     try {
       await fn();
       setMessage('Saved');
-    } catch (e: any) {
-      setMessage(e.message);
+    } catch (e: unknown) {
+      setMessage(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }

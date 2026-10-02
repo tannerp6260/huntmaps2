@@ -1,3 +1,9 @@
+import { updateMapLayers } from './map-layers';
+import AreaSettings from './area-creation';
+import StoragePanel from './storage-panel';
+import RunSelection from './run-selection';
+import JobMonitor from './job-monitor';
+import CandidateCard from './candidate-review';
 import WorkingWaypoint from './working-waypoint';
 import ManualWaypoint from './manual-waypoint';
 import React, { useEffect, useRef, useState, lazy, Suspense } from 'react';
@@ -14,50 +20,23 @@ import { TerrainControls } from './terrain';
 import { OnlineImagery, onlineSource } from './online';
 
 const FirstPerson = lazy(() => import('./first-person'));
-type Candidate = {
-  name?: string;
-  working_revision?: string;
-  id: string;
-  longitude: number;
-  latitude: number;
-  parent: string;
-  neighborhood: string | null;
-  metrics: Record<string, number | string>;
-  foreground: Record<string, number>;
-  access: unknown;
-  diagnostics: unknown;
-  alignment?: unknown;
-  obstruction_scenarios: any[];
-  obstruction: string;
-};
-type Run = {
-  id: string;
-  experimental: boolean;
-  candidates: Candidate[];
-  groups: Record<string, string[]>;
-  review_ids: string[];
-  synthetic: boolean;
-  boundary: any;
-  bounds: [[number, number], [number, number]];
-  radius_m: number;
-  imagery: any[];
-  warning: string;
-};
-type Job = {
-  id: string;
-  name: string;
-  kind: string;
-  plan: string;
-  status: string;
-  stage: string;
-  elapsed_s: number;
-  logs: string;
-  error?: string;
-  engine_event?: any;
-};
+import type {
+  Candidate,
+  Run,
+  Job,
+  RunSummary,
+  Review,
+  ManualWaypoint as ManualWaypointRecord,
+  ObserverPose,
+  WorkingWaypointRecord,
+  Overlap,
+  ImportedArea,
+  BaselinePlan,
+} from './types';
+import { useJobs, subscribePolling, refreshPolling } from './polling';
 const colors = ['#00c0e8', '#ff6782', '#aa6fff'];
-const empty = { type: 'FeatureCollection', features: [] };
-const practiceArea = (geometry: any) =>
+const empty: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
+const practiceArea = (geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon | null) =>
   geometry
     ? { id: 'practice', choices: [{ number: '1', name: 'Practice drawing', geometry }] }
     : null;
@@ -79,22 +58,25 @@ async function api(path: string, options: RequestInit = {}) {
     }
     throw Error(text || r.statusText);
   }
-  return r.json();
+  const value = await r.json();
+  if (options.method && options.method !== 'GET') void refreshPolling();
+  return value;
 }
 const num = (v: unknown, d = 3) => (typeof v === 'number' ? v.toFixed(d) : 'Not saved');
 function App() {
-  const [runList, setRunList] = useState<any[]>([]),
+  const jobs = useJobs();
+  const [runList, setRunList] = useState<RunSummary[]>([]),
     [runId, setRunId] = useState(''),
     [run, setRun] = useState<Run | null>(null),
     [selected, setSelected] = useState(''),
     [detail, setDetail] = useState<Candidate | null>(null),
     [compare, setCompare] = useState<string[]>([]),
     [compareData, setCompareData] = useState<Candidate[]>([]),
-    [overlap, setOverlap] = useState<any[]>([]),
+    [overlap, setOverlap] = useState<Overlap[]>([]),
     [exportIds, setExportIds] = useState<string[]>([]),
     [search, setSearch] = useState(''),
     [group, setGroup] = useState('all'),
-    [annotations, setAnnotations] = useState<Record<string, any>>({}),
+    [annotations, setAnnotations] = useState<Record<string, Review>>({}),
     [note, setNote] = useState(''),
     [status, setStatus] = useState('unmarked'),
     [saved, setSaved] = useState(''),
@@ -102,10 +84,15 @@ function App() {
     [loading, setLoading] = useState(false);
   const training = useTraining();
   const [firstPerson, setFirstPerson] = useState(false);
-  const [manualPoints, setManualPoints] = useState<any[]>([]),
-    [activeManual, setActiveManual] = useState<any>(null),
-    [initialObserver, setInitialObserver] = useState<any>(null);
-  const [working, setWorking] = useState<Record<string, any>>({});
+  const [manualPoints, setManualPoints] = useState<ManualWaypointRecord[]>([]),
+    [activeManual, setActiveManual] = useState<ManualWaypointRecord | WorkingWaypointRecord | null>(
+      null,
+    ),
+    [initialObserver, setInitialObserver] = useState<ObserverPose | null>(null);
+  const [working, setWorking] = useState<Record<string, WorkingWaypointRecord>>({});
+  const manualGeometryStamp = JSON.stringify(
+    manualPoints.map((p) => [p.id, p.longitude, p.latitude]),
+  );
   const workingStamp = JSON.stringify(working);
   const workingGeometryStamp = JSON.stringify(
     Object.keys(working)
@@ -141,7 +128,7 @@ function App() {
     if (currentRunRef.current === ident) setWorking(v.overrides);
     return v;
   };
-  const reviewWorking = async (v: any) => {
+  const reviewWorking = async (v: Review) => {
     const ident = runId;
     await api(`/runs/${ident}/working-waypoints/${activeManual?.id || selected}/review`, {
       method: 'PUT',
@@ -164,34 +151,37 @@ function App() {
     setInitialObserver(null);
     setSelected(id);
   };
-  const chooseManual = (p: any) => {
+  const chooseManual = (p: ManualWaypointRecord | WorkingWaypointRecord) => {
     setSelected(p.anchor);
     setActiveManual(p);
     setCompare([]);
     setClasses(false);
     setSectors(false);
   };
-  const manualChoose = useRef<(p: any) => void>(() => {});
-  manualChoose.current = chooseManual;
-  const updateManual = async (v: any) => {
+  const manualChoose = useRef<(p: ManualWaypointRecord | WorkingWaypointRecord) => void>(() => {});
+  manualChoose.current = (point) =>
+    chooseManual(shownManual.find((p) => p.id === point.id) || point);
+  const updateManual = async (v: Review) => {
+    if (!activeManual) return;
     const ident = runId;
     const p = await api(`/runs/${runId}/manual-observers/${activeManual.id}`, {
       method: 'PUT',
       body: JSON.stringify(v),
     });
     if (currentRunRef.current !== ident) return;
-    setActiveManual((old: any) => (old?.id === p.id ? p : old));
+    setActiveManual((old) => (old?.id === p.id ? p : old));
     setManualPoints((a) => a.map((q) => (q.id === p.id ? p : q)));
   };
   const deleteManual = async () => {
+    if (!activeManual) return;
     const ident = runId;
     const id = activeManual.id;
     await api(`/runs/${runId}/manual-observers/${id}`, { method: 'DELETE' });
     if (currentRunRef.current !== ident) return;
     setManualPoints((a) => a.filter((p) => p.id !== id));
     setExportIds((a) => a.filter((p) => p !== id));
-    setActiveManual((old: any) => (old?.id === id ? null : old));
-    setInitialObserver((old: any) => (old?.id === id ? null : old));
+    setActiveManual((old) => (old?.id === id ? null : old));
+    setInitialObserver((old) => (old?.id === id ? null : old));
   };
   const [runsLoaded, setRunsLoaded] = useState(false);
   useEffect(() => {
@@ -215,7 +205,7 @@ function App() {
     [opacity, setOpacity] = useState(0.5),
     [imageOpacity, setImageOpacity] = useState(1);
   const [newRun, setNewRun] = useState(training.active && training.progress?.lesson === 'area'),
-    [imported, setImported] = useState<any>(
+    [imported, setImported] = useState<ImportedArea | null>(
       training.active && training.progress?.lesson === 'area' ? practiceArea(training.draft) : null,
     ),
     [polygon, setPolygon] = useState(
@@ -227,15 +217,15 @@ function App() {
     [count, setCount] = useState(150),
     [budget, setBudget] = useState(600),
     [planId, setPlanId] = useState(''),
-    [plan, setPlan] = useState<any>(null),
+    [plan, setPlan] = useState<BaselinePlan | null>(null),
     [download, setDownload] = useState(false),
-    [jobs, setJobs] = useState<Job[]>([]),
+    [unusedJobs, unusedSetJobs] = useState<Job[]>([]),
     [busy, setBusy] = useState(false);
   const [areaMode, setAreaMode] = useState<'draw' | 'import'>('draw'),
     [drawing, setDrawing] = useState(false),
     [goLat, setGoLat] = useState(''),
     [goLon, setGoLon] = useState('');
-  const areaBackup = useRef<any>(null),
+  const areaBackup = useRef<ImportedArea | null>(null),
     intakeSession = useRef(0);
   useEffect(() => {
     intakeSession.current++;
@@ -270,7 +260,7 @@ function App() {
   const refreshRuns = () =>
     api('/runs')
       .then(setRunList)
-      .catch((e) => setError(e.message));
+      .catch((e) => setError(e instanceof Error ? e.message : String(e)));
   useEffect(() => {
     api('/runs')
       .then((r) => {
@@ -279,29 +269,12 @@ function App() {
         setRunId(
           training.active &&
             training.active &&
-            r.some((v: any) => v.id === 'soap-creek-decision-review-v2')
+            r.some((v: RunSummary) => v.id === 'soap-creek-decision-review-v2')
             ? 'soap-creek-decision-review-v2'
             : r[0]?.id || '',
         );
       })
-      .catch((e) => setError(e.message));
-  }, []);
-  useEffect(() => {
-    let alive = true;
-    const poll = () =>
-      api('/jobs')
-        .then((j) => {
-          if (alive) setJobs(j);
-        })
-        .catch((e) => {
-          if (alive) setError(e.message);
-        });
-    poll();
-    const timer = setInterval(poll, 1000);
-    return () => {
-      alive = false;
-      clearInterval(timer);
-    };
+      .catch((e) => setError(e instanceof Error ? e.message : String(e)));
   }, []);
   useEffect(() => {
     setWorking({});
@@ -316,13 +289,13 @@ function App() {
             );
         })
         .catch((e) => {
-          if (alive) setError(e.message);
+          if (alive) setError(e instanceof Error ? e.message : String(e));
         });
     poll();
-    const timer = setInterval(poll, 1000);
+    const unsubscribe = subscribePolling(poll);
     return () => {
       alive = false;
-      clearInterval(timer);
+      unsubscribe();
     };
   }, [runId, training.active]);
   useEffect(() => {
@@ -364,7 +337,7 @@ function App() {
         }
       })
       .catch((e) => {
-        if (alive) setError(e.message);
+        if (alive) setError(e instanceof Error ? e.message : String(e));
       })
       .finally(() => {
         if (alive) setLoading(false);
@@ -383,7 +356,7 @@ function App() {
         if (alive) setDetail(d);
       })
       .catch((e) => {
-        if (alive) setError(e.message);
+        if (alive) setError(e instanceof Error ? e.message : String(e));
       });
     const a = annotations[selected] || {};
     setNote(a.notes || '');
@@ -415,7 +388,7 @@ function App() {
           setOverlap(o);
         }
       })
-      .catch((e) => setError(e.message));
+      .catch((e) => setError(e instanceof Error ? e.message : String(e)));
     return () => {
       alive = false;
     };
@@ -427,7 +400,7 @@ function App() {
       .then((p) => {
         if (alive) setPlan(p);
       })
-      .catch((e) => setError(e.message));
+      .catch((e) => setError(e instanceof Error ? e.message : String(e)));
     return () => {
       alive = false;
     };
@@ -453,7 +426,7 @@ function App() {
     m.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
     m.on('load', () => {
       for (const id of ['boundary', 'import', 'candidates', 'manual-observers'])
-        m.addSource(id, { type: 'geojson', data: empty as any });
+        m.addSource(id, { type: 'geojson', data: empty });
       m.addLayer({
         id: 'boundary-fill',
         type: 'fill',
@@ -547,7 +520,8 @@ function App() {
       );
     });
     m.on('error', (e) => {
-      if (['local-elevation', onlineSource].includes((e as any).sourceId)) return;
+      if (['local-elevation', onlineSource].includes('sourceId' in e ? String(e.sourceId) : ''))
+        return;
       console.error(e.error);
       setError('Map layer could not load: ' + e.error.message);
     });
@@ -556,7 +530,7 @@ function App() {
   useEffect(() => {
     if (!ready || !run) return;
     const m = map.current!;
-    (m.getSource('boundary') as GeoJSONSource).setData(newRun ? (empty as any) : run.boundary);
+    (m.getSource('boundary') as GeoJSONSource).setData(newRun ? empty : run.boundary);
     if (!newRun) m.fitBounds(run.bounds, { padding: 45, duration: 0 });
   }, [ready, run, newRun]);
   useEffect(() => {
@@ -577,7 +551,7 @@ function App() {
             compare.includes(p.id),
         )
         .map((p) => ({
-          type: 'Feature',
+          type: 'Feature' as const,
           properties: {
             id: p.id,
             color: compare.includes(p.id)
@@ -586,21 +560,21 @@ function App() {
                 ? '#ffdf80'
                 : '#31574a',
           },
-          geometry: { type: 'Point', coordinates: [p.longitude, p.latitude] },
+          geometry: { type: 'Point' as const, coordinates: [p.longitude, p.latitude] },
         })),
-    } as any);
-  }, [ready, run, selected, compare, group, newRun, activeManual?.id, workingStamp]);
+    });
+  }, [ready, run, selected, compare, group, newRun, activeManual?.id, workingGeometryStamp]);
   useEffect(() => {
     if (ready)
       (map.current!.getSource('manual-observers') as GeoJSONSource).setData({
         type: 'FeatureCollection',
         features: (newRun ? [] : shownManual).map((p) => ({
-          type: 'Feature',
+          type: 'Feature' as const,
           properties: { id: p.id, record: JSON.stringify(p) },
-          geometry: { type: 'Point', coordinates: [p.longitude, p.latitude] },
+          geometry: { type: 'Point' as const, coordinates: [p.longitude, p.latitude] },
         })),
-      } as any);
-  }, [ready, manualPoints, newRun, workingStamp]);
+      });
+  }, [ready, manualGeometryStamp, newRun, workingGeometryStamp]);
   useEffect(() => {
     if (!ready || !run || !selected || newRun) return;
     const p = shownCandidates.find((p) => p.id === selected);
@@ -609,15 +583,13 @@ function App() {
   useEffect(() => {
     if (!ready) return;
     const m = map.current!;
-    let fs: any[] = [];
+    let fs: GeoJSON.Feature[] = [];
     if (!imported && newRun && plan?.boundary) fs = plan.boundary.features;
     if (imported && newRun) {
       const chosen =
-        polygon === 'all'
-          ? imported.choices
-          : imported.choices.filter((c: any) => c.number === polygon);
-      fs = chosen.map((c: any) => ({
-        type: 'Feature',
+        polygon === 'all' ? imported.choices : imported.choices.filter((c) => c.number === polygon);
+      fs = chosen.map((c) => ({
+        type: 'Feature' as const,
         properties: { name: c.name },
         geometry: c.geometry,
       }));
@@ -625,14 +597,17 @@ function App() {
     (m.getSource('import') as GeoJSONSource).setData({
       type: 'FeatureCollection',
       features: fs,
-    } as any);
+    });
     if (fs.length) {
       const bounds = new maplibregl.LngLatBounds();
-      const walk = (coords: any) => {
+      const walk = (coords: unknown) => {
+        if (!Array.isArray(coords)) return;
         if (typeof coords[0] === 'number') bounds.extend([coords[0], coords[1]]);
         else coords.forEach(walk);
       };
-      fs.forEach((f) => walk(f.geometry.coordinates));
+      fs.forEach((f) => {
+        if (f.geometry && 'coordinates' in f.geometry) walk(f.geometry.coordinates);
+      });
       const fit = (duration: number) =>
         m.fitBounds(bounds, {
           padding: {
@@ -654,77 +629,26 @@ function App() {
   useEffect(() => {
     if (!ready || !run) return;
     const m = map.current!;
-    let disposed = false;
-    for (const l of [...m.getStyle().layers].reverse())
-      if (l.id.startsWith('raster-') || l.id.startsWith('sector-')) m.removeLayer(l.id);
-    for (const id of Object.keys(m.getStyle().sources))
-      if (id.startsWith('raster-') || id.startsWith('sector-')) m.removeSource(id);
-    const addRaster = (layer: string, id: string, alpha: number, color = 0) => {
-      const key = `raster-${layer}-${id}`;
-      const useWorking = !!working[id];
-      m.addSource(key, {
-        type: 'raster',
-        tiles: [
-          `${location.origin}/api/runs/${run.id}/${useWorking ? 'working-tiles' : 'tiles'}/${layer}/${id}/{z}/{x}/{y}.png?color=${color}&revision=${working[id]?.revision || 'original'}`,
-        ],
-        tileSize: 256,
-        maxzoom: 20,
-      });
-      m.addLayer(
-        {
-          id: key,
-          type: 'raster',
-          source: key,
-          paint: {
-            'raster-opacity': alpha,
-            'raster-resampling': layer === 'imagery' ? 'linear' : 'nearest',
-            'raster-fade-duration': 0,
-          },
-        },
-        'boundary-fill',
-      );
-    };
-    addRaster('hillshade', 'base', 1);
-    if (m.getLayer(onlineSource)) m.moveLayer(onlineSource, 'boundary-fill');
-    if (imagery && run.imagery.length) addRaster('imagery', 'base', imageOpacity);
-    const ids = newRun
-      ? []
-      : compare.length
-        ? compare
-        : activeManual
-          ? working[activeManual.id]
-            ? [activeManual.id]
-            : []
-          : selected
-            ? [selected]
-            : [];
-    ids.forEach((id, i) => {
-      if (visibility && (!compare.length || !hiddenViews.includes(id)))
-        addRaster('visible', id, opacity, i);
-      if (sectors && !working[id] && (!compare.length || !hiddenViews.includes(id)))
-        api(`/runs/${run.id}/sectors/${id}`)
-          .then((data) => {
-            if (disposed) return;
-            const key = 'sector-' + id;
-            m.addSource(key, { type: 'geojson', data });
-            m.addLayer(
-              {
-                id: key,
-                type: 'line',
-                source: key,
-                paint: { 'line-color': colors[i], 'line-width': 2, 'line-dasharray': [2, 2] },
-              },
-              'candidate-halo',
-            );
-          })
-          .catch((e) => {
-            if (!disposed) setError(e.message);
-          });
-    });
-    if (classes && selected && !newRun && !activeManual) addRaster('classes', selected, opacity);
-    return () => {
-      disposed = true;
-    };
+    return updateMapLayers(
+      m,
+      {
+        run,
+        working,
+        imagery,
+        imageOpacity,
+        newRun,
+        compare,
+        activeManual,
+        selected,
+        visibility,
+        hiddenViews,
+        opacity,
+        sectors,
+        classes,
+      },
+      api,
+      setError,
+    );
   }, [
     ready,
     run,
@@ -794,8 +718,8 @@ function App() {
       });
       setAnnotations((a) => ({ ...a, [selected]: { status, notes: note } }));
       setSaved('Saved on this computer');
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
     }
   }
   async function importFile(file: File) {
@@ -813,13 +737,13 @@ function App() {
       setPlanId('');
       setPlan(null);
       if (training.active && i.choices.length === 1) training.setDraft(i.choices[0].geometry);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }
   }
-  async function saveDrawing(feature: any) {
+  async function saveDrawing(feature: GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>) {
     const session = intakeSession.current;
     const data = new FormData();
     data.append(
@@ -827,7 +751,7 @@ function App() {
       new File(
         [
           JSON.stringify({
-            type: 'Feature',
+            type: 'Feature' as const,
             properties: { name: training.active ? 'Practice drawing' : 'Drawn observer area' },
             geometry: feature.geometry,
           }),
@@ -867,8 +791,8 @@ function App() {
       setPlanId(j.plan);
       setPlan(null);
       setDownload(false);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }
@@ -878,8 +802,8 @@ function App() {
     try {
       setError('');
       await api(`/plans/${planId}/start`, { method: 'POST', body: JSON.stringify({ download }) });
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
     }
   }
   async function jobAction(j: Job, action: string) {
@@ -901,8 +825,8 @@ function App() {
         setPlan(p);
         setDownload(false);
       }
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
     }
   }
   const visibleCandidates =
@@ -925,50 +849,18 @@ function App() {
   });
   const running = jobs.some((j) => ['running', 'cancelling'].includes(j.status));
   const renderCandidate = (p: Candidate) => (
-    <div
-      className={'candidate ' + (!activeManual && p.id === selected ? 'active' : '')}
+    <CandidateCard
       key={p.id}
-      data-tour={'setup-' + p.id}
-    >
-      <button
-        className="candidate-select"
-        aria-label={`Select ${p.id}`}
-        onClick={() => chooseOriginal(p.id)}
-      >
-        <strong>
-          {p.id}
-          {p.working_revision ? ' · updated' : ''}
-        </strong>
-        <span>{p.parent ? 'Alternative to ' + p.parent : p.neighborhood || 'Original setup'}</span>
-        <small>
-          {num(p.metrics.raw_km2)} km² terrain view{' '}
-          {p.working_revision ? '· working location ' : ''}
-          {annotations[p.id]?.status && annotations[p.id].status !== 'unmarked'
-            ? '· ' + annotations[p.id].status
-            : ''}
-        </small>
-      </button>
-      <div className="candidate-actions">
-        <label>
-          <input
-            type="checkbox"
-            aria-label={`Compare ${p.id}`}
-            checked={compare.includes(p.id)}
-            onChange={() => toggleCompare(p.id)}
-          />
-          Compare
-        </label>
-        <label>
-          <input
-            type="checkbox"
-            aria-label={`Export ${p.id}`}
-            checked={exportIds.includes(p.id)}
-            onChange={() => toggleExport(p.id)}
-          />
-          Export
-        </label>
-      </div>
-    </div>
+      p={p}
+      selected={selected}
+      activeManual={!!activeManual}
+      compare={compare}
+      annotations={annotations}
+      exportIds={exportIds}
+      chooseOriginal={chooseOriginal}
+      toggleCompare={toggleCompare}
+      toggleExport={toggleExport}
+    />
   );
   const groupedIds = new Set(Object.values(run?.groups || {}).flat());
   const candidateCards = sorted.filter((p) => !groupedIds.has(p.id)).map(renderCandidate);
@@ -1027,25 +919,16 @@ function App() {
             <small>Local scouting desk</small>
           </div>
         </div>
-        <label className="run-picker">
-          Open saved results
-          <select
-            aria-label="Run selector"
-            disabled={training.active}
-            value={runId}
-            onChange={(e) => {
-              setRunId(e.target.value);
-              setNewRun(false);
-              setImported(null);
-            }}
-          >
-            {runList.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        <RunSelection
+          runs={runList}
+          value={runId}
+          disabled={training.active}
+          onChange={(value) => {
+            setRunId(value);
+            setNewRun(false);
+            setImported(null);
+          }}
+        />
         <button onClick={refreshRuns} title="Refresh completed local runs">
           ↻
         </button>
@@ -1326,7 +1209,7 @@ function App() {
               {newRun
                 ? 'Preview your observer area'
                 : activeManual
-                  ? currentManual.name
+                  ? currentManual?.name
                   : compare.length
                     ? 'Compare individual saved views'
                     : working[selected]?.name || selected || 'Select an observer setup'}
@@ -1572,7 +1455,7 @@ function App() {
                     }}
                   >
                     <option value="">Choose explicitly…</option>
-                    {imported.choices.map((c: any) => (
+                    {imported.choices.map((c) => (
                       <option value={c.number} key={c.number}>
                         {c.number}: {c.name}
                       </option>
@@ -1583,105 +1466,18 @@ function App() {
                   </select>
                 </label>
               )}
-              <div data-tour="run-settings">
-                <label>
-                  New run name <Help topic="name" />
-                  <input
-                    aria-label="New run name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="my-glassing-area"
-                  />
-                </label>
-                <div className="form-grid">
-                  <label>
-                    View radius <Help topic="radius" />
-                    <select
-                      aria-label="View radius"
-                      value={radius}
-                      onChange={(e) => setRadius(+e.target.value)}
-                    >
-                      {[500, 1000, 1500, 2000, 2500, 3000].map((r) => (
-                        <option value={r} key={r}>
-                          {r / 1000} km
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    Locations to evaluate <Help topic="count" />
-                    <input
-                      aria-label="Locations to evaluate"
-                      type="number"
-                      min="12"
-                      max="200"
-                      value={count}
-                      onChange={(e) => setCount(+e.target.value)}
-                    />
-                  </label>
-                  <label>
-                    Maximum download size (MB) <Help topic="budget" />
-                    <input
-                      aria-label="Maximum download size (MB)"
-                      type="number"
-                      min="1"
-                      max="1900"
-                      value={budget}
-                      onChange={(e) => setBudget(+e.target.value)}
-                    />
-                  </label>
-                </div>
-                <p className="hint">
-                  Locations to evaluate means potential glassing spots to test, not the number of
-                  best spots returned.
-                </p>
-                <details>
-                  <summary>How locations are chosen</summary>
-                  <p>
-                    The engine samples eligible locations across sections of your observer area,
-                    then adds samples from terrain resembling benches, shoulders and ridge breaks,
-                    plus general background locations. It keeps minimum spacing between points and
-                    calculates views and scores afterward.
-                  </p>
-                  <p>
-                    A fixed random seed makes the same inputs repeatable. More locations means more
-                    processing, not a guaranteed optimum. If the requested count cannot fit at the
-                    required spacing, the run stops with an explanation; reduce the count. Nearby
-                    refinement alternatives may add results beyond this initial sample.
-                  </p>
-                  <p>
-                    Current leading results use the inherited inspection score, not simply the
-                    largest terrain-visible area. Terrain shapes do not certify suitable footing,
-                    deer habitat, or legal access.
-                  </p>
-                </details>
-                <details className="advanced-scoring">
-                  <summary>Advanced scoring settings</summary>
-                  <label>
-                    Assumed inspection time <Help topic="minutes" />
-                    <input
-                      aria-label="Assumed inspection time"
-                      type="number"
-                      min="5"
-                      max="120"
-                      value={minutes}
-                      onChange={(e) => setMinutes(+e.target.value)}
-                    />
-                  </label>
-                  <p className="hint">
-                    An assumption for inspection scores and rankings, not a recommended stop
-                    duration. Terrain-visible coverage is unchanged.
-                  </p>
-                </details>
-                <details className="resource-limits">
-                  <summary>Processing limits and source details</summary>
-                  <p className="hint">
-                    Existing limits: 3 million grid cells, 1536 MiB analysis memory, 900 seconds per
-                    engine command, 800 MB outputs. Analysis acquisition does not include imagery or
-                    legal-access data. Online basemap tiles are separate browsing context.
-                  </p>
-                </details>
-              </div>
+              <AreaSettings
+                name={name}
+                radius={radius}
+                count={count}
+                budget={budget}
+                minutes={minutes}
+                setName={setName}
+                setRadius={setRadius}
+                setCount={setCount}
+                setBudget={setBudget}
+                setMinutes={setMinutes}
+              />
               <button
                 className="primary wide"
                 disabled={training.active || busy || running || !imported || !polygon || !name}
@@ -1698,7 +1494,7 @@ function App() {
                 <div className="plan">
                   <h3>{plan.name} acquisition plan</h3>
                   <p className="hint">
-                    Prepared settings: {plan.settings?.radius_m / 1000} km ·{' '}
+                    Prepared settings: {(plan.settings?.radius_m || 0) / 1000} km ·{' '}
                     {plan.settings?.observation_minutes} minutes assumed inspection time ·{' '}
                     {plan.settings?.candidate_count} initial locations to evaluate. Starting this
                     plan uses these saved settings.
@@ -1710,7 +1506,7 @@ function App() {
                         {plan.max_download_mb} MB cap
                       </b>
                       <ul>
-                        {plan.acquisition?.items?.map((i: any) => (
+                        {plan.acquisition?.items?.map((i) => (
                           <li key={i.key}>
                             {i.key}: {num(i.estimated_bytes / 1e6, 1)} MB
                           </li>
@@ -1764,7 +1560,7 @@ function App() {
                     disabled={running}
                     onClick={() =>
                       api(`/plans/${planId}/prepare`, { method: 'POST' }).catch((e) =>
-                        setError(e.message),
+                        setError(e instanceof Error ? e.message : String(e)),
                       )
                     }
                   >
@@ -2025,75 +1821,18 @@ function App() {
           <small>Saved neighborhood groupings only; no automatic optimizer or route planner.</small>
         </section>
       )}
-      {jobs.length > 0 && (
-        <details className="jobs" open={running}>
-          <summary>
-            Analysis jobs {running ? '· active' : ''} · {jobs.length}
-          </summary>
-          {jobs.slice(0, 6).map((j) => (
-            <div className="job" key={j.id}>
-              <div className="row">
-                <b>
-                  {j.name || 'Job'} · {j.kind}
-                </b>
-                <span className={'status ' + j.status}>{j.status}</span>
-                <span>{j.elapsed_s.toFixed(1)} s</span>
-                {['running', 'cancelling'].includes(j.status) ? (
-                  <button
-                    disabled={j.status === 'cancelling'}
-                    onClick={() => jobAction(j, 'cancel')}
-                  >
-                    Cancel job
-                  </button>
-                ) : (
-                  <>
-                    {!j.kind.startsWith('first-person') && j.kind !== 'waypoint-update' && (
-                      <button disabled={training.active} onClick={() => jobAction(j, 'resume')}>
-                        Review / resume plan
-                      </button>
-                    )}
-                    {j.kind === 'waypoint-update' && (
-                      <small>
-                        Retry from Update waypoint; previous committed location is retained on
-                        failure.
-                      </small>
-                    )}
-                    {j.kind.startsWith('first-person') && (
-                      <small>Review source preparation in View from this setup.</small>
-                    )}
-                    {j.status === 'complete' && j.kind === 'baseline' && (
-                      <button
-                        disabled={training.active}
-                        onClick={() => {
-                          refreshRuns();
-                          setRunId(j.name);
-                          setNewRun(false);
-                          setImported(null);
-                        }}
-                      >
-                        Open results
-                      </button>
-                    )}
-                  </>
-                )}
-              </div>
-              <p>{j.stage}</p>
-              {j.engine_event && (
-                <p className="hint">
-                  Latest engine record:{' '}
-                  {j.engine_event.stage || j.engine_event.command || 'see log'}{' '}
-                  {j.engine_event.wall_s !== undefined ? `· ${j.engine_event.wall_s}s` : ''}
-                </p>
-              )}
-              {j.error && <p className="error">{j.error}</p>}
-              <details>
-                <summary>Actual subprocess log</summary>
-                <pre>{j.logs}</pre>
-              </details>
-            </div>
-          ))}
-        </details>
-      )}
+      <JobMonitor
+        jobs={jobs}
+        running={running}
+        trainingActive={training.active}
+        onAction={jobAction}
+        onOpen={(name) => {
+          refreshRuns();
+          setRunId(name);
+          setNewRun(false);
+          setImported(null);
+        }}
+      />
       {firstPerson && (
         <Suspense
           fallback={
@@ -2117,6 +1856,7 @@ function App() {
           />
         </Suspense>
       )}
+      <StoragePanel onRecordsChanged={() => location.reload()} />
       <footer>
         Provisional desktop scouting · access and field sightlines unverified · local application ·
         optional online imagery

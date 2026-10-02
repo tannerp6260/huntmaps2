@@ -1,3 +1,4 @@
+import type { ErrorEvent as MapErrorEvent } from 'maplibre-gl';
 import { useEffect, useState } from 'react';
 import type { Map } from 'maplibre-gl';
 export const onlineSource = 'online-imagery';
@@ -30,10 +31,10 @@ export function OnlineImagery({ map }: { map: Map }) {
       },
       anchor,
     );
-    const error = (e: any) => {
+    const error = (e: MapErrorEvent & { sourceId?: string }) => {
       if (e.sourceId === onlineSource) setFailed(true);
     };
-    const loaded = (e: any) => {
+    const loaded = (e: { sourceId?: string; tile?: { state?: string } }) => {
       if (e.sourceId === onlineSource && e.tile?.state === 'loaded') setFailed(false);
     };
     map.on('error', error);
