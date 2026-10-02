@@ -87,6 +87,7 @@ def check(port=8765):
         if not 1 <= port <= 65535:
             raise OSError("Port must be 1–65535")
         with socket.socket() as sock:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             sock.bind(("127.0.0.1", port))
         result("port", True, f"127.0.0.1:{port}")
     except OSError as error:

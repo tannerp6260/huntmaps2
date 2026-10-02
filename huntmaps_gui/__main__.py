@@ -37,6 +37,7 @@ def main():
         raise SystemExit("Use a port from 1 to 65535")
     try:
         with socket.socket() as sock:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             sock.bind(("127.0.0.1", a.port))
     except OSError as error:
         raise SystemExit(

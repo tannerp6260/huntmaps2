@@ -16,6 +16,8 @@ From this Ubuntu workspace, launch the installed application:
 It opens `http://127.0.0.1:8765` in your browser. Keep the terminal open; Ctrl+C
 stops the server and cancels its active process group. For a different local port,
 use `./huntmaps-gui --port 8766`. `--no-browser` starts only the server.
+You can restart immediately after Ctrl+C. If the port is still occupied by a
+running server, stop that instance in its terminal or choose another port.
 
 The existing `scout` file is hashed into completed-run manifests. It remains
 byte-identical; the GUI has its own launcher rather than invalidating historical
