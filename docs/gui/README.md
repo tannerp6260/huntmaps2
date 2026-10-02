@@ -284,3 +284,11 @@ coverage, and missing lines do not establish absence of access.
 The compact type legend lists classifications present in loaded networks. Layer
 controls scroll when needed on smaller screens; setup markers and proposed
 approaches remain above the road/trail overlay.
+
+After a GUI update, stop the old server with Ctrl+C, run `./huntmaps-gui` again,
+and refresh the browser so frontend and backend use the same version. Downloaded
+networks remain saved; no repeat download is needed. The frontend also accepts an
+older backend's line-only response: roads/trails still display, with unknown subtype
+labels until the backend is restarted. Empty overlays explicitly say no data is
+loaded. Invalid network responses and loading failures appear inside the controls
+without replacing the scouting screen.

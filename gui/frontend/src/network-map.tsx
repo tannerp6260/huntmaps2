@@ -1,3 +1,4 @@
+import { networkResponse, type DisplayNetwork } from './network-response';
 import { useEffect, useRef, useState } from 'react';
 import { Popup, type Map, type GeoJSONSource } from 'maplibre-gl';
 import { useJobs } from './polling';
@@ -11,12 +12,6 @@ const styles = [
   ['trails:nonmotorized', 'Recorded nonmotorized trail', '#66e1bc'],
   ['trails:unknown', 'Unknown trail use', '#9fc4da'],
 ];
-type Network = {
-  id: string;
-  kind: string;
-  coverage: number[] | null;
-  display_features: GeoJSON.Feature[];
-};
 type Api = (path: string, options?: RequestInit) => Promise<any>;
 export default function NetworkMap({
   map,
@@ -41,9 +36,11 @@ export default function NetworkMap({
     window.addEventListener('huntmaps-networks-changed', refresh);
     return () => window.removeEventListener('huntmaps-networks-changed', refresh);
   }, []);
-  const [networks, setNetworks] = useState<Network[]>([]);
+  const [networks, setNetworks] = useState<DisplayNetwork[]>([]);
   const [visible, setVisible] = useState(['roads', 'trails']);
   const [error, setError] = useState('');
+  const [networkError, setNetworkError] = useState('');
+  const [loadingNetworks, setLoadingNetworks] = useState(true);
   const [plan, setPlan] = useState<any>(null);
   const [approved, setApproved] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -74,11 +71,18 @@ export default function NetworkMap({
   useEffect(() => {
     let alive = true;
     api('/networks')
+      .then(networkResponse)
       .then((v) => {
-        if (alive) setNetworks(v);
+        if (alive) {
+          setNetworks(v);
+          setNetworkError('');
+        }
       })
       .catch((e) => {
-        if (alive) setError(String(e));
+        if (alive) setNetworkError(`Could not load road/trail data: ${String(e)}`);
+      })
+      .finally(() => {
+        if (alive) setLoadingNetworks(false);
       });
     return () => {
       alive = false;
@@ -86,83 +90,87 @@ export default function NetworkMap({
   }, [api, stamp, revision]);
   useEffect(() => {
     if (!map) return;
-    const source = 'network-map';
-    const features = networks
-      .filter((n) => visible.includes(n.kind))
-      .flatMap((n) => n.display_features);
-    const data: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features };
-    if (map.getSource(source)) (map.getSource(source) as GeoJSONSource).setData(data);
-    else {
-      map.addSource(source, { type: 'geojson', data });
-      const before = ['candidate-halo', 'manual-points', 'approach-context-line'].find((id) =>
-        map.getLayer(id),
-      );
-      map.addLayer(
-        {
-          id: source + '-outline',
-          type: 'line',
-          source,
-          paint: { 'line-color': '#17221d', 'line-width': 5, 'line-opacity': 0.85 },
-        },
-        before,
-      );
-      for (const kind of ['roads', 'trails'])
+    try {
+      const source = 'network-map';
+      const features = networks
+        .filter((n) => visible.includes(n.kind))
+        .flatMap((n) => n.display_features);
+      const data: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features };
+      if (map.getSource(source)) (map.getSource(source) as GeoJSONSource).setData(data);
+      else {
+        map.addSource(source, { type: 'geojson', data });
+        const before = ['candidate-halo', 'manual-points', 'approach-context-line'].find((id) =>
+          map.getLayer(id),
+        );
         map.addLayer(
           {
-            id: source + '-' + kind,
+            id: source + '-outline',
             type: 'line',
             source,
-            filter: ['==', ['get', 'kind'], kind],
-            paint: {
-              'line-color': [
-                'match',
-                ['concat', ['get', 'kind'], ':', ['get', 'subtype']],
-                ...styles.flatMap(([key, , color]) => [key, color]),
-                '#bcbcbc',
-              ] as any,
-              'line-width': kind === 'roads' ? 2.5 : 2,
-              'line-dasharray': kind === 'roads' ? [1, 0] : [3, 2],
-            },
+            paint: { 'line-color': '#17221d', 'line-width': 5, 'line-opacity': 0.85 },
           },
           before,
         );
-    }
-    let popup: Popup | null = null;
-    const clicked = (e: any) => {
-      const feature = e.features?.[0];
-      if (!feature) return;
-      const p = feature.properties;
-      const body = document.createElement('div');
-      body.style.color = '#17221d';
-      for (const [label, key] of [
-        ['Name', 'name'],
-        ['Number', 'number'],
-        ['Recorded type', 'subtype'],
-        ['Surface', 'surface'],
-        ['Maintenance level', 'maintenance'],
-        ['Trail classification', 'classification'],
-        ['Source', 'source'],
-        ['Source date', 'source_date'],
-        ['Retrieved', 'retrieved_utc'],
-      ]) {
-        const row = document.createElement('div');
-        row.textContent = `${label}: ${p[key] || 'unknown'}`;
-        body.append(row);
+        for (const kind of ['roads', 'trails'])
+          map.addLayer(
+            {
+              id: source + '-' + kind,
+              type: 'line',
+              source,
+              filter: ['==', ['get', 'kind'], kind],
+              paint: {
+                'line-color': [
+                  'match',
+                  ['concat', ['get', 'kind'], ':', ['get', 'subtype']],
+                  ...styles.flatMap(([key, , color]) => [key, color]),
+                  '#bcbcbc',
+                ] as any,
+                'line-width': kind === 'roads' ? 2.5 : 2,
+                'line-dasharray': kind === 'roads' ? [1, 0] : [3, 2],
+              },
+            },
+            before,
+          );
       }
-      popup?.remove();
-      popup = new Popup({ className: 'network-popup' })
-        .setLngLat(e.lngLat)
-        .setDOMContent(body)
-        .addTo(map);
-    };
-    for (const kind of ['roads', 'trails']) map.on('click', source + '-' + kind, clicked);
-    return () => {
-      popup?.remove();
-      for (const kind of ['roads', 'trails']) map.off('click', source + '-' + kind, clicked);
-      for (const suffix of ['roads', 'trails', 'outline'])
-        if (map.getLayer(source + '-' + suffix)) map.removeLayer(source + '-' + suffix);
-      if (map.getSource(source)) map.removeSource(source);
-    };
+      let popup: Popup | null = null;
+      const clicked = (e: any) => {
+        const feature = e.features?.[0];
+        if (!feature) return;
+        const p = feature.properties;
+        const body = document.createElement('div');
+        body.style.color = '#17221d';
+        for (const [label, key] of [
+          ['Name', 'name'],
+          ['Number', 'number'],
+          ['Recorded type', 'subtype'],
+          ['Surface', 'surface'],
+          ['Maintenance level', 'maintenance'],
+          ['Trail classification', 'classification'],
+          ['Source', 'source'],
+          ['Source date', 'source_date'],
+          ['Retrieved', 'retrieved_utc'],
+        ]) {
+          const row = document.createElement('div');
+          row.textContent = `${label}: ${p[key] || 'unknown'}`;
+          body.append(row);
+        }
+        popup?.remove();
+        popup = new Popup({ className: 'network-popup' })
+          .setLngLat(e.lngLat)
+          .setDOMContent(body)
+          .addTo(map);
+      };
+      for (const kind of ['roads', 'trails']) map.on('click', source + '-' + kind, clicked);
+      return () => {
+        popup?.remove();
+        for (const kind of ['roads', 'trails']) map.off('click', source + '-' + kind, clicked);
+        for (const suffix of ['roads', 'trails', 'outline'])
+          if (map.getLayer(source + '-' + suffix)) map.removeLayer(source + '-' + suffix);
+        if (map.getSource(source)) map.removeSource(source);
+      };
+    } catch (e) {
+      setNetworkError(`Could not display road/trail data: ${String(e)}`);
+    }
   }, [map, networks, visible]);
   const covered = (kind: string) =>
     extent &&
@@ -211,6 +219,15 @@ export default function NetworkMap({
   return (
     <details className="network-map-controls" open>
       <summary>Roads and trails on map</summary>
+      {loadingNetworks && <p role="status">Loading road/trail data…</p>}
+      {!loadingNetworks && !networks.length && !networkError && (
+        <p role="status">No road/trail data loaded. Review a download or import mapped lines.</p>
+      )}
+      {networkError && (
+        <p role="alert" className="error">
+          {networkError}
+        </p>
+      )}
       {['roads', 'trails'].map((kind) => (
         <label key={kind}>
           <input
@@ -222,9 +239,11 @@ export default function NetworkMap({
           />
           {kind === 'roads' ? 'Roads' : 'Trails'}
           <small>
-            {covered(kind)
-              ? 'Mapped query coverage includes this area'
-              : 'Complete mapped coverage unconfirmed'}
+            {!networks.some((n) => n.kind === kind && n.display_features.length)
+              ? `No ${kind === 'roads' ? 'road' : 'trail'} lines loaded`
+              : covered(kind)
+                ? 'Mapped query coverage includes this area'
+                : 'Complete mapped coverage unconfirmed'}
           </small>
         </label>
       ))}

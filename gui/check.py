@@ -240,6 +240,7 @@ def main():
                 "browser-working-waypoint-check.mjs",
                 "browser-storage-check.mjs",
                 "browser-scouting-check.mjs",
+                "browser-network-compat-check.mjs",
                 "browser-performance-check.mjs",
                 "browser-clusters-check.mjs",
                 "browser-nearby-observer-check.mjs",

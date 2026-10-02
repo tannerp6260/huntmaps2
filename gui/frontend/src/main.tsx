@@ -62,7 +62,8 @@ async function api(path: string, options: RequestInit = {}) {
     throw Error(text || r.statusText);
   }
   const value = await r.json();
-  if (path === '/networks/import') window.dispatchEvent(new Event('huntmaps-networks-changed'));
+  if (path.split('?')[0] === '/networks/import')
+    window.dispatchEvent(new Event('huntmaps-networks-changed'));
   if (options.method && options.method !== 'GET') void refreshPolling();
   return value;
 }

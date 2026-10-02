@@ -1,3 +1,4 @@
+import { networkResponse } from './network-response';
 import { useEffect, useState } from 'react';
 export type Sampling = {
   network_ids: string[];
@@ -32,6 +33,7 @@ export default function AccessSampling({
         if (!r.ok) throw Error(v.detail || 'Network records unavailable');
         return v;
       })
+      .then(networkResponse)
       .then((v) => {
         if (alive) setNetworks(v);
       })

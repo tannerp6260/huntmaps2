@@ -1,3 +1,4 @@
+import { networkResponse } from './network-response';
 import { useEffect, useRef, useState } from 'react';
 import type { Map, GeoJSONSource } from 'maplibre-gl';
 import { Drawing } from './drawing';
@@ -200,6 +201,7 @@ export default function ScoutingTools({
   useEffect(() => {
     let alive = true;
     api('/networks')
+      .then(networkResponse)
       .then((v) => {
         if (alive) {
           setNetworks(v);

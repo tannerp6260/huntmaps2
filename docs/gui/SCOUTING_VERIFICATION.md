@@ -124,3 +124,29 @@ exports after display toggles, reviewed download consent and a simulated acquisi
 failure beside its control. Desktop/900-pixel screenshots were inspected, including
 `20-scouting-desktop.png`, `21-scouting-900.png`, and `23-network-download-900.png`.
 Live USFS acquisition remains untested in this pass; no bulk downloads occurred.
+
+## Network response compatibility fix — 2026-10-02
+
+Reproduced the owner's white screen against the running localhost backend:
+`Cannot read properties of undefined (reading 'some')`. The backend process predated
+the display-metadata API update and returned saved line-only inventories, while new
+frontend assets assumed `display_features` existed. The approved acquisition itself
+completed successfully (2 road segments and 18 trail segments); nothing needs to be
+redownloaded.
+
+A shared frontend response adapter now validates all three network-list consumers,
+preserves exact geometry and builds unknown-subtype display features for older
+responses. Invalid responses and network errors remain local to their controls;
+empty lists explicitly show no data loaded. Import notifications now include the
+network-type query parameter correctly. Restart guidance is in the GUI README.
+
+Full `./gui/check` passed; diagnostics: `/tmp/huntmaps-check-8x9ib__i`.
+Elapsed **7m53.11s**, peak backend RSS **1,372.6 MiB** across the entire suite,
+not incremental network display memory. All **7,537 protected files** were unchanged.
+The new browser regression simulates a successful approved download followed by
+legacy responses, then checks current metadata, empty lists, malformed responses,
+network failures and recovery. It independently verifies exact geometry and unchanged
+input records. Desktop and 900-pixel screenshots under
+`screenshots/browser-network-compat-check/` were inspected. Existing filtering,
+approach/export, training, first-person and working-waypoint journeys also passed.
+No acquisition or historical analysis was repeated by this fix.
