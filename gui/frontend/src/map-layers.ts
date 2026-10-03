@@ -1,6 +1,6 @@
 import type { Map } from 'maplibre-gl';
 import type { Run } from './types';
-import { onlineSource } from './online';
+import { orderRasterLayers } from './layer-order';
 import { COVERAGE_DISPLAY_VERSION } from './coverage-cache';
 const retainedRun = new WeakMap<Map, string>();
 const retained = new WeakMap<Map, globalThis.Map<string, number>>();
@@ -88,7 +88,6 @@ export function updateMapLayers(
     );
   };
   addRaster('hillshade', 'base', 1);
-  if (m.getLayer(onlineSource)) m.moveLayer(onlineSource, 'boundary-fill');
   if (imagery && run.imagery.length) addRaster('imagery', 'base', imageOpacity);
   const ids = newRun
     ? []
@@ -163,6 +162,7 @@ export function updateMapLayers(
       !keep.has(key)
     )
       m.removeSource(key);
+  orderRasterLayers(m);
   m.getContainer().dataset.coverageCache = JSON.stringify(
     [...recent.keys()].filter((k) => !!m.getSource(k)),
   );

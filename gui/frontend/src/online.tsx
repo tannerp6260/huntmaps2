@@ -1,7 +1,8 @@
 import type { ErrorEvent as MapErrorEvent } from 'maplibre-gl';
 import { useEffect, useState } from 'react';
 import type { Map } from 'maplibre-gl';
-export const onlineSource = 'online-imagery';
+import { onlineSource, orderRasterLayers } from './layer-order';
+export { onlineSource } from './layer-order';
 export function OnlineImagery({ map }: { map: Map }) {
   const [enabled, setEnabled] = useState(
       () => localStorage.getItem('huntmaps-online-imagery') !== 'off',
@@ -21,7 +22,6 @@ export function OnlineImagery({ map }: { map: Map }) {
       maxzoom: 16,
       attribution: 'USDA, USGS The National Map: Orthoimagery',
     });
-    const anchor = map.getLayer('raster-imagery-base') ? 'raster-imagery-base' : 'boundary-fill';
     map.addLayer(
       {
         id: onlineSource,
@@ -29,8 +29,9 @@ export function OnlineImagery({ map }: { map: Map }) {
         source: onlineSource,
         paint: { 'raster-fade-duration': 0 },
       },
-      anchor,
+      'boundary-fill',
     );
+    orderRasterLayers(map);
     const error = (e: MapErrorEvent & { sourceId?: string }) => {
       if (e.sourceId === onlineSource) setFailed(true);
     };

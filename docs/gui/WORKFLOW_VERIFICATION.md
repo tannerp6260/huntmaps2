@@ -71,3 +71,13 @@ The journey also visits ten setups to enforce the eight-source limit, switches r
 After the coverage stress journey, JavaScript used **13.95 MiB**, with **1.80 MiB** backing storage; this is a snapshot, not a peak or total browser/GPU memory measurement. The full checker server peaked at **1,167.17 MiB RSS** and ended at **1,151.11 MiB RSS**. The final display cache's apparent size was **12.84 MiB**, below its 256 MiB budget. These are engineering fixtures and software-rendered browser measurements, not production timing guarantees.
 
 Cache retention is best effort under the configured budget. Saved analytical viewsheds remain permanent; only regenerable display files become eviction candidates. Renderer version, run, point revision, filter and color separate browser identities; native source fingerprints separate disk assets.
+
+## Coverage occluded by imagery — 2026-10-03
+
+Retained coverage was hidden when online imagery was moved above it; the ready label only checked loading. A new canvas-pixel regression reproduced the failure with just 24 cyan pixels before the fix. Shared ordering now keeps hillshade, online imagery, saved imagery, coverage, cover classes and boundaries in that order, including reuse and imagery toggles.
+
+Final `./gui/check` passed **128 backend tests and 17 isolated browser journeys**; diagnostics are in `/tmp/huntmaps-check-_s12utew`. The audit covered **8,634 protected files with zero changes**, including unchanged owner records and companion state. Historical analyses and scenes were not regenerated.
+
+The mandatory rendering journey uses opaque local imagery fixtures and actual saved coverage API tiles. Switching, returning, opacity changes, imagery toggles and comparison entry/exit all produced visible cyan pixels; opacity zero removed them. Desktop and 900 px screenshots were inspected. This verifies rendering, not live provider availability. The independent, unintercepted cache journey measured initial readiness at **5.058 seconds**, prefetched selection at **832 ms**, and return at **813 ms**, with **zero additional return tile requests** and 180 HTTP coverage cache hits.
+
+The checker server peaked at **1,127.14 MiB RSS** and ended at **1,091.78 MiB RSS**. Cache-journey JavaScript used **18.17 MiB** with **1.93 MiB** backing storage (snapshot, not peak or GPU memory). Cache limits and analytical calculations are unchanged.
