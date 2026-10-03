@@ -194,6 +194,41 @@ class StorageTests(unittest.TestCase):
         self.assertTrue(new.exists())
         self.assertEqual(authoritative.stat().st_mtime_ns, before)
 
+    def test_viewed_coverage_retained_until_dismissed_or_budget_pressure(self):
+        import os
+        from huntmaps_gui.display_cache import remember, evict
+
+        cache = self.root / "cache"
+        kept = cache / "kept/tile.png"
+        dismissed = cache / "dismissed/tile.png"
+        other = cache / "other/tile.png"
+        for path in (kept, dismissed, other):
+            path.parent.mkdir(parents=True)
+            path.write_bytes(b"x" * 1000)
+        remember(kept.parent, "fixture", "A1", True)
+        remember(dismissed.parent, "fixture", "A2", True)
+        os.utime(kept, (1, 1))
+        storage.write(
+            self.root / "workflows/fixture.json",
+            {"points": {"A2": {"dismissed": True}}},
+        )
+        with configured(AppConfig(state_dir=self.root, display_budget_bytes=1500)):
+            evict()
+        self.assertTrue(
+            kept.exists(), "Viewed non-dismissed coverage outranks newer generic cache"
+        )
+        self.assertFalse(dismissed.exists())
+        self.assertFalse(other.exists())
+        storage.write(
+            self.root / "workflows/fixture.json",
+            {"points": {"A1": {"dismissed": True}}},
+        )
+        other.write_bytes(b"x" * 1000)
+        with configured(AppConfig(state_dir=self.root, display_budget_bytes=1500)):
+            evict()
+        self.assertFalse(kept.exists())
+        self.assertTrue(other.exists())
+
     def test_job_summaries_are_paginated_and_logs_bounded(self):
         import sys, time
         from fastapi.testclient import TestClient

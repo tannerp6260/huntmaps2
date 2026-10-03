@@ -13,6 +13,8 @@ Run `./gui/check` with the project Python environment. Verification uses disposa
 | Reload and recovery | Browser with real worker | Reload after failure and during the accepted retry; completed results refresh automatically. Desktop and 900 px screenshots. |
 | Find → approaches → scene → confirmation | Browser with actual services | Both the existing fixture and the newly generated/recovered Thorough run use an imported synthetic network and a terrain-only scene. Checks shortlist/dismiss/restore, gates, selection, viewing, confirmation and reload. |
 | Coverage display and stale replies | Browser with controlled tile timing/errors | Loading/ready/incomplete states, retry, rapid selection and cached reuse. Timing is deliberately controlled. |
+| Coverage retention and preparation | Real raster tile benchmark and browser without request interception | Repeat tiles perform no reprojection; next-three viewport preparation uses the actual raster zoom, retained sources avoid return requests, HTTP caching survives reload, and dismissal/restoration is exercised. Disk-priority, budget and job/storage pause guards have focused tests. |
+| Help dismissal | Browser mouse, keyboard and touch | Hover exit, Escape while focused, click/outside click, Tab and scrolling; desktop and 900 px screenshots. |
 | Existing scenes, exports, training and historical controls | Existing backend/browser acceptance | Historical source/output audits; no historical regeneration. Scene acquisition tests include fixtures and mocks, not live lidar acquisition. |
 
 ## Release procedure

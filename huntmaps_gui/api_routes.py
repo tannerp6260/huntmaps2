@@ -6,7 +6,7 @@ import threading
 import uuid
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from fastapi import APIRouter, UploadFile, File, Body
+from fastapi import APIRouter, UploadFile, File, Body, Header
 from fastapi.responses import Response, FileResponse
 from shapely.geometry import mapping
 from .catalog import ROOT, STATE, Run, runs, read, collection, feature
@@ -236,9 +236,27 @@ def api_router(jobs: Jobs):
         return working.DisplayRun(ident, jobs).candidate(key, True)
 
     @router.get("/api/runs/{ident}/working-tiles/{layer}/{key}/{z}/{x}/{y}.png")
-    def working_tile(ident, layer, key, z: int, x: int, y: int, color: int = 0):
+    def working_tile(
+        ident,
+        layer,
+        key,
+        z: int,
+        x: int,
+        y: int,
+        color: int = 0,
+        x_huntmaps_prefetch: bool = Header(False),
+    ):
         return Response(
-            tile(working.DisplayRun(ident, jobs), layer, key, z, x, y, color),
+            tile(
+                working.DisplayRun(ident, jobs),
+                layer,
+                key,
+                z,
+                x,
+                y,
+                color,
+                background=x_huntmaps_prefetch,
+            ),
             media_type="image/png",
             headers={"Cache-Control": "private, max-age=3600"},
         )
@@ -274,9 +292,27 @@ def api_router(jobs: Jobs):
         return Run(ident).sectors(candidate)
 
     @router.get("/api/runs/{ident}/tiles/{layer}/{candidate}/{z}/{x}/{y}.png")
-    def get_tile(ident, layer, candidate, z: int, x: int, y: int, color: int = 0):
+    def get_tile(
+        ident,
+        layer,
+        candidate,
+        z: int,
+        x: int,
+        y: int,
+        color: int = 0,
+        x_huntmaps_prefetch: bool = Header(False),
+    ):
         return Response(
-            tile(Run(ident), layer, candidate, z, x, y, color),
+            tile(
+                Run(ident),
+                layer,
+                candidate,
+                z,
+                x,
+                y,
+                color,
+                background=x_huntmaps_prefetch,
+            ),
             media_type="image/png",
             headers={"Cache-Control": "private, max-age=3600"},
         )

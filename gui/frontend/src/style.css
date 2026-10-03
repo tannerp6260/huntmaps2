@@ -888,8 +888,6 @@ summary:focus-visible {
   line-height: 1.6;
   font-weight: 400;
 }
-.help-wrap:hover .help-popover,
-.help-wrap:focus-within .help-popover,
 .help-popover.help-open {
   display: block;
 }

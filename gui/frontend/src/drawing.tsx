@@ -269,6 +269,8 @@ const descriptions = {
 };
 export function Help({ topic }: { topic: keyof typeof descriptions }) {
   const [open, setOpen] = useState(false),
+    pinned = useRef(false),
+    wrap = useRef<HTMLSpanElement>(null),
     [position, setPosition] = useState({ left: 0, top: 0 }),
     button = useRef<HTMLButtonElement>(null);
   const place = () => {
@@ -278,8 +280,47 @@ export function Help({ topic }: { topic: keyof typeof descriptions }) {
       top: Math.min(r.bottom + 6, innerHeight - 300),
     });
   };
+  useEffect(() => {
+    if (!open) return;
+    const close = () => {
+      pinned.current = false;
+      setOpen(false);
+    };
+    const outside = (e: PointerEvent) => {
+      if (!wrap.current?.contains(e.target as Node)) close();
+    };
+    const escape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close();
+    };
+    document.addEventListener('pointerdown', outside);
+    document.addEventListener('keydown', escape);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    return () => {
+      document.removeEventListener('pointerdown', outside);
+      document.removeEventListener('keydown', escape);
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+    };
+  }, [open]);
   return (
-    <span className="help-wrap">
+    <span
+      ref={wrap}
+      className="help-wrap"
+      onMouseEnter={() => {
+        place();
+        setOpen(true);
+      }}
+      onMouseLeave={() => {
+        if (!pinned.current) setOpen(false);
+      }}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget)) {
+          pinned.current = false;
+          setOpen(false);
+        }
+      }}
+    >
       <button
         ref={button}
         type="button"
@@ -287,14 +328,20 @@ export function Help({ topic }: { topic: keyof typeof descriptions }) {
         aria-label={`Help: ${topic}`}
         aria-describedby={'help-' + topic}
         aria-expanded={open}
-        onMouseEnter={place}
-        onFocus={place}
+        onFocus={() => {
+          place();
+          setOpen(true);
+        }}
         onClick={() => {
           place();
-          setOpen(!open);
+          pinned.current = !pinned.current;
+          setOpen(pinned.current);
         }}
         onKeyDown={(e) => {
-          if (e.key === 'Escape') setOpen(false);
+          if (e.key === 'Escape') {
+            pinned.current = false;
+            setOpen(false);
+          }
         }}
       >
         ?

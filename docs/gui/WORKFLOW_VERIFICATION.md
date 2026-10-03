@@ -56,3 +56,18 @@ New regressions cover 16 boundary/preset combinations, exhausted and empty eligi
 The final audit covered **8,184 protected files with zero changes**, alongside unchanged owner GUI records and companion-app state. Historical analyses and prepared scenes were not regenerated. One early disposable harness incorrectly reached a live DEM endpoint; its isolation was corrected and its generated 360 MB temporary download removed, with logs retained. The final recovery fixtures route source responses to localhost and reject uncontrolled external requests.
 
 See [TESTING.md](TESTING.md) for the execution-level coverage matrix, mocked boundaries and remaining limitations. Legacy failed plans require one explicit refresh/review before reuse; incompatible older calculation checkpoints require a new run name and remain intact.
+
+
+## Coverage retention and help dismissal — 2026-10-03
+
+Final `./gui/check` passed **128 backend tests and 16 isolated browser journeys**. Diagnostics: `/tmp/huntmaps-check-w5iu2oiu`. Its audit covered **8,409 protected files with zero changes**, plus unchanged owner GUI records and companion-app state. No historical analyses or prepared scenes were regenerated.
+
+The help regression checks hover exit, focused Escape, click/outside click, Tab, scrolling and touch. Desktop and 900 px coverage screenshots, the background tile counter and the open 900 px help box were visually inspected. Full-page screenshots intentionally resize the viewport and dismiss help, so the open-box screenshot uses the actual viewport.
+
+A real saved-raster benchmark generated one cold tile in **49.0 ms**, served the same bytes in **0.8 ms**, and verified only one GDAL reprojection. The separate browser cache journey uses no request interception (Playwright routing disables HTTP caching). It measured **4.985 seconds** from run selection to initial readiness, **827 ms** to a prefetched setup and **797 ms** to a returned setup, including map movement. Returning requested **zero additional coverage tiles**. CDP recorded **191 coverage-image cache hits**, with assertions for the exact prefetched and reloaded setups. Warming fetched 90 local tiles for the next three setups; it acquired no new source data.
+
+The journey also visits ten setups to enforce the eight-source limit, switches runs, reloads and dismisses/restores a setup. Focused backend tests verify dismissal-aware eviction, retention under budget pressure, pinned sources, duplicate request coalescing and preparation pauses for active jobs or the 20 GiB reserve. Existing filter, comparison, revised waypoint, failure/retry and stale-response journeys remain mandatory.
+
+After the coverage stress journey, JavaScript used **13.95 MiB**, with **1.80 MiB** backing storage; this is a snapshot, not a peak or total browser/GPU memory measurement. The full checker server peaked at **1,167.17 MiB RSS** and ended at **1,151.11 MiB RSS**. The final display cache's apparent size was **12.84 MiB**, below its 256 MiB budget. These are engineering fixtures and software-rendered browser measurements, not production timing guarantees.
+
+Cache retention is best effort under the configured budget. Saved analytical viewsheds remain permanent; only regenerable display files become eviction candidates. Renderer version, run, point revision, filter and color separate browser identities; native source fingerprints separate disk assets.

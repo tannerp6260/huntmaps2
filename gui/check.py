@@ -299,6 +299,7 @@ def main():
                 "browser-workflow-check.mjs",
                 "browser-transfer-check.mjs",
                 "browser-coverage-search-check.mjs",
+                "browser-coverage-cache-check.mjs",
                 "browser-check.mjs",
                 "browser-training-check.mjs",
                 "browser-first-person-check.mjs",

@@ -1,4 +1,4 @@
-from .display_cache import touch, evict, pin
+from .display_cache import touch, evict, pin, remember
 from .storage import locked
 
 """GDAL EPSG:3857 XYZ raster adapter. Nearest sampling for saved categorical cells."""
@@ -7,12 +7,15 @@ from contextlib import ExitStack, contextmanager
 import hashlib
 import io
 import threading
+import shutil
 from pathlib import Path
 import numpy as np
 from PIL import Image
 from osgeo import gdal
 from glassing import core
 from .catalog import STATE, safe_path
+from .storage import read_json
+from .jobs import ACTIVE
 
 LOCK = threading.RLock()
 WORKERS = threading.BoundedSemaphore(2)
@@ -144,9 +147,17 @@ def sources(run, layer, ident, color):
     return [path], key
 
 
-def tile(run, layer, ident, z, x, y, color=0):
+def tile(run, layer, ident, z, x, y, color=0, background=False):
     if not (0 <= z <= 20 and 0 <= x < 2**z and 0 <= y < 2**z and 0 <= color <= 2):
         raise ValueError("Invalid tile coordinate")
+    if background:
+        if any(
+            read_json(p).get("status") in ACTIVE
+            for p in (STATE / "jobs").glob("*.json")
+        ):
+            raise ValueError("Background coverage paused while analysis is active")
+        if shutil.disk_usage(STATE.resolve()).free < 20 * 1024**3:
+            raise ValueError("Background coverage paused to retain 20 GiB free")
     with WORKERS, cache_cleanup(), ExitStack() as held:
         with locked(STATE / "maintenance"), LOCK:
             paths, key = sources(run, layer, ident, color)
@@ -155,6 +166,11 @@ def tile(run, layer, ident, z, x, y, color=0):
             if not paths:
                 return transparent()
             cache = STATE / "cache" / "tiles" / fingerprint(paths) / f"{z}-{x}-{y}.png"
+            if layer == "visible" and hasattr(run, "id"):
+                remember(cache.parent, run.id, ident, not background)
+                for path in paths:
+                    if path.is_relative_to(STATE / "cache"):
+                        remember(path.parent, run.id, ident, not background)
             if cache.exists():
                 touch(cache)
                 return cache.read_bytes()

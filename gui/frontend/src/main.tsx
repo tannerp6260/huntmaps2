@@ -4,6 +4,7 @@ import NetworkMap from './network-map';
 import AccessSampling, { type Sampling } from './access-sampling';
 import ScoutingTools, { type AppliedFilter } from './scouting-tools';
 import { updateMapLayers } from './map-layers';
+import { prepareCoverage } from './coverage-cache';
 import AreaSettings from './area-creation';
 import StoragePanel from './storage-panel';
 import RunSelection from './run-selection';
@@ -81,6 +82,7 @@ function App() {
   const [nearbyRadius, setNearbyRadius] = useState(30);
   const [treeThreshold, setTreeThreshold] = useState(10);
   const [coverageStatus, setCoverageStatus] = useState('');
+  const [coveragePreparation, setCoveragePreparation] = useState('');
   const [coverageRetry, setCoverageRetry] = useState(0);
   const [sortMode, setSortMode] = useState('coverage');
   const [planningApproaches, setPlanningApproaches] = useState(false);
@@ -502,6 +504,7 @@ function App() {
       center: [-107.28, 38.7],
       zoom: 12,
       maxZoom: 20,
+      maxTileCacheSize: 64,
       attributionControl: false,
     });
     map.current = m;
@@ -751,6 +754,9 @@ function App() {
         opacity,
         sectors,
         classes,
+        dismissed: Object.values(workflow?.points || {})
+          .filter((p) => p.dismissed)
+          .map((p) => p.point.id),
       },
       api,
       setError,
@@ -774,6 +780,7 @@ function App() {
     workingGeometryStamp,
     coverageRetry,
     filterId,
+    workflow?.revision,
   ]);
   useEffect(() => {
     if (
@@ -1018,6 +1025,50 @@ function App() {
       : (typeof b.metrics.raw_km2 === 'number' ? b.metrics.raw_km2 : -1) -
           (typeof a.metrics.raw_km2 === 'number' ? a.metrics.raw_km2 : -1) || original;
   });
+  const nextCoverage = sorted
+    .slice(Math.max(0, sorted.findIndex((p) => p.id === selected) + 1))
+    .filter(
+      (p) =>
+        p.id !== selected &&
+        !workflow?.points[p.id]?.dismissed &&
+        typeof p.metrics.raw_km2 === 'number',
+    )
+    .slice(0, 3)
+    .map((p) => p.id);
+  useEffect(() => {
+    setCoveragePreparation('');
+    if (
+      !ready ||
+      !run ||
+      newRun ||
+      !visibility ||
+      compare.length ||
+      activeManual ||
+      !coverageStatus.startsWith('Coverage ready') ||
+      jobs.some((j) => ['queued', 'running', 'cancelling'].includes(j.status))
+    )
+      return;
+    return prepareCoverage(
+      map.current!,
+      run.id,
+      nextCoverage,
+      working,
+      filterId,
+      setCoveragePreparation,
+    );
+  }, [
+    ready,
+    run?.id,
+    newRun,
+    visibility,
+    compare.join(','),
+    activeManual?.id,
+    coverageStatus,
+    nextCoverage.join(','),
+    workingGeometryStamp,
+    filterId,
+    jobs.map((j) => j.status).join(','),
+  ]);
   useEffect(() => {
     setInspectStage(false);
     setFirstPerson(false);
@@ -1606,7 +1657,10 @@ function App() {
           {coverageStatus && (
             <div className="coverage-status" role="status" aria-live="polite">
               {coverageStatus.startsWith('Loading') && <progress aria-label="Loading coverage" />}
-              <span>{coverageStatus}</span>
+              <span>
+                {coverageStatus}
+                {coveragePreparation && <small> · {coveragePreparation}</small>}
+              </span>
               {coverageStatus.startsWith('Coverage incomplete') && (
                 <button
                   onClick={() => {

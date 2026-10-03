@@ -3,7 +3,7 @@
 import sys
 import uuid
 from pathlib import Path
-from fastapi import APIRouter, UploadFile, File, Body
+from fastapi import APIRouter, UploadFile, File, Body, Header
 from fastapi.responses import Response
 from shapely.geometry import mapping
 from glassing.owner_area import choices, LIMIT
@@ -155,7 +155,15 @@ def router(jobs):
 
     @r.get("/runs/{ident}/filtered-tiles/{profile}/{layer}/{cid}/{z}/{x}/{y}.png")
     def filtered_tile(
-        ident, profile, layer, cid, z: int, x: int, y: int, color: int = 0
+        ident,
+        profile,
+        layer,
+        cid,
+        z: int,
+        x: int,
+        y: int,
+        color: int = 0,
+        x_huntmaps_prefetch: bool = Header(False),
     ):
         return Response(
             tile(
@@ -168,8 +176,10 @@ def router(jobs):
                 x,
                 y,
                 color,
+                background=x_huntmaps_prefetch,
             ),
             media_type="image/png",
+            headers={"Cache-Control": "private, max-age=3600"},
         )
 
     @r.get("/runs/{ident}/filtered-overlap/{profile}")

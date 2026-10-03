@@ -14,6 +14,55 @@ from huntmaps_gui.config import AppConfig, configured
 
 
 class TileConcurrency(unittest.TestCase):
+    def test_background_preparation_respects_jobs_and_free_space(self):
+        from types import SimpleNamespace
+        from huntmaps_gui.storage import write
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            with configured(AppConfig(state_dir=root)):
+                with patch.object(
+                    tiles.shutil,
+                    "disk_usage",
+                    return_value=SimpleNamespace(free=19 * 1024**3),
+                ):
+                    with self.assertRaisesRegex(ValueError, "20 GiB"):
+                        tiles.tile(None, "visible", "A0001", 3, 1, 1, background=True)
+                write(root / "jobs/job.json", dict(status="running"))
+                with self.assertRaisesRegex(ValueError, "analysis is active"):
+                    tiles.tile(None, "visible", "A0001", 3, 1, 1, background=True)
+
+    def test_real_tile_return_avoids_reprojection(self):
+        import math
+        from huntmaps_gui.catalog import Run
+        from huntmaps_gui.config import current
+
+        base = current()
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            with configured(AppConfig(base.source_dir, root, base.workspace)):
+                run = Run("soap-creek-decision-review-v2")
+                p = run.candidate("A0075")
+                z = 15
+                x = int((p["longitude"] + 180) / 360 * 2**z)
+                y = int(
+                    (1 - math.asinh(math.tan(math.radians(p["latitude"]))) / math.pi)
+                    / 2
+                    * 2**z
+                )
+                with patch.object(tiles.gdal, "Warp", wraps=tiles.gdal.Warp) as warp:
+                    started = time.perf_counter()
+                    cold = tiles.tile(run, "visible", "A0075", z, x, y)
+                    cold_ms = (time.perf_counter() - started) * 1000
+                    started = time.perf_counter()
+                    warm = tiles.tile(run, "visible", "A0075", z, x, y)
+                    warm_ms = (time.perf_counter() - started) * 1000
+                    self.assertEqual(cold, warm)
+                    self.assertEqual(warp.call_count, 1)
+                    print(
+                        f"Real coverage tile: cold={cold_ms:.1f} ms warm={warm_ms:.1f} ms"
+                    )
+
     def test_terrain_and_raster_share_maintenance_then_gdal_lock_order(self):
         from huntmaps_gui.storage import locked
 
