@@ -25,6 +25,10 @@ export default function FirstPerson({
   waypointKey,
   workingWaypoint,
   globalBusy,
+  onViewed,
+  onConfirm,
+  approachCurrent,
+  viewedSceneKey,
 }: {
   runId: string;
   cid: string;
@@ -35,7 +39,14 @@ export default function FirstPerson({
   waypointKey?: string;
   workingWaypoint?: WorkingWaypointRecord;
   globalBusy?: boolean;
+  onViewed?: (key: string) => void;
+  onConfirm?: () => void;
+  approachCurrent?: boolean;
+  viewedSceneKey?: string | null;
 }) {
+  const [sceneAnchor, setSceneAnchor] = useState(cid);
+  useEffect(() => setSceneAnchor(cid), [cid]);
+  const [opened, setOpened] = useState('');
   const [meta, setMeta] = useState<Scene | null>(null),
     [error, setError] = useState(''),
     [eye, setEye] = useState(1.7),
@@ -62,11 +73,13 @@ export default function FirstPerson({
   const updating = savingWaypoint || ['running', 'cancelling'].includes(updateJob?.status || '');
   const entityKey = waypointKey || cid;
   const committed =
-    workingWaypoint?.anchor === cid
-      ? workingWaypoint
-      : initialObserver?.anchor === cid
-        ? initialObserver
-        : null;
+    meta?.status === 'ready' && meta.scene_signature
+      ? null
+      : workingWaypoint?.anchor === sceneAnchor
+        ? workingWaypoint
+        : initialObserver?.anchor === sceneAnchor
+          ? initialObserver
+          : null;
   const previewDistance = Math.hypot(
     (observer?.east_m || 0) - (committed?.east_m || 0),
     (observer?.north_m || 0) - (committed?.north_m || 0),
@@ -106,15 +119,19 @@ export default function FirstPerson({
     };
   }, []);
   const [planId, setPlanId] = useState(
-      () => localStorage.getItem('huntmaps-first-person-plan') || '',
+      () => localStorage.getItem('huntmaps-first-person-plan:' + runId) || '',
     ),
     [plan, setPlan] = useState<FirstPersonPlan | null>(null),
     [job, setJob] = useState<Job | null>(null),
     [allow, setAllow] = useState(false),
+    [transferLimit, setTransferLimit] = useState(500),
     [busy, setBusy] = useState(false),
     [refresh, setRefresh] = useState(0),
     [sceneVersion, setSceneVersion] = useState(0);
-  const url = '/api/runs/' + runId + '/first-person/' + cid;
+  useEffect(() => {
+    if (plan?.download_cap_bytes) setTransferLimit(plan.download_cap_bytes / 1e6);
+  }, [plan?.download_cap_bytes]);
+  const url = '/api/runs/' + runId + '/first-person/' + sceneAnchor;
   const move = async (p: Target) => {
     if (updating) return;
     const ticket = ++moveTicket.current;
@@ -150,7 +167,11 @@ export default function FirstPerson({
     setWaypointSaved('');
   };
   useEffect(() => {
-    if (meta?.status === 'ready' && initialObserver?.anchor === cid) {
+    if (
+      meta?.status === 'ready' &&
+      !meta.scene_signature &&
+      initialObserver?.anchor === sceneAnchor
+    ) {
       setExplore(true);
       move({ east_m: initialObserver.east_m, north_m: initialObserver.north_m });
     }
@@ -202,6 +223,7 @@ export default function FirstPerson({
       const v = await request('/api/runs/' + runId + '/working-waypoints/' + entityKey, {
         observer_east_m: observer.east_m,
         observer_north_m: observer.north_m,
+        scene_key: meta?.status === 'ready' && meta.scene_signature ? meta.key : undefined,
         name: waypointName || entityKey,
         notes: waypointNotes,
       });
@@ -219,6 +241,7 @@ export default function FirstPerson({
   useEffect(() => {
     let alive = true;
     setMeta(null);
+    setOpened('');
     setObserver(null);
     setExplore(false);
     setMoveError('');
@@ -233,6 +256,15 @@ export default function FirstPerson({
     request(url)
       .then((v) => {
         if (alive) {
+          if (
+            v.status === 'unprepared' &&
+            initialObserver?.id === entityKey &&
+            initialObserver.anchor !== cid &&
+            sceneAnchor === cid
+          ) {
+            setSceneAnchor(initialObserver.anchor);
+            return;
+          }
           setMeta(v);
           setHeading(v.initial_bearing_deg || 0);
           if (v.vegetation?.meshes?.['120']?.unavailable)
@@ -250,7 +282,7 @@ export default function FirstPerson({
   }, [url, sceneVersion]);
   useEffect(() => {
     if (!planId) return;
-    localStorage.setItem('huntmaps-first-person-plan', planId);
+    localStorage.setItem('huntmaps-first-person-plan:' + runId, planId);
     let alive = true;
     const poll = async () => {
       try {
@@ -260,6 +292,7 @@ export default function FirstPerson({
         ]);
         if (!alive) return;
         setPlan(p);
+
         const current = j.find((v) => v.plan === planId);
         setJob(current || null);
         if (
@@ -334,17 +367,22 @@ export default function FirstPerson({
         className="fp-dialog"
         role="dialog"
         aria-modal="true"
-        aria-label="First-person terrain pilot"
+        aria-label="First-person modeled view"
       >
         <div className="section-title">
-          <h2>View from {cid} · Soap Creek pilot</h2>
+          <h2>View from {cid} · modeled scene</h2>
           <button onClick={onClose}>Return to map</button>
         </div>
         <p>
-          Terrain-model preview, not a photograph or verified view through trees. Explore nearby
-          positions to try another stance within 30 ft. Fine ground covers up to 300 m; distant
-          terrain is coarse context.
+          Modeled view from recorded sources. Inspect the scene and selected approach before
+          confirming. Source coverage and limitations are shown below.
         </p>
+        {sceneAnchor !== cid && (
+          <p className="notice">
+            Legacy nearby preview using the saved anchor scene. Prepare an exact waypoint scene
+            before final confirmation.
+          </p>
+        )}
         <label>
           Saved setup
           <select
@@ -353,9 +391,11 @@ export default function FirstPerson({
             value={cid}
             onChange={(e) => onSelect(e.target.value)}
           >
-            {pilot.map((v) => (
-              <option key={v}>{v}</option>
-            ))}
+            {(runId === 'soap-creek-decision-review-v2' && pilot.includes(cid) ? pilot : [cid]).map(
+              (v) => (
+                <option key={v}>{v}</option>
+              ),
+            )}
           </select>
         </label>
         {error && (
@@ -374,10 +414,13 @@ export default function FirstPerson({
         <details open={meta?.status === 'unprepared'} className="fp-preparation">
           <summary>Prepare local fine terrain and lidar</summary>
           <p>
-            One shared pilot preparation for all four setups. Existing scores and outputs stay
+            Preparation uses exact waypoints from this run. Existing scores and outputs stay
             unchanged. New source downloads are capped at 500 MB; cached sources are reused.
           </p>
-          <button disabled={busy || active} onClick={() => action('/api/first-person/plans', {})}>
+          <button
+            disabled={busy || active}
+            onClick={() => action('/api/first-person/plans', { run_id: runId, ids: [cid] })}
+          >
             Check source plan
           </button>
           {plan && (
@@ -388,10 +431,51 @@ export default function FirstPerson({
                   : 'Checking catalog metadata…'}{' '}
                 · {(plan.already_received_bytes || 0) / 1e6} MB previously transferred
               </p>
+              {(
+                plan as FirstPersonPlan & {
+                  needs_acquisition_selection?: boolean;
+                  acquisitions?: string[];
+                }
+              ).needs_acquisition_selection && (
+                <label>
+                  Select one acquisition
+                  <select
+                    aria-label="Lidar acquisition"
+                    defaultValue=""
+                    onChange={(e) =>
+                      action('/api/first-person/plans', {
+                        run_id: runId,
+                        ids: plan.candidates || [cid],
+                        acquisition: e.target.value,
+                      })
+                    }
+                  >
+                    <option value="" disabled>
+                      Choose acquisition…
+                    </option>
+                    {(plan as FirstPersonPlan & { acquisitions?: string[] }).acquisitions?.map(
+                      (v) => <option key={v}>{v}</option>,
+                    )}
+                  </select>
+                </label>
+              )}
+              <button
+                disabled={busy || active}
+                onClick={() =>
+                  action('/api/first-person/plans', {
+                    run_id: runId,
+                    ids: plan.candidates || [cid],
+                    fidelity: 'terrain',
+                  })
+                }
+              >
+                Review terrain-only scene · no new transfer
+              </button>
               {plan.sources?.map((s) => (
                 <p key={s.key}>
                   <b>{s.cached ? 'Cached' : 'New source'}</b> · {s.title} ·{' '}
-                  {(s.bytes / 1e6).toFixed(1)} MB · {s.acquisition_date}
+                  {(s.bytes / 1e6).toFixed(1)} MB · {s.acquisition_date} ·{' '}
+                  {s.vertical_reference || 'Vertical reference: inspect recorded scene sources'}
                 </p>
               ))}
               {plan.errors?.map((v: string) => (
@@ -400,6 +484,47 @@ export default function FirstPerson({
                 </p>
               ))}
               <p>{plan.source_note}</p>
+              <p>
+                Already cached:{' '}
+                {(plan.sources?.filter((s) => s.cached).reduce((sum, s) => sum + s.bytes, 0) || 0) /
+                  1e6}{' '}
+                MB. Suggested transfer ceiling:{' '}
+                {Math.min(
+                  500,
+                  Math.max(10, Math.ceil((plan.estimated_new_bytes * 1.2) / 1e7) * 10),
+                )}{' '}
+                MB; the separate cumulative cap remains 500 MB.
+              </p>
+              <details>
+                <summary>Custom scene transfer ceiling</summary>
+                <input
+                  aria-label="Scene download allowance"
+                  type="number"
+                  min="10"
+                  max="500"
+                  value={transferLimit}
+                  onChange={(e) => setTransferLimit(+e.target.value)}
+                />
+                <button
+                  disabled={active || busy}
+                  onClick={async () => {
+                    try {
+                      setPlan(
+                        await request(
+                          '/api/first-person/plans/' + planId + '/allowance',
+                          { max_download_mb: transferLimit },
+                          'PUT',
+                        ),
+                      );
+                      setAllow(false);
+                    } catch (e) {
+                      setError(String(e));
+                    }
+                  }}
+                >
+                  Review scene allowance
+                </button>
+              </details>
               <label>
                 <input
                   type="checkbox"
@@ -410,12 +535,18 @@ export default function FirstPerson({
                 Allow this plan’s source downloads within 500 MB
               </label>
               <button
-                disabled={busy || active || !plan.prepared}
+                disabled={
+                  busy ||
+                  active ||
+                  !plan.prepared ||
+                  !!(plan as FirstPersonPlan & { needs_acquisition_selection?: boolean })
+                    .needs_acquisition_selection
+                }
                 onClick={() =>
                   action('/api/first-person/plans/' + planId + '/start', { download: allow })
                 }
               >
-                {allow ? 'Download and prepare pilot' : 'Prepare using cached sources only'}
+                {allow ? 'Download and prepare views' : 'Prepare using cached sources only'}
               </button>
             </>
           )}
@@ -442,7 +573,7 @@ export default function FirstPerson({
             </div>
           )}
         </details>
-        {meta?.status === 'ready' && meta.candidate === cid && (
+        {meta?.status === 'ready' && meta.candidate === sceneAnchor && (
           <>
             <div className="fp-controls">
               <label>
@@ -488,34 +619,43 @@ export default function FirstPerson({
               >
                 Reset view
               </button>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={foliage}
-                  onChange={(e) => setFoliage(e.target.checked)}
-                />
-                Inferred vegetation
-              </label>
-              <span>Dense foliage · saved 120 m patch</span>
+              {meta.fidelity !== 'terrain' && (
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={foliage}
+                    onChange={(e) => setFoliage(e.target.checked)}
+                  />
+                  Inferred vegetation
+                </label>
+              )}
+              {meta.fidelity !== 'terrain' && <span>Dense foliage · saved 120 m patch</span>}
             </div>
-            <p className="notice">
-              {meta.fine_observer_available
-                ? 'Local lidar-derived ground'
-                : 'Baseline-only preview: fine ground at the observer is unknown.'}{' '}
-              · {(meta.coverage_fraction * 100).toFixed(1)}% of the 300 m circle has supported fine
-              ground · {meta.acquisition_date}.{' '}
-              {points
-                ? 'Above-ground returns: green vegetation-class, amber unclassified, blue other classes. Missing returns do not mean empty space.'
-                : ''}{' '}
-              Aerial imagery is always shown where available; photographed canopy lies on ground,
-              not reconstructed trees. Foliage clusters infer vegetation from returns; shape,
-              thickness and opacity are assumptions. Weaker measurements are included where nearby
-              stronger measurements support a patch. Colors follow cached photographs, not
-              vegetation identification. Only centres within {nearby} m are screened; farther
-              vegetation is unevaluated. Missing returns do not prove open space. Amber diagnostic
-              markers are unclassified.
-            </p>
-            {meta.vegetation.meshes && (
+            {meta.fidelity === 'terrain' ? (
+              <p className="notice">
+                Terrain-only view from the existing DEM. Fine ground and measured vegetation are
+                unavailable; shaded terrain marks missing imagery. This is not a live camera feed.
+              </p>
+            ) : (
+              <p className="notice">
+                {meta.fine_observer_available
+                  ? 'Local lidar-derived ground'
+                  : 'Baseline-only preview: fine ground at the observer is unknown.'}{' '}
+                · {(meta.coverage_fraction * 100).toFixed(1)}% of the 300 m circle has supported
+                fine ground · {meta.acquisition_date}.{' '}
+                {points
+                  ? 'Above-ground returns: green vegetation-class, amber unclassified, blue other classes. Missing returns do not mean empty space.'
+                  : ''}{' '}
+                Aerial imagery is always shown where available; photographed canopy lies on ground,
+                not reconstructed trees. Foliage clusters infer vegetation from returns; shape,
+                thickness and opacity are assumptions. Weaker measurements are included where nearby
+                stronger measurements support a patch. Colors follow cached photographs, not
+                vegetation identification. Only centres within {nearby} m are screened; farther
+                vegetation is unevaluated. Missing returns do not prove open space. Amber diagnostic
+                markers are unclassified.
+              </p>
+            )}
+            {meta.fidelity !== 'terrain' && meta.vegetation.meshes && (
               <p className="hint">
                 Cluster surface detail:{' '}
                 {meta.vegetation.meshes[String(nearby)]?.sampling_interval_m} m sampling
@@ -530,6 +670,16 @@ export default function FirstPerson({
             <div className="fp-workspace">
               <div>
                 <Viewer
+                  onOpened={() => {
+                    setOpened(meta.key);
+                    const current = workingWaypoint || initialObserver;
+                    if (
+                      !current ||
+                      (current.longitude === meta.observer.longitude &&
+                        current.latitude === meta.observer.latitude)
+                    )
+                      onViewed?.(meta.key);
+                  }}
                   observer={observer}
                   meta={meta}
                   url={url}
@@ -549,6 +699,35 @@ export default function FirstPerson({
                 />
               </div>
               <aside>
+                <section className="workflow-task">
+                  <h3>Inspect and confirm {cid}</h3>
+                  <p>
+                    {meta.fine_observer_available
+                      ? 'Lidar ground with measured returns'
+                      : 'Terrain-only DEM; fine ground and measured vegetation unavailable'}
+                    . Recorded sources; this is not a live camera feed.
+                  </p>
+                  <p>
+                    {approachCurrent
+                      ? 'Current approach selected.'
+                      : 'Return to approaches to select a current alternative.'}
+                  </p>
+                  <button
+                    className="primary wide"
+                    disabled={
+                      !approachCurrent || opened !== meta.key || viewedSceneKey !== meta.key
+                    }
+                    onClick={onConfirm}
+                  >
+                    Confirm setup
+                  </button>
+                  {opened !== meta.key && (
+                    <small>Wait for the current scene to open successfully.</small>
+                  )}
+                  {opened === meta.key && viewedSceneKey !== meta.key && (
+                    <small>Recording this scene viewing before confirmation.</small>
+                  )}
+                </section>
                 <section className="fp-nearby">
                   <h3>Explore nearby positions</h3>
                   <p>
@@ -556,9 +735,15 @@ export default function FirstPerson({
                     Update waypoint to apply your stance and calculate its terrain shading. The
                     original setup remains available.
                   </p>
-                  <button onClick={() => setExplore((v) => !v)}>
+                  <button
+                    disabled={!meta.fine_observer_available}
+                    onClick={() => setExplore((v) => !v)}
+                  >
                     {explore ? 'Hide position controls' : 'Explore nearby positions'}
                   </button>
+                  {!meta.fine_observer_available && (
+                    <small>Nearby stance movement needs supported fine ground at this setup.</small>
+                  )}
                   {explore && (
                     <>
                       <h4>Move the observer</h4>

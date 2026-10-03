@@ -39,7 +39,7 @@ export default function WorkingWaypoint({
       <p>
         {(point.displacement_m / 0.3048).toFixed(1)} ft from the original {point.anchor}
       </p>
-      <button onClick={onView}>View from this setup</button>
+      <button onClick={onView}>Inspect now</button>
       <div className="metric">
         <strong>{point.metrics.raw_km2.toFixed(3)}</strong>
         <span>km² terrain-visible target area at this waypoint</span>

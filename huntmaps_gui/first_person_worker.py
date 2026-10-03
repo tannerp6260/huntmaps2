@@ -19,6 +19,7 @@ from . import first_person as fp
 from .catalog import ROOT, Run, read
 from .jobs import write
 from glassing.acquire import digest
+from .downloads import suggested_mb
 
 
 def deps():
@@ -49,15 +50,31 @@ def geographic_box(run, cid):
 
 
 def discover(ident):
-    fp.stage("Checking pilot source catalog metadata; no bulk downloads")
+    fp.stage("Checking scene source metadata; no bulk downloads")
     p = fp.plan(ident)
-    run = Run(fp.RUN)
+    run = fp.scene_run(p.get("run_id", fp.RUN))
+    if p.get("fidelity") == "terrain":
+        run.validate(run.dem_path)
+        p.update(
+            prepared=True,
+            sources=[],
+            acquisitions=[],
+            estimated_new_bytes=0,
+            already_received_bytes=0,
+            errors=[],
+            coverage={cid: 0 for cid in p["candidates"]},
+            source_note="Existing DEM only. Fine ground and measured vegetation unavailable.",
+        )
+        write(fp.HOME / "plans" / (ident + ".json"), p)
+        return
     sources = {}
-    existing = read(ROOT / "configs/vegetation.soap-creek-v1.json")["lidar_source"]
-    cached = ROOT / existing["path"]
+    existing = read(ROOT / "configs/vegetation.soap-creek-v1.json", {}).get(
+        "lidar_source", {}
+    )
+    cached = ROOT / existing.get("path", "__missing_lidar__")
     if cached.exists():
         fp.verify_file(cached, existing["sha256"])
-    for cid in fp.PILOT:
+    for cid in p["candidates"]:
         bbox = geographic_box(run, cid)
         query = urllib.parse.urlencode(
             dict(
@@ -69,7 +86,10 @@ def discover(ident):
         with urllib.request.urlopen(
             "https://tnmaccess.nationalmap.gov/api/v1/products?" + query, timeout=30
         ) as response:
-            result = json.load(response)
+            raw = response.read(5_000_001)
+            if len(raw) > 5_000_000:
+                raise ValueError("Catalog metadata exceeds 5 MB; narrow scene batch")
+            result = json.loads(raw)
         if result.get("errors") or result.get("total", 0) > 100:
             raise ValueError(
                 "Lidar catalog incomplete or truncated; no source plan approved."
@@ -85,7 +105,12 @@ def discover(ident):
             ):
                 continue
             # Do not mix overlapping acquisitions in this pilot.
-            if "CO_WestCentral_2019" not in url:
+            project = (
+                parsed.path.split("/LAZ/", 1)[0]
+                if "/LAZ/" in parsed.path
+                else parsed.path.rsplit("/", 1)[0]
+            )
+            if p.get("acquisition") and project != p["acquisition"]:
                 continue
             size = int(item.get("sizeInBytes") or 0)
             if size <= 0:
@@ -99,7 +124,13 @@ def discover(ident):
                     bytes=size,
                     title=item["title"],
                     bounds=item["boundingBox"],
-                    acquisition_date="2019 project; individual return dates not resolved",
+                    acquisition=project,
+                    acquisition_date=item.get("acquisitionDate")
+                    or "Unknown acquisition date; catalog created "
+                    + str(item.get("dateCreated", "unknown"))
+                    + "; publication "
+                    + str(item.get("publicationDate", "unknown")),
+                    vertical_reference="Requires LAS header inspection; no vertical correction implied",
                     publication_date=item.get("publicationDate"),
                     provider="USGS 3DEP",
                     candidates=[],
@@ -107,7 +138,7 @@ def discover(ident):
                 ),
             )
             entry["candidates"].append(cid)
-            if url == existing["url"] and cached.exists():
+            if url == existing.get("url") and cached.exists():
                 entry.update(cached=True, path=str(cached), sha256=existing["sha256"])
             elif (fp.HOME / "sources" / key).exists():
                 rec = read(fp.HOME / "sources" / "manifest.json", {}).get(key)
@@ -119,6 +150,14 @@ def discover(ident):
                         sha256=rec["sha256"],
                     )
     entries = list(sources.values())
+    acquisitions = sorted(set(s["acquisition"] for s in entries))
+    if p.get("fidelity") == "terrain":
+        entries = []
+    needs_selection = (
+        p.get("fidelity", "lidar") == "lidar"
+        and not p.get("acquisition")
+        and len(acquisitions) > 1
+    )
     for s in entries:
         partial = fp.HOME / "sources" / Path(s["key"]).with_suffix(".partial")
         s["remaining_bytes"] = (
@@ -133,7 +172,11 @@ def discover(ident):
     p.update(
         prepared=True,
         sources=entries,
+        acquisitions=acquisitions,
+        needs_acquisition_selection=needs_selection,
         estimated_new_bytes=estimated,
+        download_cap_bytes=suggested_mb(estimated, 500) * 1_000_000,
+        suggested_download_mb=suggested_mb(estimated, 500),
         already_received_bytes=spent,
         errors=(
             []
@@ -143,7 +186,7 @@ def discover(ident):
             ]
         ),
         coverage={
-            cid: sum(cid in s["candidates"] for s in entries) for cid in fp.PILOT
+            cid: sum(cid in s["candidates"] for s in entries) for cid in p["candidates"]
         },
         source_note="Catalog bounds do not guarantee ground-return coverage. Fine-data gaps remain unknown.",
     )
@@ -618,7 +661,7 @@ def publish_copy(run, cid, key, prior, target, started):
     write(folder / "scene.json", meta)
     target.parent.mkdir(parents=True, exist_ok=True)
     folder.replace(target)
-    write(fp.HOME / "ready" / (cid + ".json"), dict(key=key))
+    write(fp.ready_path(run.id, cid), dict(key=key))
     fp.stage(cid + " nearby foliage ready; verified cells and photographs reused")
 
 
@@ -757,7 +800,7 @@ def publish_clusters(run, cid, key, prior, target, started, sources):
         raise ValueError("800 MB derived-asset cap exceeded; prior scene retained.")
     target.parent.mkdir(parents=True, exist_ok=True)
     folder.replace(target)
-    write(fp.HOME / "ready" / (cid + ".json"), dict(key=key))
+    write(fp.ready_path(run.id, cid), dict(key=key))
     fp.stage(cid + " connected foliage ready")
 
 
@@ -767,9 +810,13 @@ def publish(run, cid, sources):
     fp.stage("Building fine terrain, support masks and scene for " + cid)
     p = run.candidate(cid)
     signature = dict(
+        run_id=run.id,
+        waypoint_id=cid,
+        algorithm="workflow-scene-v2",
+        waypoint_revision=p.get("working_revision"),
         version=fp.VERSION,
         observer=[p["longitude"], p["latitude"]],
-        sources=[h for s, path, h in sources if cid in s["candidates"]],
+        sources=sorted(h for s, path, h in sources if cid in s["candidates"]),
         baseline=digest(run.dem_path),
         radius=300,
     )
@@ -785,7 +832,7 @@ def publish(run, cid, sources):
         meta = read(target / "scene.json")
         for name, h in meta["hashes"].items():
             fp.verify_file(fp.asset_path(target, meta, name), h)
-        write(fp.HOME / "ready" / (cid + ".json"), dict(key=key))
+        write(fp.ready_path(run.id, cid), dict(key=key))
         fp.stage(cid + " cached bundle verified and reused")
         return
     previous_signature = {
@@ -798,8 +845,19 @@ def publish(run, cid, sources):
     if (prior / "scene.json").exists():
         publish_clusters(run, cid, key, prior, target, started, sources)
         return
-    points, vref, hist = crop_points(run, cid, sources)
-    a, support = fine_grid(points)
+    if any(cid in source[0]["candidates"] for source in sources):
+        points, vref, hist = crop_points(run, cid, sources)
+    else:
+        points = np.empty((0, 4))
+        vref, hist = "Terrain DEM only", {}
+    a, support = (
+        fine_grid(points)
+        if len(points)
+        else (
+            np.full((601, 601), np.nan, dtype=np.float32),
+            np.full((601, 601), np.nan, dtype=np.float32),
+        )
+    )
     fine_ground = float(fp.sample(a, 1, -300, 300, np.array([0.0]), np.array([0.0]))[0])
     base, res, x0, y0 = baseline_grid(run, cid)
     baseline_ground = float(
@@ -895,6 +953,8 @@ def publish(run, cid, sources):
         key=key,
         candidate=cid,
         observer=p,
+        scene_signature=signature,
+        run_id=run.id,
         origin_epsg=run.config["epsg"],
         ground_m=ground,
         fine_ground_m=fine_ground if hasfine else None,
@@ -904,11 +964,21 @@ def publish(run, cid, sources):
         context_radius_m=2000,
         context_available=context_ok,
         baseline_resolution_m=res,
-        resolution_m=1,
+        resolution_m=1 if hasfine else res,
         coverage_fraction=float((valid & circle).sum() / circle.sum()),
         maximum_support_distance_m=float(np.nanmax(support)) if valid.any() else None,
         ground_interpolation="Linear classified-ground triangulation in 60 m tiles with 10 m support halos; one measured ground return per 0.25 m bin; edges >5 m excluded; no extrapolation. 1 m derived grid is not a claim of 1 m accuracy.",
-        acquisition_date="2019 project; individual return dates unresolved",
+        acquisition_date="; ".join(
+            sorted(
+                set(
+                    s["acquisition_date"]
+                    for s, _, _ in sources
+                    if cid in s["candidates"]
+                )
+            )
+        )
+        or "Existing DEM; see run source metadata",
+        fidelity="lidar" if hasfine else "terrain",
         vertical_reference=vref,
         vertical_note="Local sources share the same recorded vertical CRS. Coarse NAVD88 context may differ in realization; the 300–320 m transition is deliberately not joined.",
         classification_counts=hist,
@@ -924,6 +994,22 @@ def publish(run, cid, sources):
         hashes=hashes,
         sources=[
             dict(
+                title="Existing run DEM",
+                sha256=signature["baseline"],
+                provider=run.config.get("data", {})
+                .get("dem", {})
+                .get("provider", "unknown"),
+                acquisition_date=run.config.get("data", {})
+                .get("dem", {})
+                .get("acquisition_date", "unknown"),
+                vertical_reference=run.config.get("data", {})
+                .get("dem", {})
+                .get("vertical_datum", "unknown"),
+                resolution_m=res,
+            )
+        ]
+        + [
+            dict(
                 title=s["title"],
                 sha256=h,
                 bytes=path.stat().st_size,
@@ -938,6 +1024,14 @@ def publish(run, cid, sources):
         ),
         warning="Terrain-model preview, not a photograph or verified sightline. Lidar points are incomplete measured returns, not reconstructed trees. Fine-data holes remain unknown.",
     )
+    if not hasfine:
+        dem_source = run.config.get("data", {}).get("dem", {})
+        meta.update(
+            ground_interpolation="Native run DEM cell-center triangles; fine ground unavailable",
+            vertical_reference=dem_source.get("vertical_datum", "unknown"),
+            vertical_note="Terrain-only DEM; no mixing with another vertical dataset or vertical correction.",
+            warning="Modeled terrain-only scene from the recorded DEM, not a live feed or verified sightline. Fine ground and measured vegetation are unavailable.",
+        )
     enrich_clusters(folder, meta, points, a)
     meta["hashes"] = {f.name: digest(f) for f in folder.iterdir() if f.is_file()}
     write(folder / "scene.json", meta)
@@ -951,7 +1045,7 @@ def publish(run, cid, sources):
         raise ValueError("800 MB derived-asset cap exceeded")
     target.parent.mkdir(parents=True, exist_ok=True)
     folder.replace(target)
-    write(fp.HOME / "ready" / (cid + ".json"), dict(key=key))
+    write(fp.ready_path(run.id, cid), dict(key=key))
     fp.stage(
         cid
         + " ready · "
@@ -964,16 +1058,29 @@ def prepare(ident, allow):
     p = fp.plan(ident)
     if not p.get("prepared"):
         raise ValueError("Review the first-person source plan first")
+    if p.get("needs_acquisition_selection"):
+        raise ValueError(
+            "Select one recorded lidar acquisition or choose terrain-only; overlapping acquisitions cannot be mixed"
+        )
+    for cid, snapshot in p.get("snapshots", {}).items():
+        from .workflow import point
+
+        if point(p["run_id"], cid) != snapshot:
+            raise ValueError("Waypoint changed; review a new scene plan")
+    if allow and p["estimated_new_bytes"] > p.get("download_cap_bytes", fp.LIMIT):
+        raise ValueError("Estimated new sources exceed the reviewed transfer allowance")
     if allow and p.get("errors"):
         raise ValueError("; ".join(p["errors"]))
+    spent = read(fp.HOME / "sources" / "ledger.json", {}).get("received_bytes", 0)
+    fp.LIMIT = min(fp.LIMIT, spent + p.get("download_cap_bytes", fp.LIMIT))
     sources = []
     for s in p["sources"]:
         path, h = acquire(s, allow)
         if path:
             sources.append((s, path, h))
-    run = Run(fp.RUN)
+    run = fp.scene_run(p.get("run_id", fp.RUN))
     failures = {}
-    for cid in fp.PILOT:
+    for cid in p["candidates"]:
         try:
             publish(run, cid, sources)
         except (ValueError, RuntimeError, MemoryError) as e:
@@ -987,7 +1094,7 @@ def prepare(ident, allow):
             + json.dumps(failures)
             + ". Other validated bundles were retained."
         )
-    fp.stage("Pilot ready; existing scores, masks and coordinates unchanged")
+    fp.stage("Views ready; existing scores, masks and coordinates unchanged")
 
 
 def main():

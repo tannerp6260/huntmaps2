@@ -1,4 +1,4 @@
-# First-person terrain pilot
+# First-person modeled views
 
 Launch from the project directory:
 
@@ -6,10 +6,11 @@ Launch from the project directory:
 ./huntmaps-gui
 ```
 
-Select **soap-creek-decision-review-v2**, select A0075, V010, V008 or A0031,
-and click **View from this setup**. All four have prepared local scenes on this
-computer. Opening them requires no source downloads. This pilot is limited to
-these saved setups; it does not add a scoring model or arbitrary-area analysis.
+Use **Inspect now** on any completed-run waypoint, or prepare selected approaches
+as a batch in **Inspect and confirm**. Review lidar acquisitions before downloads;
+terrain-only scenes use the existing DEM offline. See [the workflow guide](WORKFLOW.md).
+The four prepared Soap Creek scenes remain available unchanged as historical examples.
+The detailed lidar rendering notes below describe their recorded pilot implementation.
 
 ## Use the view
 

@@ -15,8 +15,8 @@ try {
   await page.goto(base);
   await page.getByLabel('Select A0075',{exact:true}).click();
   const started=performance.now();
-  await page.getByRole('button',{name:'View from this setup',exact:true}).click();
-  await page.waitForFunction(()=>{const camera=JSON.parse(document.querySelector('.fp-scene')?.getAttribute('data-camera')||'{}');return camera.loaded&&camera.imageryPending===0});
+  await page.getByRole('button',{name:'Inspect now',exact:true}).click();
+  await page.waitForFunction(()=>{const camera=JSON.parse(document.querySelector('.fp-scene')?.getAttribute('data-camera')||'{}');return camera.loaded&&camera.imageryPending===0},undefined,{timeout:120000});
   const readyMs=performance.now()-started;
   const camera=async()=>JSON.parse(await page.locator('.fp-scene').getAttribute('data-camera'));
   await page.waitForTimeout(1000);
@@ -34,7 +34,7 @@ try {
   await page.screenshot({path:out+'/performance-desktop.png',fullPage:true});
   await page.setViewportSize({width:900,height:800});await page.screenshot({path:out+'/performance-900.png',fullPage:true});
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
-  assert.deepEqual(errors,[]);assert.ok(mutations.every(url=>url.endsWith('/observer')));
+  assert.deepEqual(errors,[]);assert.ok(mutations.every(url=>url.endsWith('/observer') || url.includes('/workflow/')));
   fs.writeFileSync(out+'/performance.json',JSON.stringify({readyMs,moveMs,heap,binaryRequests,additionalGeometryRequests:assets.length-binaryRequests,idleDraws:idle.draws-before.draws,triangles:moved.triangles,errors,mutations},null,2));
   console.log('Idle rendering, cached geometry and 900px layout passed:',out);
 } finally {await browser.close()}

@@ -19,6 +19,7 @@ export default function Viewer({
   onTarget,
   onHeading,
   onLook,
+  onOpened,
 }: {
   meta: SceneReady;
   url: string;
@@ -36,6 +37,7 @@ export default function Viewer({
   onTarget: (v: Target) => void;
   onHeading: (v: number) => void;
   onLook: (v: number) => void;
+  onOpened?: () => void;
 }) {
   const container = useRef<HTMLDivElement>(null),
     plan = useRef<HTMLCanvasElement>(null),
@@ -435,10 +437,11 @@ export default function Viewer({
         ? meta.fine_ground_m
         : meta.baseline_ground_m;
       const render = (now = performance.now()) => {
-        if (!alive || !renderer) return;
+        const host = container.current;
+        if (!alive || !renderer || !host) return;
         const s = state.current,
-          w = container.current!.clientWidth,
-          h = container.current!.clientHeight;
+          w = host.clientWidth,
+          h = host.clientHeight;
         frame = requestAnimationFrame(render);
         const key = JSON.stringify([
           s.eye,
@@ -534,6 +537,7 @@ export default function Viewer({
       };
       paintPlan();
       render();
+      if (alive && container.current) onOpened?.();
     }
     start().catch((e) => {
       if (alive) {

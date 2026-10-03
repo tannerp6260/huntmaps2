@@ -1,11 +1,11 @@
 import { refreshPolling } from './polling';
-export async function request(path: string, body?: unknown) {
+export async function request(path: string, body?: unknown, method = 'POST') {
   const r = await fetch(
     path,
     body === undefined
       ? {}
       : {
-          method: 'POST',
+          method,
           headers: { 'Content-Type': 'application/json', 'X-HuntMaps': 'local' },
           body: JSON.stringify(body),
         },

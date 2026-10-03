@@ -1226,3 +1226,42 @@ summary:focus-visible {
   max-height: 300px;
   overflow-y: auto;
 }
+
+.workflow-stages {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  background: #152c25;
+  padding: 0.65rem;
+}
+.workflow-task {
+  padding: 0.8rem;
+  border: 1px solid #62786b;
+  border-radius: 0.5rem;
+  margin-bottom: 1rem;
+}
+.setup-drawer-toggle {
+  display: none;
+}
+@media (max-width: 900px) {
+  .workspace {
+    grid-template-columns: minmax(0, 1fr) 320px !important;
+  }
+  .workspace > .sidebar {
+    display: none;
+  }
+  .workspace > .sidebar.drawer-open {
+    display: block;
+    position: absolute;
+    z-index: 15;
+    width: 280px;
+    height: calc(100vh - 170px);
+    background: #172d25;
+  }
+  .setup-drawer-toggle {
+    display: block;
+  }
+}

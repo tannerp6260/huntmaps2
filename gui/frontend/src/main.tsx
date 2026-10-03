@@ -37,6 +37,7 @@ import type {
   BaselinePlan,
 } from './types';
 import { useJobs, subscribePolling, refreshPolling } from './polling';
+import WorkflowPanel, { type Workflow } from './workflow';
 const colors = ['#00c0e8', '#ff6782', '#aa6fff'];
 const empty: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
 const practiceArea = (geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon | null) =>
@@ -71,6 +72,10 @@ const num = (v: unknown, d = 3) => (typeof v === 'number' ? v.toFixed(d) : 'Not 
 function App() {
   const jobs = useJobs();
   const [appliedFilter, setAppliedFilter] = useState<AppliedFilter | null>(null);
+  const [inspectStage, setInspectStage] = useState(false);
+  const [workflow, setWorkflow] = useState<Workflow | null>(null);
+  const [listOpen, setListOpen] = useState(false);
+  const [sortMode, setSortMode] = useState('coverage');
   const [planningApproaches, setPlanningApproaches] = useState(false);
   const filterId = appliedFilter?.profile.id || '';
   const [sampling, setSampling] = useState<Sampling | null>(null);
@@ -222,7 +227,7 @@ function App() {
     [polygon, setPolygon] = useState(
       training.active && training.progress?.lesson === 'area' && training.draft ? '1' : '',
     ),
-    [name, setName] = useState(''),
+    [name, setName] = useState('scouting-' + new Date().toISOString().slice(0, 10)),
     [radius, setRadius] = useState(2000),
     [minutes, setMinutes] = useState(30),
     [count, setCount] = useState(150),
@@ -244,6 +249,9 @@ function App() {
     Number.isInteger(minutes) &&
     minutes >= 5 &&
     minutes <= 120;
+  useEffect(() => {
+    if (plan?.prepared) setBudget(plan.max_download_mb);
+  }, [plan?.max_download_mb, plan?.prepared]);
   const planDirty =
     !!plan &&
     (name !== plan.name ||
@@ -361,7 +369,7 @@ function App() {
           setManualPoints(m);
           setRun(r);
           setAnnotations(a);
-          setGroup(r.review_ids.length ? 'review' : 'all');
+          setGroup('all');
           setSelected(r.groups.West?.[0] || r.candidates[0]?.id || '');
           if (training.active && training.progress?.lesson === 'area' && !training.draft)
             map.current?.fitBounds(r.bounds, { padding: 60, duration: 0 });
@@ -889,6 +897,11 @@ function App() {
   const visibleCandidates =
     shownCandidates.filter(
       (p) =>
+        (training.active ||
+          (!planningApproaches && !inspectStage) ||
+          (inspectStage
+            ? !!workflow?.points[p.id]?.approach
+            : !!workflow?.points[p.id]?.shortlisted)) &&
         (group === 'all' ||
           (group === 'review'
             ? run?.review_ids.includes(p.id)
@@ -902,22 +915,97 @@ function App() {
           appliedFilter.candidates.find((row) => row.id === p.id)?.qualifies === true),
     ) || [];
   const sorted = [...visibleCandidates].sort((a, b) => {
+    const original =
+      shownCandidates.findIndex((p) => p.id === a.id) -
+      shownCandidates.findIndex((p) => p.id === b.id);
     if (appliedFilter)
       return (
-        appliedFilter.candidates.findIndex((p) => p.id === a.id) -
-        appliedFilter.candidates.findIndex((p) => p.id === b.id)
+        (appliedFilter.candidates.find((p) => p.id === b.id)?.matching_km2 ?? -1) -
+          (appliedFilter.candidates.find((p) => p.id === a.id)?.matching_km2 ?? -1) || original
       );
-    const special = ['A0075', 'V010', 'V008'];
-    return (
-      (special.includes(a.id) ? special.indexOf(a.id) - 10 : 0) -
-        (special.includes(b.id) ? special.indexOf(b.id) - 10 : 0) || a.id.localeCompare(b.id)
-    );
+    return sortMode === 'engine'
+      ? Number(b.metrics.baseline_score ?? b.metrics.selective_score ?? -1) -
+          Number(a.metrics.baseline_score ?? a.metrics.selective_score ?? -1) || original
+      : (typeof b.metrics.raw_km2 === 'number' ? b.metrics.raw_km2 : -1) -
+          (typeof a.metrics.raw_km2 === 'number' ? a.metrics.raw_km2 : -1) || original;
   });
+  useEffect(() => {
+    setInspectStage(false);
+    setFirstPerson(false);
+  }, [runId]);
+  const refreshWorkflow = async () => {
+    const ident = runId;
+    const value = await api(`/runs/${ident}/workflow`);
+    if (currentRunRef.current === ident) setWorkflow(value);
+    return value;
+  };
+  const decisionQueue = useRef<Promise<void>>(Promise.resolve());
+  const decide = (cid: string, action: string, extra: Record<string, unknown> = {}) => {
+    const ident = runId;
+    const displayed =
+      shownManual.find((p) => p.id === cid) || shownCandidates.find((p) => p.id === cid);
+    const expectedPoint = workflow?.points[cid]?.point;
+    const submit = async () => {
+      try {
+        if (currentRunRef.current !== ident) return;
+        const state = await api(`/runs/${ident}/workflow`);
+        const current =
+          state.points[cid]?.point || (await api(`/runs/${ident}/workflow-point/${cid}`));
+        if (currentRunRef.current !== ident) return;
+        if (
+          displayed &&
+          (displayed.longitude !== current.longitude || displayed.latitude !== current.latitude)
+        )
+          throw Error('Waypoint changed; reload before submitting this decision.');
+        const point = expectedPoint || current;
+        const value = await api(`/runs/${ident}/workflow/${cid}`, {
+          method: 'PUT',
+          body: JSON.stringify({ action, revision: state.revision, point, ...extra }),
+        });
+        if (currentRunRef.current === ident)
+          setWorkflow((old) => (!old || value.revision >= old.revision ? value : old));
+      } catch (e) {
+        if (currentRunRef.current === ident) setError(String(e));
+      }
+    };
+    decisionQueue.current = decisionQueue.current.catch(() => {}).then(submit);
+    return decisionQueue.current;
+  };
+  useEffect(() => {
+    setWorkflow(null);
+    if (!runId || training.active) return;
+    let alive = true;
+    const poll = () =>
+      api(`/runs/${runId}/workflow`)
+        .then((v) => {
+          if (alive) setWorkflow((old) => (!old || v.revision >= old.revision ? v : old));
+        })
+        .catch((e) => {
+          if (alive) setError(String(e));
+        });
+    poll();
+    const unsubscribe = subscribePolling(poll);
+    return () => {
+      alive = false;
+      unsubscribe();
+    };
+  }, [
+    runId,
+    workingStamp,
+    JSON.stringify(annotations),
+    JSON.stringify(manualPoints),
+    training.active,
+  ]);
+  const shortlisted = Object.values(workflow?.points || {}).filter((p) => p.shortlisted);
+  const approached = shortlisted.filter((p) => p.approach);
+  const confirmed = approached.filter((p) => p.confirmed);
   const running = jobs.some((j) => ['running', 'cancelling'].includes(j.status));
   const renderCandidate = (p: Candidate) => (
     <CandidateCard
       key={p.id}
       p={p}
+      shortlisted={workflow?.points[p.id]?.shortlisted}
+      onDecision={training.active ? undefined : (action) => decide(p.id, action)}
       matching={appliedFilter?.candidates.find((row) => row.id === p.id)?.matching_km2}
       selected={selected}
       activeManual={!!activeManual}
@@ -1000,7 +1088,23 @@ function App() {
           ↻
         </button>
         <button onClick={() => training.setOpen(true)}>Learn</button>
-        <button className="primary" disabled={training.active} onClick={() => setNewRun(!newRun)}>
+        <button
+          className="primary"
+          disabled={training.active}
+          onClick={() => {
+            if (!newRun) {
+              setMinutes(30);
+              setName('scouting-' + new Date().toISOString().slice(0, 10));
+              setPlan(null);
+              setPlanId('');
+              setImported(null);
+              setPolygon('');
+              setPlanningApproaches(false);
+              setInspectStage(false);
+            }
+            setNewRun(!newRun);
+          }}
+        >
           {newRun ? 'Back to review' : '+ New baseline run'}
         </button>
       </header>
@@ -1053,75 +1157,51 @@ function App() {
         }}
       />
       <nav className="workflow-stages" aria-label="Scouting workflow">
-        <button className={newRun ? 'primary' : ''} onClick={() => setNewRun(true)}>
-          1 · Create results
-        </button>
         <button
-          className={!newRun && !planningApproaches ? 'primary' : ''}
-          disabled={!run}
+          aria-current={!planningApproaches && !inspectStage ? 'step' : undefined}
+          className={!planningApproaches && !inspectStage ? 'primary' : ''}
           onClick={() => {
-            setNewRun(false);
             setPlanningApproaches(false);
+            setInspectStage(false);
           }}
         >
-          2 · Review and keep setups
+          1 · Find setups · {shortlisted.length} shortlisted
         </button>
         <button
+          aria-current={planningApproaches ? 'step' : undefined}
           className={planningApproaches ? 'primary' : ''}
-          disabled={
-            newRun ||
-            training.active ||
-            ![...Object.values(annotations), ...Object.values(working), ...manualPoints].some(
-              (p) => p.status === 'keep',
-            )
-          }
+          disabled={!shortlisted.length || training.active}
           onClick={() => {
             setNewRun(false);
+            setInspectStage(false);
             setPlanningApproaches(true);
           }}
         >
-          3 · Plan approaches
+          2 · Compare approaches · {approached.length} selected
         </button>
-        {newRun && (
-          <button
-            className="primary"
-            disabled={
-              running ||
-              busy ||
-              !settingsValid ||
-              planDirty ||
-              (!plan && (!imported || !polygon)) ||
-              (!!plan?.prepared &&
-                !planComplete &&
-                ((!plan.sources_ready && !download) ||
-                  !!plan.acquisition?.errors?.length ||
-                  (plan.acquisition?.estimated_bytes || 0) > plan.max_download_mb * 1e6))
-            }
-            onClick={
-              planComplete
-                ? () => {
-                    refreshRuns();
-                    setRunId(plan!.name);
-                    setNewRun(false);
-                  }
-                : plan?.prepared
-                  ? startPlan
-                  : planFailed
-                    ? () => document.querySelector('.plan')?.scrollIntoView({ block: 'start' })
-                    : prepare
-            }
-          >
-            {planComplete
-              ? 'Open results'
-              : plan?.prepared
-                ? !plan.sources_ready && !download
-                  ? 'Review download consent below'
-                  : 'Start / resume baseline'
-                : planFailed
-                  ? 'Review failed preparation below'
-                  : 'Prepare plan · next action'}
-          </button>
+        <button
+          aria-current={inspectStage ? 'step' : undefined}
+          className={inspectStage ? 'primary' : ''}
+          disabled={!approached.length || training.active}
+          onClick={() => {
+            setNewRun(false);
+            setPlanningApproaches(false);
+            setInspectStage(true);
+            const id = approached[0]?.point.id;
+            const manual = shownManual.find((p) => p.id === id);
+            if (manual) chooseManual(manual);
+            else if (id) chooseOriginal(id);
+          }}
+        >
+          3 · Inspect and confirm · {confirmed.length} confirmed
+        </button>
+        {!shortlisted.length && <small>Shortlist a setup to compare approaches.</small>}
+        {!!shortlisted.length && !approached.length && (
+          <small>Select a current approach to inspect and confirm.</small>
         )}
+        <button className="setup-drawer-toggle" onClick={() => setListOpen(!listOpen)}>
+          Setups
+        </button>
       </nav>
       {error && (
         <div className="error" role="alert">
@@ -1132,7 +1212,7 @@ function App() {
         </div>
       )}
       <div className="workspace">
-        <aside className="sidebar">
+        <aside className={'sidebar ' + (listOpen ? 'drawer-open' : '')}>
           {newRun ? (
             <>
               <h2>{training.active ? 'Practice observer area' : 'Your new area'}</h2>
@@ -1209,6 +1289,17 @@ function App() {
                     : `${visibleCandidates.length} / ${run?.candidates.length || 0}`}
                 </span>
               </div>
+              <label>
+                Order
+                <select
+                  aria-label="Setup order"
+                  value={sortMode}
+                  onChange={(e) => setSortMode(e.target.value)}
+                >
+                  <option value="coverage">Terrain-visible area</option>
+                  <option value="engine">Original engine ranking</option>
+                </select>
+              </label>
               <input
                 aria-label="Find a setup"
                 placeholder="Find a setup or parent…"
@@ -1240,8 +1331,14 @@ function App() {
                   <p>Opening saved results…</p>
                 ) : (
                   <>
-                    {groupCards}
-                    {candidateCards}
+                    {group === 'all' && !training.active ? (
+                      sorted.map(renderCandidate)
+                    ) : (
+                      <>
+                        {groupCards}
+                        {candidateCards}
+                      </>
+                    )}
                   </>
                 )}
               </div>
@@ -1391,7 +1488,7 @@ function App() {
             </span>
             {compare.length > 0 && <button onClick={() => setCompare([])}>Exit compare</button>}
           </div>
-          <details className="layers" open={!drawing}>
+          <details className="layers">
             <summary>Map layers</summary>
             <Meaning topic="layers" />
             {ready && <OnlineImagery map={map.current!} />}
@@ -1627,33 +1724,41 @@ function App() {
                   </select>
                 </label>
               )}
+              {drawing && <p className="notice">Confirm this boundary to continue.</p>}
               <AreaSettings
                 name={name}
                 radius={radius}
                 count={count}
-                budget={budget}
                 minutes={minutes}
                 setName={setName}
                 setRadius={setRadius}
                 setCount={setCount}
-                setBudget={setBudget}
-                setMinutes={setMinutes}
               />
-              <AccessSampling
-                key={planId || 'new'}
-                initialSampling={sampling}
-                onChange={setSampling}
-                includeNetwork={includeNetwork}
-                onNetwork={setIncludeNetwork}
-              />
+              <details>
+                <summary>More options · sampling restrictions</summary>
+                <AccessSampling
+                  key={planId || 'new'}
+                  initialSampling={sampling}
+                  onChange={setSampling}
+                  includeNetwork={includeNetwork}
+                  onNetwork={setIncludeNetwork}
+                />
+              </details>
               <button
                 className="primary wide"
+                hidden={!!plan?.prepared && !planDirty}
                 disabled={
-                  training.active || busy || running || !imported || !polygon || !settingsValid
+                  training.active ||
+                  busy ||
+                  running ||
+                  drawing ||
+                  !imported ||
+                  !polygon ||
+                  !settingsValid
                 }
                 onClick={prepare}
               >
-                Prepare acquisition plan
+                Review downloads
               </button>
               <small>
                 {training.active
@@ -1662,8 +1767,8 @@ function App() {
               </small>
               {!settingsValid && (
                 <p className="error">
-                  Use a valid new run name, 12–200 locations, 5–120 inspection minutes and a 1–1900
-                  MB download cap.
+                  Use a valid new run name, 12–200 trial locations and a reviewed 1–1900 MB transfer
+                  ceiling.
                 </p>
               )}
               {error && (
@@ -1695,10 +1800,61 @@ function App() {
                   )}
                   {plan.prepared ? (
                     <>
+                      <p>
+                        Allowance is a transfer ceiling, not a quality setting. Suggested:{' '}
+                        {Math.min(
+                          1900,
+                          Math.max(
+                            10,
+                            Math.ceil(((plan.acquisition?.estimated_bytes || 0) * 1.2) / 1e7) * 10,
+                          ),
+                        )}{' '}
+                        MB. Estimates near 1900 MB have limited headroom.
+                      </p>
+                      <details>
+                        <summary>Custom transfer limit</summary>
+                        <input
+                          aria-label="Maximum download size (MB)"
+                          type="number"
+                          min="10"
+                          max="1900"
+                          value={budget}
+                          onChange={(e) => setBudget(+e.target.value)}
+                        />
+                        <button
+                          disabled={running || busy}
+                          onClick={async () => {
+                            try {
+                              const j = await api(`/plans/${planId}/allowance`, {
+                                method: 'PUT',
+                                body: JSON.stringify({ max_download_mb: budget }),
+                              });
+                              setPlan(null);
+                              setDownload(false);
+                            } catch (e) {
+                              setError(String(e));
+                            }
+                          }}
+                        >
+                          Review updated allowance
+                        </button>
+                      </details>
                       <b>
+                        Estimated new download:{' '}
                         {num((plan.acquisition?.estimated_bytes || 0) / 1e6, 1)} MB estimated ·{' '}
                         {plan.max_download_mb} MB cap
                       </b>
+                      {(plan.acquisition?.estimated_bytes || 0) > 1900e6 && (
+                        <p className="error">
+                          This estimate exceeds the 1900 MB ceiling. Reduce the area or settings
+                          before continuing.
+                        </p>
+                      )}
+                      <p>
+                        Already cached:{' '}
+                        {num((plan.acquisition?.already_cached_bytes || 0) / 1e6, 1)} MB ·{' '}
+                        {plan.acquisition?.cached_keys?.join(', ') || 'none recorded'}
+                      </p>
                       <ul>
                         {plan.acquisition?.items?.map((i) => (
                           <li key={i.key}>
@@ -1740,13 +1896,21 @@ function App() {
                           running ||
                           planDirty ||
                           !settingsValid ||
-                          (!plan.sources_ready && !download) ||
+                          (!planComplete && !plan.sources_ready && !download) ||
                           !!plan.acquisition?.errors?.length ||
                           (plan.acquisition?.estimated_bytes || 0) > plan.max_download_mb * 1e6
                         }
-                        onClick={startPlan}
+                        onClick={
+                          planComplete
+                            ? () => {
+                                refreshRuns();
+                                setRunId(plan.name);
+                                setNewRun(false);
+                              }
+                            : startPlan
+                        }
                       >
-                        Start / resume baseline
+                        {planComplete ? 'Open results' : 'Generate setups'}
                       </button>
                     </>
                   ) : (
@@ -1775,253 +1939,289 @@ function App() {
             </>
           ) : (
             <>
-              {!training.active && runId && (
-                <ScoutingTools
-                  key={runId}
+              <div hidden={inspectStage}>
+                {!training.active && runId && (
+                  <ScoutingTools
+                    key={'tools:' + runId}
+                    runId={runId}
+                    map={ready ? map.current : null}
+                    api={api}
+                    onFilter={setAppliedFilter}
+                    stamp={
+                      JSON.stringify(annotations) +
+                      workingStamp +
+                      JSON.stringify(manualPoints) +
+                      workflow?.revision
+                    }
+                    analysisPlan={planId}
+                    budget={budget}
+                    observerBoundary={run?.boundary}
+                    onInputsChanged={(scenario) => {
+                      for (const p of Object.values(workflow?.points || {}))
+                        if (p.approach?.scenario === scenario) void decide(p.point.id, 'unselect');
+                    }}
+                    onApproach={(cid, scenario, alternative) =>
+                      decide(cid, 'approach', { scenario, alternative })
+                    }
+                    planning={planningApproaches}
+                    onPlanning={(v) => {
+                      setPlanningApproaches(v);
+                      if (v) setInspectStage(false);
+                    }}
+                  />
+                )}
+              </div>
+              {!training.active && (
+                <WorkflowPanel
+                  key={'workflow:' + runId}
                   runId={runId}
-                  map={ready ? map.current : null}
+                  workflow={workflow}
+                  cid={activeManual?.id || selected}
+                  inspect={inspectStage}
+                  onDecision={decide}
+                  onInspect={() => setFirstPerson(true)}
+                  onApproaches={() => {
+                    setInspectStage(false);
+                    setPlanningApproaches(true);
+                  }}
                   api={api}
-                  onFilter={setAppliedFilter}
-                  stamp={JSON.stringify(annotations) + workingStamp + JSON.stringify(manualPoints)}
-                  analysisPlan={planId}
-                  budget={budget}
-                  planning={planningApproaches}
-                  onPlanning={setPlanningApproaches}
                 />
               )}
-              {workingSelected ? (
-                <WorkingWaypoint
-                  key={workingSelected.revision}
-                  point={workingSelected}
-                  original={activeManual || run?.candidates.find((p) => p.id === selected)}
-                  onReview={reviewWorking}
-                  onRestore={restoreWorking}
-                  onView={() => {
-                    setInitialObserver(workingSelected);
-                    setFirstPerson(true);
-                  }}
-                />
-              ) : activeManual ? (
-                <ManualWaypoint
-                  key={activeManual.id}
-                  point={activeManual}
-                  onSave={updateManual}
-                  onDelete={deleteManual}
-                  onView={() => {
-                    setInitialObserver(currentManual);
-                    setFirstPerson(true);
-                  }}
-                />
-              ) : (
-                <>
-                  <div className="eyebrow">
-                    {run?.synthetic
-                      ? 'Synthetic engineering fixture'
-                      : run?.experimental
-                        ? 'Saved Soap Creek experiment'
-                        : 'Terrain baseline'}
-                  </div>
-                  <h2>{selected || 'Choose a setup'}</h2>
-                  {detail ? (
-                    <>
-                      <p className="coordinates">
-                        {detail.latitude.toFixed(7)}, {detail.longitude.toFixed(7)}
-                      </p>
-                      <p>
-                        {detail.parent
-                          ? 'Alternative setup to ' + detail.parent
-                          : 'Original observer setup'}
-                        {detail.neighborhood ? ' · ' + detail.neighborhood + ' neighborhood' : ''}
-                      </p>
-                      <button
-                        disabled={
-                          training.active ||
-                          runId !== 'soap-creek-decision-review-v2' ||
-                          !['A0075', 'V010', 'V008', 'A0031'].includes(selected)
-                        }
-                        onClick={() => {
-                          setInitialObserver(working[selected] || null);
-                          setFirstPerson(true);
-                        }}
-                      >
-                        View from this setup
-                      </button>
-                      {!['A0075', 'V010', 'V008', 'A0031'].includes(selected) && (
-                        <small>First-person pilot: A0075, V010, V008 and A0031 only.</small>
-                      )}
-                      <div className="metric">
-                        <strong>{num(detail.metrics.raw_km2)}</strong>
-                        <span>km² original terrain-visible target area</span>
-                        {appliedFilter && (
-                          <p>
-                            {num(
-                              appliedFilter.candidates.find((p) => p.id === selected)?.matching_km2,
-                            )}{' '}
-                            km² matching saved visible terrain
+              <div hidden={planningApproaches || inspectStage}>
+                {workingSelected ? (
+                  <WorkingWaypoint
+                    key={workingSelected.revision}
+                    point={workingSelected}
+                    original={activeManual || run?.candidates.find((p) => p.id === selected)}
+                    onReview={reviewWorking}
+                    onRestore={restoreWorking}
+                    onView={() => {
+                      setInitialObserver(workingSelected);
+                      setFirstPerson(true);
+                    }}
+                  />
+                ) : activeManual ? (
+                  <ManualWaypoint
+                    key={activeManual.id}
+                    point={activeManual}
+                    onSave={updateManual}
+                    onDelete={deleteManual}
+                    onView={() => {
+                      setInitialObserver(currentManual);
+                      setFirstPerson(true);
+                    }}
+                  />
+                ) : (
+                  <>
+                    <div className="eyebrow">
+                      {run?.synthetic
+                        ? 'Synthetic engineering fixture'
+                        : run?.experimental
+                          ? 'Saved Soap Creek experiment'
+                          : 'Terrain baseline'}
+                    </div>
+                    <h2>{selected || 'Choose a setup'}</h2>
+                    {detail ? (
+                      <>
+                        <p className="coordinates">
+                          {detail.latitude.toFixed(7)}, {detail.longitude.toFixed(7)}
+                        </p>
+                        <p>
+                          {detail.parent
+                            ? 'Alternative setup to ' + detail.parent
+                            : 'Original observer setup'}
+                          {detail.neighborhood ? ' · ' + detail.neighborhood + ' neighborhood' : ''}
+                        </p>
+                        <button
+                          disabled={training.active || !selected}
+                          onClick={() => {
+                            setInitialObserver(working[selected] || null);
+                            setFirstPerson(true);
+                          }}
+                        >
+                          Inspect now
+                        </button>
+                        <div className="metric">
+                          <strong>{num(detail.metrics.raw_km2)}</strong>
+                          <span>km² original terrain-visible target area</span>
+                          {appliedFilter && (
+                            <p>
+                              {num(
+                                appliedFilter.candidates.find((p) => p.id === selected)
+                                  ?.matching_km2,
+                              )}{' '}
+                              km² matching saved visible terrain
+                            </p>
+                          )}
+                        </div>
+                        <p className="hint">
+                          Terrain alone permits these sightlines. Trees, branches, animal
+                          concealment and ground footing still need inspection.
+                        </p>
+                        {selectedFilter && (
+                          <p className="hint">
+                            Nearest mapped network:{' '}
+                            {selectedFilter.access.distance_m == null
+                              ? 'unknown'
+                              : (selectedFilter.access.distance_m / 1609.344).toFixed(2) +
+                                ' mi'}{' '}
+                            · positive height above it:{' '}
+                            {selectedFilter.access.height_m == null
+                              ? 'unknown'
+                              : (selectedFilter.access.height_m / 0.3048).toFixed(0) + ' ft'}
+                            . {selectedFilter.access.status} under the applied access limits; not
+                            cumulative approach gain.
                           </p>
                         )}
-                      </div>
-                      <p className="hint">
-                        Terrain alone permits these sightlines. Trees, branches, animal concealment
-                        and ground footing still need inspection.
-                      </p>
-                      {selectedFilter && (
-                        <p className="hint">
-                          Nearest mapped network:{' '}
-                          {selectedFilter.access.distance_m == null
-                            ? 'unknown'
-                            : (selectedFilter.access.distance_m / 1609.344).toFixed(2) + ' mi'}{' '}
-                          · positive height above it:{' '}
-                          {selectedFilter.access.height_m == null
-                            ? 'unknown'
-                            : (selectedFilter.access.height_m / 0.3048).toFixed(0) + ' ft'}
-                          . {selectedFilter.access.status} under the applied access limits; not
-                          cumulative approach gain.
-                        </p>
-                      )}
-                      <h3>Cover across {appliedFilter ? 'original ' : ''}visible terrain</h3>
-                      <div className="breakdown">
-                        {[
-                          ['Tree cover under 10%', 'tree_lt10_km2'],
-                          ['Tree cover 10–40%', 'tree_10to40_km2'],
-                          ['Tree cover 40% or more', 'tree_ge40_km2'],
-                          ['Unknown tree cover', 'tree_unknown_km2'],
-                          ['Shrub cover over 30%', 'shrub_gt30_km2'],
-                        ].map(([label, key]) => (
-                          <div key={key}>
-                            <span>{label}</span>
-                            <b>{num(detail.metrics[key])} km²</b>
-                          </div>
-                        ))}
-                      </div>
-                      <p className="hint">
-                        Shrubs overlap tree classes. Low tree cover does not guarantee visible deer
-                        or good habitat.
-                      </p>
-                      <h3>Inspection scores</h3>
-                      <Meaning topic="scores" />
-                      <div className="breakdown">
-                        <div>
-                          <span>Inherited baseline index</span>
-                          <b>
-                            {num(
-                              detail.metrics.baseline_score ?? detail.metrics.selective_score,
-                              4,
-                            )}
-                          </b>
-                        </div>
-                        {run?.experimental && (
-                          <>
-                            <div>
-                              <span>Target inspection index</span>
-                              <b>{num(detail.metrics.target_heuristic, 4)}</b>
+                        <h3>Cover across {appliedFilter ? 'original ' : ''}visible terrain</h3>
+                        <div className="breakdown">
+                          {[
+                            ['Tree cover under 10%', 'tree_lt10_km2'],
+                            ['Tree cover 10–40%', 'tree_10to40_km2'],
+                            ['Tree cover 40% or more', 'tree_ge40_km2'],
+                            ['Unknown tree cover', 'tree_unknown_km2'],
+                            ['Shrub cover over 30%', 'shrub_gt30_km2'],
+                          ].map(([label, key]) => (
+                            <div key={key}>
+                              <span>{label}</span>
+                              <b>{num(detail.metrics[key])} km²</b>
                             </div>
+                          ))}
+                        </div>
+                        <p className="hint">
+                          Shrubs overlap tree classes. Low tree cover does not guarantee visible
+                          deer or good habitat.
+                        </p>
+                        <details>
+                          <summary>Inherited inspection indices and calculation details</summary>
+                          <h3>Inspection scores</h3>
+                          <Meaning topic="scores" />
+                          <div className="breakdown">
                             <div>
-                              <span>20% / 40% foreground screens</span>
+                              <span>Inherited baseline index</span>
                               <b>
-                                {num(detail.metrics.directional_20, 4)} /{' '}
-                                {num(detail.metrics.directional_40, 4)}
+                                {num(
+                                  detail.metrics.baseline_score ?? detail.metrics.selective_score,
+                                  4,
+                                )}
                               </b>
                             </div>
-                          </>
+                            {run?.experimental && (
+                              <>
+                                <div>
+                                  <span>Target inspection index</span>
+                                  <b>{num(detail.metrics.target_heuristic, 4)}</b>
+                                </div>
+                                <div>
+                                  <span>20% / 40% foreground screens</span>
+                                  <b>
+                                    {num(detail.metrics.directional_20, 4)} /{' '}
+                                    {num(detail.metrics.directional_40, 4)}
+                                  </b>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                          <p className="hint">
+                            The inherited index combines cover, distance, seasonal and light
+                            assumptions within a fixed inspection budget. The experimental target
+                            index omits seasonal/light weighting; its 20% and 40% screens test
+                            nearby tree-cover cutoffs. None are acres or deer probabilities.
+                          </p>
+                        </details>
+                        <h3>Foreground & access</h3>
+                        <p>
+                          {detail.foreground.foreground_cover_mean !== undefined
+                            ? `Nearby average tree cover: ${num(detail.foreground.foreground_cover_mean * 100, 1)}%.`
+                            : 'No historical foreground average saved for this alternative.'}
+                        </p>
+                        {detail.foreground.foreground_unknown_fraction !== undefined && (
+                          <p className="hint">
+                            Nearby cover unknown:{' '}
+                            {num(detail.foreground.foreground_unknown_fraction * 100, 1)}%.
+                          </p>
                         )}
-                      </div>
-                      <p className="hint">
-                        The inherited index combines cover, distance, seasonal and light assumptions
-                        within a fixed inspection budget. The experimental target index omits
-                        seasonal/light weighting; its 20% and 40% screens test nearby tree-cover
-                        cutoffs. None are acres or deer probabilities.
-                      </p>
-                      <h3>Foreground & access</h3>
-                      <p>
-                        {detail.foreground.foreground_cover_mean !== undefined
-                          ? `Nearby average tree cover: ${num(detail.foreground.foreground_cover_mean * 100, 1)}%.`
-                          : 'No historical foreground average saved for this alternative.'}
-                      </p>
-                      {detail.foreground.foreground_unknown_fraction !== undefined && (
-                        <p className="hint">
-                          Nearby cover unknown:{' '}
-                          {num(detail.foreground.foreground_unknown_fraction * 100, 1)}%.
-                        </p>
-                      )}
-                      <p className="hint">{detail.obstruction}</p>
-                      {!!detail.obstruction_scenarios?.length && (
-                        <p className="hint">
-                          {detail.obstruction_scenarios.length} saved sampled column scenarios are
-                          available in the diagnostics below. These do not measure
-                          vegetation-visible acreage.
-                        </p>
-                      )}
-                      <div className="notice">
-                        {typeof detail.access === 'string'
-                          ? detail.access
-                          : 'Mapped approach evidence available; legal and safe access remains unverified. Inspect diagnostics.'}
-                      </div>
-                      <section data-tour="review-fields">
-                        <h3>{training.active ? 'Practice review' : 'Your review'}</h3>
-                        <Meaning topic="review" />
-                        <label>
-                          Decision
-                          <select
-                            aria-label="Candidate decision"
-                            value={status}
-                            onChange={(e) => {
-                              setStatus(e.target.value);
-                              setSaved('');
-                            }}
-                          >
-                            {['unmarked', 'keep', 'reject', 'needs inspection'].map((s) => (
-                              <option key={s}>{s}</option>
-                            ))}
-                          </select>
-                        </label>
-                        <label>
-                          Notes
-                          <textarea
-                            aria-label="Candidate notes"
-                            maxLength={10000}
-                            value={note}
-                            rows={3}
-                            onChange={(e) => {
-                              setNote(e.target.value);
-                              setSaved('');
-                            }}
-                            placeholder="Foreground gaps, approach questions, setup checks…"
-                          />
-                        </label>
-                        <button className="primary" onClick={save}>
-                          Save review
-                        </button>
-                        <small role="status">{saved}</small>
-                      </section>
-                      <details className="technical">
-                        <summary>Sources, formulas & technical diagnostics</summary>
-                        <p>
-                          Raw area counts target-clipped saved visible cells × cell area. Display
-                          tiles reproject these cells without smoothing. Inspection sectors are
-                          separate full footprints.
-                        </p>
-                        <p>{run?.warning}</p>
-                        <p>
-                          Saved inspection index: sum of selected patch rewards under the existing
-                          time budget. Patch rewards use the saved distance and cover response
-                          functions; baseline also includes its inherited seasonal/light
-                          assumptions. Experimental directional screens set patch reward to zero
-                          beyond an assumed nearby cover cutoff. These are uncalibrated heuristics.
-                        </p>
-                        <p>Aerial imagery metadata</p>
-                        <pre>{JSON.stringify(run?.imagery, null, 2)}</pre>
-                        <p>
-                          Saved values, foreground, selected sectors, alignment and access evidence
-                        </p>
-                        <pre>{JSON.stringify(detail, null, 2)}</pre>
-                      </details>
-                    </>
-                  ) : (
-                    <p>{loading ? 'Loading saved results…' : 'Loading setup…'}</p>
-                  )}
-                </>
-              )}
+                        <p className="hint">{detail.obstruction}</p>
+                        {!!detail.obstruction_scenarios?.length && (
+                          <p className="hint">
+                            {detail.obstruction_scenarios.length} saved sampled column scenarios are
+                            available in the diagnostics below. These do not measure
+                            vegetation-visible acreage.
+                          </p>
+                        )}
+                        <div className="notice">
+                          {typeof detail.access === 'string'
+                            ? detail.access
+                            : 'Mapped approach evidence available; legal and safe access remains unverified. Inspect diagnostics.'}
+                        </div>
+                        <section data-tour="review-fields">
+                          <h3>{training.active ? 'Practice review' : 'Your review'}</h3>
+                          <Meaning topic="review" />
+                          <label>
+                            Decision
+                            <select
+                              aria-label="Candidate decision"
+                              value={status}
+                              onChange={(e) => {
+                                setStatus(e.target.value);
+                                setSaved('');
+                              }}
+                            >
+                              {['unmarked', 'keep', 'reject', 'needs inspection'].map((s) => (
+                                <option key={s}>{s}</option>
+                              ))}
+                            </select>
+                          </label>
+                          <label>
+                            Notes
+                            <textarea
+                              aria-label="Candidate notes"
+                              maxLength={10000}
+                              value={note}
+                              rows={3}
+                              onChange={(e) => {
+                                setNote(e.target.value);
+                                setSaved('');
+                              }}
+                              placeholder="Foreground gaps, approach questions, setup checks…"
+                            />
+                          </label>
+                          <button className="primary" onClick={save}>
+                            Save review
+                          </button>
+                          <small role="status">{saved}</small>
+                        </section>
+                        <details className="technical">
+                          <summary>Sources, formulas & technical diagnostics</summary>
+                          <p>
+                            Raw area counts target-clipped saved visible cells × cell area. Display
+                            tiles reproject these cells without smoothing. Inspection sectors are
+                            separate full footprints.
+                          </p>
+                          <p>{run?.warning}</p>
+                          <p>
+                            Saved inspection index: sum of selected patch rewards under the existing
+                            time budget. Patch rewards use the saved distance and cover response
+                            functions; baseline also includes its inherited seasonal/light
+                            assumptions. Experimental directional screens set patch reward to zero
+                            beyond an assumed nearby cover cutoff. These are uncalibrated
+                            heuristics.
+                          </p>
+                          <p>Aerial imagery metadata</p>
+                          <pre>{JSON.stringify(run?.imagery, null, 2)}</pre>
+                          <p>
+                            Saved values, foreground, selected sectors, alignment and access
+                            evidence
+                          </p>
+                          <pre>{JSON.stringify(detail, null, 2)}</pre>
+                        </details>
+                      </>
+                    ) : (
+                      <p>{loading ? 'Loading saved results…' : 'Loading setup…'}</p>
+                    )}
+                  </>
+                )}
+              </div>
             </>
           )}
         </aside>
@@ -2064,18 +2264,21 @@ function App() {
           </small>
         </section>
       )}
-      <JobMonitor
-        jobs={jobs}
-        running={running}
-        trainingActive={training.active}
-        onAction={jobAction}
-        onOpen={(name) => {
-          refreshRuns();
-          setRunId(name);
-          setNewRun(false);
-          setImported(null);
-        }}
-      />
+      <details>
+        <summary>Job history and recovery</summary>
+        <JobMonitor
+          jobs={jobs}
+          running={running}
+          trainingActive={training.active}
+          onAction={jobAction}
+          onOpen={(name) => {
+            refreshRuns();
+            setRunId(name);
+            setNewRun(false);
+            setImported(null);
+          }}
+        />
+      </details>
       {firstPerson && (
         <Suspense
           fallback={
@@ -2093,7 +2296,11 @@ function App() {
               if (currentRunRef.current === p.run_id) setWorking((a) => ({ ...a, [p.id]: p }));
             }}
             runId={runId}
-            cid={selected}
+            cid={activeManual?.id || selected}
+            viewedSceneKey={workflow?.points[activeManual?.id || selected]?.viewed}
+            approachCurrent={!!workflow?.points[activeManual?.id || selected]?.approach}
+            onConfirm={() => decide(activeManual?.id || selected, 'confirm')}
+            onViewed={(key) => decide(activeManual?.id || selected, 'viewed', { scene: key })}
             onSelect={chooseOriginal}
             onClose={() => setFirstPerson(false)}
           />

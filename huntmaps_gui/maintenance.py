@@ -18,6 +18,8 @@ router = APIRouter(prefix="/api/storage")
 def records():
     return sorted(
         [
+            *(STATE / "workflows").glob("*.json"),
+            *(STATE / "first-person/ready").rglob("*.json"),
             *(STATE / "annotations").glob("*.json"),
             *(STATE / "manual-observers").glob("*.json"),
             *(STATE / "working-waypoints").glob("*/state.json"),
@@ -89,7 +91,9 @@ def reset(body: Reset):
         key = backup()
         for path in records():
             if (
-                path.is_relative_to(STATE / "approaches")
+                path.is_relative_to(STATE / "workflows")
+                or path.is_relative_to(STATE / "first-person")
+                or path.is_relative_to(STATE / "approaches")
                 or path.is_relative_to(STATE / "networks")
                 or path.is_relative_to(STATE / "filter-profiles")
             ):
@@ -132,7 +136,14 @@ def restore(body: Restore):
             ) or not target.resolve().is_relative_to(STATE.resolve()):
                 raise ValueError("Invalid backup path")
             if any(
-                part in ("approaches", "networks", "filter-profiles")
+                part
+                in (
+                    "approaches",
+                    "networks",
+                    "filter-profiles",
+                    "workflows",
+                    "first-person",
+                )
                 for part in target.relative_to(STATE.resolve()).parts
             ):
                 restored[target] = source.read_bytes()
@@ -162,13 +173,27 @@ def ensure_idle():
 
 
 def inventory():
-    protected = set()
+    protected = {
+        p.parent.name
+        for p in (STATE / "first-person/bundles").glob("*/scene.json")
+        if read_json(p).get("status") == "ready"
+    }
+    # Published immutable scenes are retained, including earlier acquisitions.
     # Ready bundles and all recursively referenced base bundles stay available offline.
-    queue = [read_json(p)["key"] for p in (STATE / "first-person/ready").glob("*.json")]
+    queue = [
+        read_json(p)["key"] for p in (STATE / "first-person/ready").rglob("*.json")
+    ]
+    for path in (STATE / "workflows").glob("*.json"):
+        for record in read_json(path).get("points", {}).values():
+            if record.get("viewed"):
+                queue.append(record["viewed"])
+    visited = set()
+    queue.extend(protected)
     while queue:
         key = queue.pop()
-        if key in protected:
+        if key in visited:
             continue
+        visited.add(key)
         if len(key) != 32 or any(c not in "0123456789abcdef" for c in key):
             raise ValueError("Invalid ready scene reference; cleanup refused")
         protected.add(key)
@@ -244,6 +269,8 @@ def inventory():
         add(path, "saved approach scenario and referenced results", True)
     for path in (STATE / "networks").glob("*"):
         add(path, "referenced network source", True)
+    for path in (STATE / "workflows").glob("*.json"):
+        add(path, "saved workflow decisions and referenced results", True)
     for path in (STATE / "filter-profiles").glob("*.json"):
         add(path, "saved filter profile", True)
     return dict(

@@ -28,6 +28,7 @@ class Observer(Payload):
 
 
 class Waypoint(Observer, Review):
+    scene_key: str | None = None
     anchor: str | None = None
 
 

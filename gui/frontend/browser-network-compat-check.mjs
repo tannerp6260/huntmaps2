@@ -40,7 +40,7 @@ try {
     jobs = [{ id: '11223344556677889900112233445566', kind: 'network-acquisition', plan: planId, status: 'complete', stage: 'Finished', elapsed_s: 1 }];
     return route.fulfill({ json: jobs[0] });
   });
-  await page.goto(base);
+  await page.goto(base);await page.getByText('Map layers',{exact:true}).click();
   const controls = page.locator('.network-map-controls');
   await controls.getByText('No road/trail data loaded.', { exact: false }).waitFor();
   await controls.getByRole('button', { name: 'Review road/trail download', exact: true }).click();
@@ -50,7 +50,7 @@ try {
   await controls.getByText('Unknown trail use', { exact: true }).waitFor();
   await controls.getByText('Network acquisition complete:', { exact: false }).waitFor();
   assert.ok((await page.locator('#root').innerText()).includes('HuntMaps2'));
-  await page.getByRole('button', { name: 'View from this setup', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Inspect now', exact: true }).waitFor();
   await page.waitForTimeout(800);
   await controls.getByText('Unknown road surface', { exact: true }).scrollIntoViewIfNeeded();
   await page.screenshot({ path: out + '/01-legacy-download-desktop.png', fullPage: true });
@@ -64,10 +64,10 @@ try {
   await controls.getByRole('alert').filter({ hasText: 'display geometry is invalid' }).waitFor();
   assert.ok((await page.locator('#root').innerText()).includes('HuntMaps2'));
   // A full reload also exercises the review panel's network-list consumer.
-  await page.reload();
+  await page.reload();await page.getByText('Map layers',{exact:true}).click();
   await controls.getByRole('alert').filter({ hasText: 'display geometry is invalid' }).waitFor();
   assert.ok((await page.locator('#root').innerText()).includes('HuntMaps2'));
-  await page.getByRole('button', { name: 'View from this setup', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Inspect now', exact: true }).waitFor();
   mode = 'failure'; await refresh();
   await controls.getByRole('alert').filter({ hasText: 'Synthetic network service failure' }).waitFor();
   await controls.getByRole('alert').scrollIntoViewIfNeeded();

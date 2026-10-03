@@ -33,6 +33,7 @@ def owner_records():
 
     files = []
     for folder in (
+        "workflows",
         "annotations",
         "manual-observers",
         "networks",
@@ -102,6 +103,7 @@ def main():
             "test_approach*.py",
             "test_scouting_filters.py",
             "test_first_person.py",
+            "test_workflow.py",
             "test_vegetation_screen.py",
             "test_nearby_foliage.py",
             "test_foliage_clusters.py",
@@ -140,6 +142,37 @@ def main():
         run(["npm", "run", "format:check"], "frontend-format", ROOT / "gui/frontend")
         run(["npm", "run", "build"], "frontend-build", ROOT / "gui/frontend")
         if not args.skip_browser:
+            for name in ("glassing", "configs"):
+                shutil.copytree(
+                    ROOT / name,
+                    work / "workspace" / name,
+                    ignore=shutil.ignore_patterns("__pycache__"),
+                )
+            run(
+                [
+                    sys.executable,
+                    "-c",
+                    "from glassing.transfer_fixture import create; create('workflow-fixture.json','workflow-fixture')",
+                ],
+                "workflow-fixture",
+                work / "workspace",
+            )
+            run(
+                [
+                    sys.executable,
+                    "-m",
+                    "glassing.owner",
+                    "run",
+                    "--area",
+                    "workflow-fixture/observer.geojson",
+                    "--source-config",
+                    "workflow-fixture.json",
+                    "--name",
+                    "workflow-fixture",
+                ],
+                "workflow-owner",
+                work / "workspace",
+            )
             with socket.socket() as sock:
                 sock.bind(("127.0.0.1", 0))
                 port = sock.getsockname()[1]
@@ -234,6 +267,7 @@ def main():
             else:
                 raise RuntimeError("Dedicated test server did not become ready")
             for script in (
+                "browser-workflow-check.mjs",
                 "browser-check.mjs",
                 "browser-training-check.mjs",
                 "browser-first-person-check.mjs",

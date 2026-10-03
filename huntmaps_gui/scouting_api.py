@@ -21,6 +21,20 @@ from .tiles import tile
 def router(jobs):
     r = APIRouter(prefix="/api")
 
+    from . import workflow
+
+    @r.get("/runs/{ident}/workflow")
+    def workflow_get(ident):
+        return workflow.get(ident, jobs)
+
+    @r.get("/runs/{ident}/workflow-point/{cid}")
+    def workflow_point(ident, cid):
+        return workflow.point(ident, cid, jobs)
+
+    @r.put("/runs/{ident}/workflow/{cid}")
+    def workflow_decide(ident, cid, body: dict = Body(...)):
+        return workflow.decide(ident, cid, body, jobs)
+
     @r.post("/networks/import")
     async def imported(
         kind: str, source_date: str = "unknown", file: UploadFile = File(...)
@@ -216,7 +230,19 @@ def router(jobs):
         return approaches.status(ident, jobs)
 
     @r.get("/approaches/{ident}/export/{fmt}")
-    def export(ident, fmt, point: int = 0, alternative: int = 0):
+    def export(
+        ident, fmt, point: int = 0, alternative: int = 0, waypoint: str | None = None
+    ):
+        if waypoint is not None:
+            saved = approaches.status(ident, jobs)
+            matches = [
+                i
+                for i, r in enumerate((saved.get("results") or {}).get("results", []))
+                if r["point"]["id"] == waypoint
+            ]
+            if not matches:
+                raise ValueError("Choose a waypoint in this completed scenario")
+            point = matches[0]
         if point < 0 or alternative < 0:
             raise ValueError("Choose a result alternative")
         try:

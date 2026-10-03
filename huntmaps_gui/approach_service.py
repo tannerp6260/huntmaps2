@@ -30,12 +30,17 @@ def point_snapshot(run, jobs=None):
     r = DisplayRun(run, jobs)
     annotations = read_json(STATE / "annotations" / f"{run}.json", {})
     manual = records(run)
+    from .workflow import records
+
+    decisions = records(run)["points"]
     result = {}
     for ident in dict.fromkeys([*r.points, *r.working]):
         p = r.candidate(ident)
         override = r.working.get(ident, {})
         annotation = override or manual.get(ident) or annotations.get(ident, {})
-        if annotation.get("status") == "keep":
+        if decisions.get(ident, {}).get(
+            "shortlisted", annotation.get("status") == "keep"
+        ):
             result[ident] = dict(
                 id=ident,
                 longitude=p["longitude"],
@@ -47,7 +52,10 @@ def point_snapshot(run, jobs=None):
             )
     # Uncalculated manual waypoints still have exact destination coordinates.
     for ident, p in manual.items():
-        if p["status"] == "keep" and ident not in result:
+        if (
+            decisions.get(ident, {}).get("shortlisted", p["status"] == "keep")
+            and ident not in result
+        ):
             result[ident] = dict(
                 id=ident,
                 longitude=p["longitude"],
@@ -146,6 +154,20 @@ def create(run, body, jobs):
             if not area.covers(p):
                 raise ValueError(f"{key} must lie in the explicit travel area")
     write(STATE / "approaches" / value["id"] / "scenario.json", value)
+    from .workflow import records, path
+
+    with locked(path(run)):
+        workflow = records(run)
+        changed = False
+        for cid in ids:
+            entry = workflow["points"].get(cid)
+            if entry and entry.get("approach"):
+                entry.pop("approach", None)
+                entry["confirmed"] = False
+                changed = True
+        if changed:
+            workflow["revision"] += 1
+            write(path(run), workflow)
     return value
 
 

@@ -210,7 +210,7 @@ export function Drawing({
         <>
           <p className="hint">
             {closed
-              ? 'Drag the corner handles to adjust the boundary, then use it.'
+              ? 'Drag the corner handles to adjust the boundary. Confirm this boundary to continue.'
               : 'Click at least three corners on the map. Click your first corner again, or choose Finish shape. Press Escape to cancel.'}
           </p>
           <div className="row">
@@ -238,7 +238,7 @@ export function Drawing({
               </button>
             )}
             <button className="primary" disabled={!closed || saving} onClick={useBoundary}>
-              {saving ? 'Checking boundary…' : 'Use this boundary'}
+              {saving ? 'Checking boundary…' : 'Confirm boundary'}
             </button>
             <button disabled={saving} onClick={cancel}>
               Cancel drawing

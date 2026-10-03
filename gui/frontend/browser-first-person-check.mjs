@@ -11,7 +11,7 @@ try{
  const api=base+'/api/runs/soap-creek-decision-review-v2';
  const annotations=await (await page.request.get(api+'/annotations')).text(),jobs=await (await page.request.get(base+'/api/jobs')).json();
  const loaded=()=>page.waitForFunction(()=>{const s=JSON.parse(document.querySelector('.fp-scene')?.getAttribute('data-camera')||'{}');return s.loaded&&s.imageryPending===0});
- await page.goto(base);await page.getByLabel('Select A0031',{exact:true}).click();await page.getByRole('button',{name:'View from this setup',exact:true}).click();await loaded();assert.equal(await page.getByLabel('Measured above-ground returns',{exact:true}).isChecked(),false);assert.equal(await page.getByLabel('Inferred vegetation',{exact:true}).isChecked(),true);
+ await page.goto(base);await page.getByLabel('Select A0031',{exact:true}).click();await page.getByRole('button',{name:'Inspect now',exact:true}).click();await loaded();assert.equal(await page.getByLabel('Measured above-ground returns',{exact:true}).isChecked(),false);assert.equal(await page.getByLabel('Inferred vegetation',{exact:true}).isChecked(),true);
  const meta=await (await page.request.get(api+'/first-person/A0031')).json();assert.ok(meta.fine_observer_available);
  let state=JSON.parse(await page.locator('.fp-scene').getAttribute('data-camera'));assert.equal(state.eye_m,1.7);assert.equal(state.east_m,0);assert.equal(state.north_m,0);assert.equal(state.ground_m,meta.fine_ground_m);assert.equal(state.vegetationSide,2);assert.equal(state.vegetationCells,meta.vegetation.nearby_counts['120']);assert.equal(state.vegetationVisible,true);
  await page.screenshot({path:out+'/01-eye-height-ground.png',fullPage:true});
@@ -28,7 +28,7 @@ try{
  const scene=page.locator('.fp-scene');await scene.scrollIntoViewIfNeeded();await scene.focus();await page.keyboard.press('ArrowRight');const start=Date.now();await page.getByLabel('First-person heading',{exact:true}).fill('200');await page.waitForFunction(()=>JSON.parse(document.querySelector('.fp-scene').getAttribute('data-camera')).heading===200);const interactionMs=Date.now()-start;assert.ok(interactionMs<2000);
  await page.setViewportSize({width:900,height:800});await page.screenshot({path:out+'/05-smaller-screen.png',fullPage:true});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  await scene.evaluate(el=>el.querySelector('canvas').dispatchEvent(new Event('webglcontextlost',{cancelable:true,bubbles:true})));await page.getByText('Graphics context lost.',{exact:false}).waitFor();
- await page.getByRole('button',{name:'Return to map',exact:true}).click();await page.getByRole('button',{name:'View from this setup',exact:true}).click();await loaded();
+ await page.getByRole('button',{name:'Return to map',exact:true}).click();await page.getByRole('button',{name:'Inspect now',exact:true}).click();await loaded();
  for(const cid of ['A0075','V010','V008']){
   await page.getByLabel('First-person setup',{exact:true}).selectOption(cid);const m=await (await page.request.get(api+'/first-person/'+cid)).json();
   if(m.status==='ready'){await page.waitForFunction(cid=>JSON.parse(document.querySelector('.fp-scene')?.getAttribute('data-camera')||'{}').candidate===cid,cid);await loaded();assert.ok(await scene.isVisible());const camera=JSON.parse(await scene.getAttribute('data-camera'));assert.equal(camera.ground_m,m.fine_ground_m);assert.equal(camera.east_m,0);assert.equal(camera.north_m,0);await page.screenshot({path:out+'/'+cid+'-view.png',fullPage:true});
@@ -37,9 +37,9 @@ try{
  // Failed photographs retain usable terrain and the profile; no checkbox is needed.
  await page.getByRole('button',{name:'Return to map',exact:true}).click();
  await page.route('**/assets/*imagery.png',r=>r.abort());
- await page.getByRole('button',{name:'View from this setup',exact:true}).click();await loaded();
+ await page.getByRole('button',{name:'Inspect now',exact:true}).click();await loaded();
  await page.getByText('Some imagery unavailable; shaded terrain retained.',{exact:true}).waitFor();
  assert.ok(JSON.parse(await scene.getAttribute('data-camera')).triangles>0);
- assert.equal(await (await page.request.get(api+'/annotations')).text(),annotations);assert.equal((await (await page.request.get(base+'/api/jobs')).json()).length,jobs.length);assert.ok(mutations.every(u=>u.endsWith('/profile')));assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
+ assert.equal(await (await page.request.get(api+'/annotations')).text(),annotations);assert.equal((await (await page.request.get(base+'/api/jobs')).json()).length,jobs.length);assert.ok(mutations.every(u=>u.endsWith('/profile') || u.includes('/workflow/')));assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
  fs.writeFileSync(out+'/results.json',JSON.stringify({errors,external,mutations,interactionMs,metadata:meta,annotationsUnchanged:true,jobsUnchanged:true},null,2));console.log('First-person camera, points, texture, profiles, offline, keyboard, resizing, switching and context failure verified:',out);
 }finally{await browser.close()}

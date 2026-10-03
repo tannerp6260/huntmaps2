@@ -2,6 +2,8 @@ import type { Candidate, Review } from './types';
 const num = (value: unknown) => (typeof value === 'number' ? value.toFixed(3) : 'Not saved');
 export default function CandidateCard({
   p,
+  shortlisted,
+  onDecision,
   matching,
   selected,
   activeManual,
@@ -13,6 +15,8 @@ export default function CandidateCard({
   toggleExport,
 }: {
   p: Candidate;
+  shortlisted?: boolean;
+  onDecision?: (action: string) => void;
   matching?: number;
   selected: string;
   activeManual: boolean;
@@ -48,6 +52,14 @@ export default function CandidateCard({
         </small>
         {matching !== undefined && <small>{num(matching)} km² matching visible terrain</small>}
       </button>
+      {onDecision && (
+        <div className="candidate-actions">
+          <button onClick={() => onDecision('shortlist')}>
+            {shortlisted ? 'Shortlisted' : 'Shortlist'}
+          </button>
+          <button onClick={() => onDecision('remove')}>Dismiss</button>
+        </div>
+      )}
       <div className="candidate-actions">
         <label>
           <input

@@ -69,6 +69,9 @@ const aspects = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 const number = (v: number | null, d = 1) => (v === null ? 'unknown' : v.toFixed(d));
 export default function ScoutingTools({
   runId,
+  observerBoundary,
+  onApproach,
+  onInputsChanged,
   map,
   api,
   onFilter,
@@ -79,6 +82,9 @@ export default function ScoutingTools({
   onPlanning,
 }: {
   runId: string;
+  observerBoundary?: GeoJSON.FeatureCollection;
+  onApproach?: (cid: string, scenario: string, alternative: number) => void;
+  onInputsChanged?: (scenario: string) => void;
   map: Map | null;
   api: Api;
   onFilter: (v: AppliedFilter | null) => void;
@@ -152,6 +158,9 @@ export default function ScoutingTools({
           start: currentScenario.start?.join(',') || '',
           pinned: currentScenario.pinned?.join(',') || '',
         }));
+  useEffect(() => {
+    if (scenarioDirty && scenarioId) onInputsChanged?.(scenarioId);
+  }, [scenarioDirty, scenarioId]);
   function showAlternative(point: string, index: number) {
     setAlternativesOnMap((v) => ({ ...v, [point]: index }));
     const path = scenarios
@@ -505,14 +514,15 @@ export default function ScoutingTools({
   const networkJob = jobs.find((j) => j.kind === 'network-acquisition' && j.plan === networkPlanId);
   return (
     <section className="scouting-tools">
-      <h3>Review and keep setups</h3>
+      <h3>{planning ? 'Compare approaches' : 'Terrain and access filters'}</h3>
       <button
         className="primary wide"
         disabled={!kept.length}
         onClick={() => onPlanning(!planning)}
       >
-        Plan approaches ({kept.length} kept)
+        Compare approaches ({kept.length} shortlisted)
       </button>
+      {!kept.length && <small>Shortlist at least one setup to compare approaches.</small>}
       <details>
         <summary>Observer access and visible-terrain filters</summary>
         <p>
@@ -732,7 +742,22 @@ export default function ScoutingTools({
       </details>
       {planning && (
         <div className="approach-controls">
-          <h3>Plan independent provisional approaches</h3>
+          <h3>Compare independent provisional approaches</h3>
+          <ol className="approach-checklist">
+            <li>Travel boundary: {editing ? 'confirm edits' : area ? 'saved' : 'required'}</li>
+            <li>
+              Network sources: {selectedNetworks.length} selected; coverage remains source dependent
+            </li>
+            <li>
+              Optional network start:{' '}
+              {includeWalk ? start || 'choose a mapped point' : 'nearby departures'}
+            </li>
+            <li>
+              Preferences: {Object.values(weights).every((v) => v === 1) ? 'balanced' : 'custom'};
+              modeled slope limit {maximum}°
+            </li>
+            <li>Computation: {scenarioJob?.stage || 'ready after the required inputs'}</li>
+          </ol>
           {kept.map((p) => (
             <p key={p.id}>
               {p.id}: {p.latitude.toFixed(7)}, {p.longitude.toFixed(7)} · original terrain-visible{' '}
@@ -742,6 +767,24 @@ export default function ScoutingTools({
           <p>
             Required travel area defines the search domain; it does not infer permission. Each kept
             setup is planned independently.
+          </p>
+          <button
+            onClick={() => {
+              const geometries = observerBoundary?.features
+                .map((f) => f.geometry)
+                .filter((g) => g.type === 'Polygon' || g.type === 'MultiPolygon');
+              if (geometries?.length === 1) setArea(geometries[0] as Polygon);
+              else
+                setError(
+                  'Import or draw one explicit travel polygon; the observer area has multiple geometries.',
+                );
+            }}
+          >
+            Copy observer boundary as editable travel area
+          </button>
+          <p>
+            Observer area selects standing positions. Travel area bounds the approach search; expand
+            it to include departures.
           </p>
           <label>
             Import travel polygon
@@ -815,64 +858,80 @@ export default function ScoutingTools({
           {includeWalk && (
             <button onClick={() => setPick('start')}>Choose network start on map</button>
           )}
-          <button onClick={() => setPick('pinned')}>Pin a departure on map</button>
-          {includeWalk && (
+          <details>
+            <summary>More options · pinned departure and preferences</summary>
+            <button onClick={() => setPick('pinned')}>Pin a departure on map</button>
+            {includeWalk && (
+              <label>
+                Network start (longitude,latitude)
+                <input
+                  aria-label="Network starting point"
+                  value={start}
+                  onChange={(e) => setStart(e.target.value)}
+                />
+              </label>
+            )}
             <label>
-              Network start (longitude,latitude)
+              Optional pinned departure (longitude,latitude)
               <input
-                aria-label="Network starting point"
-                value={start}
-                onChange={(e) => setStart(e.target.value)}
+                aria-label="Pinned network departure"
+                value={pinned}
+                onChange={(e) => setPinned(e.target.value)}
               />
             </label>
+            <p>
+              Balanced preferences are one each. Weights are relative costs, not walking times or
+              safety predictions. Distance always contributes.
+            </p>
+            {Object.entries(weights).map(([k, v]) => (
+              <label key={k}>
+                Avoid{' '}
+                {k === 'gain'
+                  ? 'cumulative climbing'
+                  : k === 'slope'
+                    ? 'steep terrain'
+                    : k + ' cover'}
+                : {v}
+                <input
+                  aria-label={`Approach ${k} weight`}
+                  type="range"
+                  min="0"
+                  max="5"
+                  step=".5"
+                  value={v}
+                  onChange={(e) => setWeights((w) => ({ ...w, [k]: +e.target.value }))}
+                />
+              </label>
+            ))}
+            <label>
+              Maximum modeled slope (degrees)
+              <input
+                aria-label="Maximum approach slope"
+                type="number"
+                min="1"
+                max="60"
+                value={maximum}
+                onChange={(e) => setMaximum(+e.target.value)}
+              />
+            </label>
+            <p>
+              30° default is a desktop screening threshold. Unknown vegetation receives maximum
+              cover penalties when avoidance is enabled.
+            </p>
+          </details>
+          {(!kept.length || !area || editing || active || busy || !selectedNetworks.length) && (
+            <p>
+              {editing
+                ? 'Confirm this boundary to continue.'
+                : !area
+                  ? 'Confirm an explicit travel boundary.'
+                  : !selectedNetworks.length
+                    ? 'Select mapped road/trail sources.'
+                    : active || busy
+                      ? 'Wait for the current job or cancel it.'
+                      : 'Shortlist at least one setup.'}
+            </p>
           )}
-          <label>
-            Optional pinned departure (longitude,latitude)
-            <input
-              aria-label="Pinned network departure"
-              value={pinned}
-              onChange={(e) => setPinned(e.target.value)}
-            />
-          </label>
-          <p>
-            Balanced preferences are one each. Weights are relative costs, not walking times or
-            safety predictions. Distance always contributes.
-          </p>
-          {Object.entries(weights).map(([k, v]) => (
-            <label key={k}>
-              Avoid{' '}
-              {k === 'gain'
-                ? 'cumulative climbing'
-                : k === 'slope'
-                  ? 'steep terrain'
-                  : k + ' cover'}
-              : {v}
-              <input
-                aria-label={`Approach ${k} weight`}
-                type="range"
-                min="0"
-                max="5"
-                step=".5"
-                value={v}
-                onChange={(e) => setWeights((w) => ({ ...w, [k]: +e.target.value }))}
-              />
-            </label>
-          ))}
-          <label>
-            Maximum modeled slope (degrees)
-            <input
-              aria-label="Maximum approach slope"
-              type="number"
-              min="1"
-              max="60"
-              value={maximum}
-              onChange={(e) => setMaximum(+e.target.value)}
-            />
-          </label>
-          <p>
-            30° default is a desktop screening threshold. Unknown vegetation receives maximum cover
-            penalties when avoidance is enabled.
-          </p>
           <button
             className="primary wide"
             disabled={
@@ -880,7 +939,7 @@ export default function ScoutingTools({
             }
             onClick={planApproaches}
           >
-            Compute independent approaches
+            Compare approaches
           </button>
           {scenarioJob && (
             <p role="status" className={scenarioJob.status === 'failed' ? 'error' : 'hint'}>
@@ -924,12 +983,27 @@ export default function ScoutingTools({
                   <h4>
                     {r.point.id} · original terrain-visible {number(r.point.coverage, 3)} km²
                   </h4>
-                  {r.message && <p>{r.message}</p>}
+                  {r.message && (
+                    <p>
+                      {r.message} No path found does not certify inaccessibility. Change the travel
+                      boundary/preferences or remove this setup from the shortlist.
+                    </p>
+                  )}
                   {r.pinned_status && <p>{r.pinned_status}</p>}
                   {r.message && <pre>{JSON.stringify(r.limiting_evidence, null, 2)}</pre>}
                   {r.alternatives.map((a, j) => (
                     <div className="plan" key={j}>
-                      <b>{a.labels.join(' / ')}</b>
+                      <b>
+                        {a.labels.join(' / ')} ·{' '}
+                        {number(a.mapped_distance_m + a.offtrail_distance_m)} m total
+                      </b>
+                      <button
+                        className="primary"
+                        disabled={scenario.stale || scenarioDirty}
+                        onClick={() => onApproach?.(r.point.id, scenario.scenario.id, j)}
+                      >
+                        Use this approach
+                      </button>
                       <button
                         disabled={scenario.stale || scenarioDirty}
                         onClick={() => showAlternative(r.point.id, j)}

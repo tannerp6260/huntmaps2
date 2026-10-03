@@ -12,9 +12,9 @@ try{
  const annotations=await (await page.request.get(api+'/annotations')).text(),jobs=await (await page.request.get(base+'/api/jobs')).json();
  const headers={'X-HuntMaps':'local'};
  const originalManual=await (await page.request.get(api+'/manual-observers')).json();
- await page.goto(base);await page.getByLabel('Select A0075',{exact:true}).waitFor();assert.equal(await page.getByLabel('Select V010',{exact:true}).isVisible(),false);
- await page.screenshot({path:out+'/grouped-setups.png',fullPage:true});await page.locator('.setup-group summary').first().click();await page.getByLabel('Compare A0075',{exact:true}).check();await page.getByLabel('Compare V010',{exact:true}).check();await page.getByLabel('Compare V008',{exact:true}).check();await page.getByLabel('Show V010 view',{exact:true}).uncheck();await page.getByRole('button',{name:'Exit compare',exact:true}).click();
- await page.getByRole('button',{name:'View from this setup',exact:true}).click();
+ await page.goto(base);await page.getByLabel('Select A0075',{exact:true}).click();assert.equal(await page.getByLabel('Select V010',{exact:true}).isVisible(),true);
+ await page.screenshot({path:out+'/grouped-setups.png',fullPage:true});if(await page.locator('.setup-group summary').count()) await page.locator('.setup-group summary').first().click();await page.getByLabel('Compare A0075',{exact:true}).check();await page.getByLabel('Compare V010',{exact:true}).check();await page.getByLabel('Compare V008',{exact:true}).check();await page.getByLabel('Show V010 view',{exact:true}).uncheck();await page.getByRole('button',{name:'Exit compare',exact:true}).click();
+ await page.getByRole('button',{name:'Inspect now',exact:true}).click();
  const loaded=cid=>page.waitForFunction(cid=>{const s=JSON.parse(document.querySelector('.fp-scene')?.getAttribute('data-camera')||'{}');return s.candidate===cid&&s.loaded&&s.imageryPending===0},cid),state=async()=>JSON.parse(await page.locator('.fp-scene').getAttribute('data-camera'));
  const evidence={};let saved;
  for(const cid of ['A0075','V010','V008','A0031']){console.log('Checking nearby '+cid);

@@ -10,15 +10,18 @@ from osgeo import gdal, ogr, osr
 from glassing.transfer import project
 from glassing.review_maps import visible_mask
 
-from .config import SOURCE as ROOT, STATE
+from .config import SOURCE as ROOT, STATE, WORKSPACE
 
 
 from .storage import read_json as read
 
 
-def safe_path(value):
-    p = (ROOT / value).resolve()
-    if not p.is_relative_to(ROOT):
+def safe_path(value, source_root=None):
+    base = Path(source_root or ROOT)
+    p = (base / value).resolve()
+    if source_root is None and not p.exists() and (WORKSPACE / value).exists():
+        p = (WORKSPACE / value).resolve()
+    if not any(p.is_relative_to(Path(root).resolve()) for root in (ROOT, WORKSPACE)):
         raise ValueError("Source must be inside this project")
     return p
 
@@ -47,19 +50,21 @@ def collection(features):
 
 def runs():
     entries = []
-    for p in sorted((ROOT / "results").glob("*/scouting.json")):
-        if (p.parent / "manifest.json").exists() and (
-            p.parent / "analysis/scores.json"
-        ).exists():
-            synthetic = read(p).get("input_kind") == "synthetic_fixture"
-            entries.append(
-                dict(
-                    id=p.parent.name,
-                    label=p.parent.name
-                    + (" · SYNTHETIC TEST" if synthetic else " · baseline"),
-                    experimental=False,
+    for root in dict.fromkeys([ROOT.resolve(), WORKSPACE.resolve()]):
+        for p in sorted((root / "results").glob("*/scouting.json")):
+            if (p.parent / "manifest.json").exists() and (
+                p.parent / "analysis/scores.json"
+            ).exists():
+                synthetic = read(p).get("input_kind") == "synthetic_fixture"
+                entries.append(
+                    dict(
+                        id=p.parent.name,
+                        label=p.parent.name
+                        + (" · SYNTHETIC TEST" if synthetic else " · baseline"),
+                        experimental=False,
+                        source_root=str(root),
+                    )
                 )
-            )
     if (ROOT / "results/soap-creek-decision-review-v2/shortlist.csv").exists():
         entries.insert(
             0,
@@ -90,9 +95,15 @@ class Run:
         entry = next((r for r in runs() if r["id"] == ident), None)
         if entry is None:
             raise ValueError("Select a completed local run")
+        self.source_root = Path(entry.get("source_root", ROOT))
+        self.path = lambda value: safe_path(value, self.source_root)
         self.id = ident
         self.experimental = entry["experimental"]
-        self.base = ROOT / "results" / ("soap-creek-v1" if self.experimental else ident)
+        self.base = (
+            self.source_root
+            / "results"
+            / ("soap-creek-v1" if self.experimental else ident)
+        )
         self.hashes = {}
         manifests = [self.base / "manifest.json"]
         if self.experimental:
@@ -106,10 +117,10 @@ class Run:
             manifests.append(ROOT / "results/soap-creek-v1-review-v2/manifest.json")
         for manifest in manifests:
             for path, h in frozen_read(manifest, {}).items():
-                self.hashes[str(safe_path(path))] = h
+                self.hashes[str(self.path(path))] = h
         self.validate(self.base / "scouting.json")
         self.config = frozen_read(self.base / "scouting.json")
-        self.analysis = safe_path(self.config["work"])
+        self.analysis = self.path(self.config["work"])
         self.dem_path = self.analysis / "dem.tif"
         self.validate(self.dem_path)
         self.validate(self.analysis / "scores.json")
@@ -155,11 +166,11 @@ class Run:
                 for r in self.config["data"].get("imagery", [])
             ]
         self.images = [
-            i for i in self.images if i.get("path") and safe_path(i["path"]).is_file()
+            i for i in self.images if i.get("path") and self.path(i["path"]).is_file()
         ]
         self.images.sort(key=lambda i: -i.get("resolution_m", 0))
         for i in self.images:
-            self.validate(safe_path(i["path"]))
+            self.validate(self.path(i["path"]))
         self.validate(self.analysis / "patches.json")
         self.validate(self.analysis / "approaches.json")
         self.ll = project(self.config["epsg"], 4326)

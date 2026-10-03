@@ -68,7 +68,7 @@ const areaSteps = [
     text: 'Look at the settings in the RIGHT panel. Open How locations are chosen, then Advanced scoring settings. Hover over, focus or click each question mark for a plain-language explanation. The current defaults are a starting point, not a guarantee of suitable setups.',
     target: 'run-settings',
     extra:
-      'View radius controls analysis distance. Locations to evaluate controls initial sampling, not shortlist size; too many separated points for a small area causes a failure. Assumed inspection time affects scores, not visible terrain or a stop duration. Maximum download size limits analysis acquisition; online browsing is separate.',
+      'View radius controls analysis distance. Locations to evaluate controls initial sampling, not shortlist size; too many separated points for a small area causes a failure. Calculation details show the fixed inspection assumption, which affects inherited scores rather than visible terrain or a stop duration. Inspect source metadata before reviewing the download ceiling; online browsing is separate.',
   },
   {
     id: 'handoff',

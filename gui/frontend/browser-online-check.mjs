@@ -19,14 +19,13 @@ try{
  const before=tiles.size;await page.getByRole('button',{name:'Go to location',exact:true}).click();await page.waitForTimeout(4500);assert.ok(tiles.size>before);
  const canvas=page.locator('.maplibregl-canvas'),box=await canvas.boundingBox();await page.mouse.move(box.x+box.width*.65,box.y+box.height*.6);await page.mouse.wheel(0,500);await page.waitForTimeout(2500);
  await page.getByRole('button',{name:'Draw boundary',exact:true}).click();for(const [x,y] of [[.5,.35],[.75,.35],[.75,.6],[.5,.6]])await page.mouse.click(box.x+box.width*x,box.y+box.height*y);
- await page.getByRole('button',{name:'Finish shape',exact:true}).click();await page.getByRole('button',{name:'Use this boundary',exact:true}).click();await page.getByRole('button',{name:'Edit vertices',exact:true}).waitFor();
- const minutes=page.getByLabel('Assumed inspection time',{exact:true});assert.equal(await minutes.isVisible(),false);
- await page.getByText('How locations are chosen',{exact:true}).click();await page.getByText('Advanced scoring settings',{exact:true}).click();assert.equal(await minutes.inputValue(),'30');
+ await page.getByRole('button',{name:'Finish shape',exact:true}).click();await page.getByRole('button',{name:'Confirm boundary',exact:true}).click();await page.getByRole('button',{name:'Edit vertices',exact:true}).waitFor();
+ assert.equal(await page.getByLabel('Assumed inspection time',{exact:true}).count(),0);
+ await page.getByText('More options · trial locations',{exact:true}).click();await page.getByText('Calculation details',{exact:true}).click();await page.getByText('Saved inspection assumption: 30 minutes per setup.',{exact:false}).waitFor();
  await page.getByRole('button',{name:'Help: count',exact:true}).focus();await page.getByRole('tooltip').filter({hasText:'not a top-X shortlist'}).waitFor({state:'visible'});
- await page.getByRole('button',{name:'Help: minutes',exact:true}).click();await page.getByRole('tooltip').filter({hasText:'not a recommended stop duration'}).waitFor({state:'visible'});
  await page.getByLabel('New run name').fill('online-settings-test');let prepared;
  await page.route('**/api/plans',async r=>{prepared=r.request().postDataJSON();await r.fulfill({status:400,json:{detail:'Verification intercepted preparation; no job started.'}})});
- await page.getByRole('button',{name:'Prepare acquisition plan',exact:true}).click();await page.getByRole('alert').filter({hasText:'Verification intercepted preparation; no job started.'}).waitFor();
+ await page.getByRole('button',{name:'Review downloads',exact:true}).click();await page.getByRole('alert').filter({hasText:'Verification intercepted preparation; no job started.'}).waitFor();
  assert.equal(prepared.observation_minutes,30);assert.equal(prepared.candidate_count,150);assert.equal(prepared.radius_m,2000);assert.equal(prepared.max_download_mb,600);
  await page.getByRole('button',{name:'Dismiss error'}).click();await page.screenshot({path:out+'/02-settings-and-new-area.png',fullPage:true});
  await page.setViewportSize({width:1000,height:850});await page.screenshot({path:out+'/03-small-settings.png',fullPage:true});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));

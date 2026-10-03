@@ -52,7 +52,6 @@ def original(ident, key):
         return p["anchor"], p
     r = Run(ident)
     p = r.candidate(key)
-    fp.candidate(ident, key)
     return key, p
 
 
@@ -149,6 +148,14 @@ def snapshot(ident, jobs):
 
 def start(ident, key, body, jobs):
     anchor, p = original(ident, key)
+    if body.get("scene_key"):
+        meta = fp.scene(ident, key)
+        if meta.get("key") != body["scene_key"]:
+            raise ValueError(
+                "Scene changed; reopen the current view before moving a waypoint"
+            )
+        if meta.get("scene_signature"):
+            anchor = key
     pose = fp.observer(ident, anchor, body)
     f = manual.fields(
         dict(
@@ -295,7 +302,10 @@ class DisplayRun:
     def candidate(self, key, include_mask=False):
         if key not in self.working:
             if key.startswith("manual-"):
-                return manual.records(self.id)[key]
+                p = manual.records(self.id).get(key)
+                if not p:
+                    raise ValueError("Unknown manual waypoint")
+                return p
             return self.base.candidate(key, include_mask)
         p = self.working[key]
         anchor, old = original(self.id, key)

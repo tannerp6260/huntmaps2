@@ -96,6 +96,8 @@ export type BaselinePlan = {
   boundary?: GeoJSON.FeatureCollection;
   settings: { radius_m: number; observation_minutes: number; candidate_count: number };
   acquisition?: {
+    already_cached_bytes?: number;
+    cached_keys?: string[];
     estimated_bytes: number;
     estimate_note: string;
     errors: string[];
@@ -103,6 +105,8 @@ export type BaselinePlan = {
   };
 };
 export type FirstPersonPlan = {
+  download_cap_bytes: number;
+  candidates: string[];
   id: string;
   prepared: boolean;
   estimated_new_bytes: number;
@@ -115,6 +119,7 @@ export type FirstPersonPlan = {
     cached: boolean;
     bytes: number;
     acquisition_date: string;
+    vertical_reference?: string;
   }[];
 };
 export type Intersection = Target & { distance_m: number; ground_m: number; line_m: number };
@@ -166,6 +171,8 @@ export type MeshInfo = {
   triangle_count: number;
 };
 export type SceneReady = {
+  scene_signature?: Record<string, unknown>;
+  fidelity?: string;
   status: 'ready';
   key: string;
   candidate: string;

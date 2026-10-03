@@ -28,11 +28,36 @@ def stage(text):
 
 
 def candidate(ident, cid):
-    if ident != RUN or cid not in PILOT:
-        raise ValueError(
-            "First-person is a Soap Creek pilot: A0075, V010, V008 and A0031 only."
+    return scene_run(ident).candidate(cid)
+
+
+def scene_run(ident):
+    from .working_waypoints import DisplayRun
+    from .manual_observers import records
+
+    r = DisplayRun(ident, None)
+    r.points = dict(r.base.points)
+    for cid in dict.fromkeys([*records(ident), *r.working]):
+        p = r.candidate(cid)
+        x, y = (
+            r.xy(p["longitude"], p["latitude"])
+            if hasattr(r, "xy")
+            else __import__("pyproj")
+            .Transformer.from_crs(4326, r.config["epsg"], always_xy=True)
+            .transform(p["longitude"], p["latitude"])
         )
-    return Run(ident).candidate(cid)
+        r.points[cid] = dict(p, x=x, y=y)
+    return r
+
+
+def ready_path(run, cid, validated=False):
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", cid):
+        raise ValueError("Invalid waypoint ID")
+    from .catalog import Run
+
+    if not validated:
+        Run(run)
+    return HOME / "ready" / run / (cid + ".json")
 
 
 def plan(ident):
@@ -44,7 +69,17 @@ def plan(ident):
     return p
 
 
-def new_plan():
+def new_plan(run=RUN, ids=None, fidelity="lidar", acquisition=None):
+    ids = list(PILOT) if ids is None else ids
+    if not isinstance(ids, list) or any(not isinstance(cid, str) for cid in ids):
+        raise ValueError("Supply a list of waypoint IDs")
+    if not ids or len(ids) > 250 or len(set(ids)) != len(ids):
+        raise ValueError("Choose distinct completed-run waypoints")
+    if fidelity not in ("lidar", "terrain"):
+        raise ValueError("Choose lidar or terrain fidelity")
+    from .workflow import point
+
+    snapshots = {cid: point(run, cid) for cid in ids}
     ident = uuid.uuid4().hex
     write(
         HOME / "plans" / (ident + ".json"),
@@ -54,7 +89,11 @@ def new_plan():
             prepared=False,
             radius_m=300,
             download_cap_bytes=LIMIT,
-            candidates=list(PILOT),
+            candidates=ids,
+            run_id=run,
+            snapshots=snapshots,
+            fidelity=fidelity,
+            acquisition=acquisition,
             version=VERSION,
         ),
     )
@@ -66,17 +105,26 @@ def verify_file(path, expected):
     check_hash(str(path), st.st_mtime_ns, st.st_size, expected)
 
 
-def scene(ident, cid):
-    p = candidate(ident, cid)
-    pointer = read(HOME / "ready" / (cid + ".json"))
-    if pointer is None:
+def scene(ident, cid, run_data=None, orientation=True):
+    p = run_data.candidate(cid) if run_data is not None else candidate(ident, cid)
+    pointer = read(ready_path(ident, cid, validated=run_data is not None))
+    legacy = pointer is None and ident == RUN and cid in PILOT
+    if legacy:
+        historical = (
+            (run_data.base if hasattr(run_data, "working") else run_data)
+            if run_data is not None
+            else Run(ident)
+        )
+        p = historical.candidate(cid)
+        pointer = read(HOME / "ready" / (cid + ".json"))
+    if pointer is None and ident == RUN and cid in PILOT:
         pointer = read(ROOT / ".gui/first-person/ready" / (cid + ".json"))
     if not pointer:
         return dict(
             status="unprepared",
             candidate=cid,
             observer=p,
-            reason="Prepare the local lidar pilot before opening a fine view.",
+            reason="Review a scene source plan, or prepare a terrain-only view from the existing DEM.",
         )
     folder = locate_bundle(pointer["key"])
     meta = read(folder / "scene.json")
@@ -87,11 +135,30 @@ def scene(ident, cid):
         or meta["observer"]["latitude"] != p["latitude"]
     ):
         raise ValueError("First-person bundle is stale. Prepare the pilot again.")
+    signature = meta.get("scene_signature")
+    if signature:
+        r = run_data if run_data is not None else scene_run(ident)
+        r.validate(r.dem_path)
+        from glassing.acquire import digest
+
+        if (
+            signature.get("run_id") != ident
+            or signature.get("waypoint_revision") != p.get("working_revision")
+            or signature.get("baseline") != digest(r.dem_path)
+        ):
+            raise ValueError("Scene inputs changed; review a new scene plan")
     for name, h in meta["hashes"].items():
         verify_file(asset_path(folder, meta, name), h)
+    if not orientation:
+        return meta
     # Orientation only: face the first saved inspection sector, not a new score.
-    r = Run(ident)
-    sectors = r.sectors(cid).get("features", [])
+    r = scene_run(ident) if not legacy else Run(ident)
+    sectors = (
+        r.sectors(cid)
+        if cid in (r.points if legacy else r.base.points)
+        else {"features": []}
+    )
+    sectors = sectors.get("features", [])
     bearing = 0.0
     if sectors:
         from shapely.geometry import shape
@@ -119,8 +186,8 @@ def scene(ident, cid):
     )
 
 
-def bundle(cid):
-    meta = scene(RUN, cid)
+def bundle(cid, ident=RUN, run_data=None):
+    meta = scene(ident, cid, run_data=run_data, orientation=False)
     if meta["status"] == "unprepared":
         raise ValueError("Prepare this setup first")
     return locate_bundle(meta["key"]), meta
@@ -285,7 +352,6 @@ def scene_grid(path, mtime, ground):
 
 
 def observer(ident, cid, body):
-    candidate(ident, cid)
     try:
         if isinstance(body["observer_east_m"], bool) or isinstance(
             body["observer_north_m"], bool
@@ -302,7 +368,7 @@ def observer(ident, cid, body):
         raise ValueError(
             "Choose a position within 30 ft (9.144 m) of the saved observer."
         )
-    r = Run(ident)
+    r = scene_run(ident) if ready_path(ident, cid).exists() else Run(ident)
     p = r.points[cid]
     lon, lat = r.ll(p["x"] + east, p["y"] + north)
     from shapely.geometry import shape, Point
@@ -312,7 +378,7 @@ def observer(ident, cid, body):
         raise ValueError(
             "This position is outside the saved observer area. Choose a point inside the boundary."
         )
-    folder, meta = bundle(cid)
+    folder, meta = bundle(cid, ident, run_data=r)
     if not meta["fine_observer_available"]:
         raise ValueError("Supported fine ground is unavailable at this setup.")
     path = asset_path(folder, meta, "fine.npz")
@@ -446,7 +512,7 @@ def profile(ident, cid, body):
         or radius not in veg.RANGES
     ):
         raise ValueError("Choose nearby foliage range 30, 60 or 120 m")
-    folder, meta = bundle(cid)
+    folder, meta = bundle(cid, ident)
     moved = "observer_east_m" in body or "observer_north_m" in body
     pose = observer(ident, cid, body) if moved else None
     if moved and math.hypot(x, y) > 300:

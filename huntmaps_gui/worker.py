@@ -90,6 +90,36 @@ def main():
         )
     if acquisition is None:
         return code or 2
+    current_config = read(root / "scouting.json", {})
+    cached_keys = read(root / "acquisition.json", {}).get("cached_keys", [])
+    cached_bytes = 0
+    for key in cached_keys:
+        descriptor = current_config.get("data", {}).get(key)
+        if isinstance(descriptor, dict) and descriptor.get("path"):
+            source = Path(descriptor["path"])
+            if not source.is_absolute():
+                source = WORKSPACE / source
+            if source.is_file():
+                cached_bytes += source.stat().st_size
+    acquisition = dict(
+        acquisition, already_cached_bytes=cached_bytes, cached_keys=cached_keys
+    )
+    if (
+        a.action == "prepare"
+        and p.get("estimate_first")
+        and not p.get("allowance_reviewed")
+    ):
+        from .downloads import suggested_mb
+
+        p.update(
+            max_download_mb=suggested_mb(acquisition["estimated_bytes"]),
+            allowance_reviewed=True,
+        )
+        write(path, p)
+        return subprocess.run(
+            [sys.executable, "-u", "-m", "huntmaps_gui.worker", "prepare", a.plan],
+            cwd=WORKSPACE,
+        ).returncode
     if a.action == "prepare":
         p.update(
             acquisition=acquisition,

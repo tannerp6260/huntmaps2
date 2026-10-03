@@ -6,7 +6,7 @@ import threading
 import uuid
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from fastapi import APIRouter, UploadFile, File
+from fastapi import APIRouter, UploadFile, File, Body
 from fastapi.responses import Response, FileResponse
 from shapely.geometry import mapping
 from .catalog import ROOT, STATE, Run, runs, read, collection, feature
@@ -42,8 +42,13 @@ def api_router(jobs: Jobs):
     from . import first_person as fp
 
     @router.post("/api/first-person/plans")
-    def fp_plan():
-        ident = fp.new_plan()
+    def fp_plan(body: dict = Body(default={})):
+        ident = fp.new_plan(
+            body.get("run_id", fp.RUN),
+            body.get("ids"),
+            body.get("fidelity", "lidar"),
+            body.get("acquisition"),
+        )
         return jobs.start(
             [
                 sys.executable,
@@ -60,6 +65,23 @@ def api_router(jobs: Jobs):
     @router.get("/api/first-person/plans/{ident}")
     def fp_get_plan(ident):
         return fp.plan(ident)
+
+    @router.put("/api/first-person/plans/{ident}/allowance")
+    def fp_allowance(ident, body: dict = Body(...)):
+        from .storage import locked
+
+        with locked(STATE / "maintenance"):
+            if any(j["status"] in ("running", "cancelling") for j in jobs.list(False)):
+                raise ValueError(
+                    "Wait for the active job before changing the allowance"
+                )
+            p = fp.plan(ident)
+            cap = body.get("max_download_mb")
+            if type(cap) is not int or not 10 <= cap <= 500:
+                raise ValueError("Choose a 10–500 MB scene transfer ceiling")
+            p["download_cap_bytes"] = cap * 1_000_000
+            write(fp.HOME / "plans" / (ident + ".json"), p)
+            return p
 
     @router.post("/api/first-person/plans/{ident}/start")
     def fp_start(ident, body: Start):
@@ -88,7 +110,7 @@ def api_router(jobs: Jobs):
     @router.get("/api/runs/{ident}/first-person/{cid}/assets/{name}")
     def fp_asset(ident, cid, name):
         fp.candidate(ident, cid)
-        folder, meta = fp.bundle(cid)
+        folder, meta = fp.bundle(cid, ident)
         if name not in meta["hashes"] or name.endswith(".npz"):
             raise ValueError("Unknown scene asset")
         return FileResponse(
@@ -412,6 +434,7 @@ def api_router(jobs: Jobs):
             prepared=False,
             access_sampling=sampling,
             include_network=body.get("include_network", False),
+            estimate_first=True,
         )
         write(folder / (ident + ".json"), p)
         return jobs.start(
@@ -420,6 +443,36 @@ def api_router(jobs: Jobs):
             name,
             ident,
         )
+
+    @router.put("/api/plans/{ident}/allowance")
+    def allowance(ident, body: dict = Body(...)):
+        from .storage import locked
+
+        with locked(STATE / "maintenance"):
+            if any(j["status"] in ("running", "cancelling") for j in jobs.list(False)):
+                raise ValueError(
+                    "Wait for the active job before changing the allowance"
+                )
+            p = (
+                read(STATE / "plans" / (ident + ".json"))
+                if re.fullmatch(r"[a-f0-9]{32}", ident)
+                else None
+            )
+            cap = body.get("max_download_mb")
+            if not p or type(cap) is not int or not 10 <= cap <= 1900:
+                raise ValueError(
+                    "Choose a prepared plan and a 10–1900 MB transfer ceiling"
+                )
+            if (WORKSPACE / "results" / p["name"] / "manifest.json").exists():
+                raise ValueError("Completed run preserved")
+            p.update(max_download_mb=cap, prepared=False, allowance_reviewed=True)
+            write(STATE / "plans" / (ident + ".json"), p)
+            return jobs.start(
+                [sys.executable, "-u", "-m", "huntmaps_gui.worker", "prepare", ident],
+                "prepare",
+                p["name"],
+                ident,
+            )
 
     @router.get("/api/plans/{ident}")
     def plan(ident):

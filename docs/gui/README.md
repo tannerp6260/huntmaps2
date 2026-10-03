@@ -1,5 +1,7 @@
 # HuntMaps2 local scouting desk
 
+Current workflow: [Find, reach and inspect setups](WORKFLOW.md).
+
 Current guides: [setup](SETUP.md), this user guide, and
 [maintenance/testing](MAINTENANCE.md). Experimental protocols and `*_VERIFICATION.md`
 files in this folder record historical evidence; their original claims and limits
@@ -28,16 +30,17 @@ verification. Existing CLI commands continue to work.
 1. Open a completed run in the header. The initial Soap Creek neighborhood review
    is explicitly experimental; choose **soap-creek-v1 · baseline** to see the
    unchanged normal analysis. Opening results starts no analysis or source acquisition; enabled online imagery requests display tiles.
-2. The initial list shows saved review positions. Use the neighborhood filter or
-   **All setups** for the full saved pool. Select A0075, V010 or V008 to inspect
+2. The initial list shows **All setups**, ordered by terrain-visible area. Original
+   engine ranking and the historical leading collection remain optional. Select A0075, V010 or V008 to inspect
    coordinates, parent relationship, target area, cover breakdown and uncertainty.
 3. **Compare** selects up to three. Colored layers retain each individual saved
    mask. The checkboxes beside their names show/hide individual views without
    removing the comparison. Shared terrain appears below the map. **Setup close-up**
    zooms into the active observer. Saved inspection sectors include hidden terrain;
    tree classes apply to the active setup only.
-4. Mark keep/reject/needs inspection, enter notes and click **Save review**.
-   Annotation files are separate from completed results.
+4. **Shortlist** or **Dismiss** a setup. Then use the numbered stepper to compare
+   approaches, select an alternative, prepare a view and confirm. Legacy review
+   annotations and notes remain separate from these workflow decisions.
 5. Check **Export** for the observer setups you want, then click GPX or KML.
    Export coordinates are the saved observer positions, with meaningful names and
    your notes. Target-opening coordinates are deliberately excluded. These are
@@ -54,7 +57,10 @@ Choose **New baseline run**, import GeoJSON/KML/KMZ, explicitly select a polygon
 candidate layers are hidden in this preview. Cached context belongs to the open
 run; it is not proof that new-area data are available.
 
-Enter a new run name, radius, observation minutes, candidate count and download cap.
+Review the suggested run name and view radius. Trial count and sampling controls
+are under More options. Inspection minutes are a calculation detail: new GUI runs
+use 30; recovered runs retain saved values. Check metadata before choosing the
+reviewed download allowance.
 The existing hunt context is inherited from the transfer template: GMU54 second
 rifle 2026, personal dates unset and light assumptions hypothetical. This small form
 does not introduce new coefficients or permit arbitrary shell commands.
