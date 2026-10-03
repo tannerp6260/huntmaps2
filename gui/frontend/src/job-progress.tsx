@@ -41,6 +41,7 @@ export default function JobProgress({ job }: { job: Job | undefined | null }) {
         <small>
           {p?.total != null ? `${p.completed} / ${p.total} items · ` : ''}
           {job.elapsed_s?.toFixed(0) || 0} sec elapsed · {job.status}
+          {active && p?.remaining_s != null && ` · about ${duration(p.remaining_s)} remaining`}
         </small>
       )}
       {fraction === 1 && active && <small>This stage is finished; the job is still running.</small>}

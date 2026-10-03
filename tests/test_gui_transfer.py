@@ -220,6 +220,9 @@ class TransferSafety(unittest.TestCase):
             )
             self.assertEqual(response.status_code, 200, response.text)
             self.assertIn("--review-signature", start.call_args.args[0])
+        write(config, {"candidate_count": 600, "search": {"recommendation_count": 12}})
+        self.assertNotEqual(downloads.baseline_review_signature(plan), signature)
+        write(config, {})
         plan["max_download_mb"] = 3500
         write(path, plan)
         with patch.object(

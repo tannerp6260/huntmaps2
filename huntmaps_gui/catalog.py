@@ -129,6 +129,11 @@ class Run:
             raise ValueError("Saved DEM is unavailable")
         self.points = {p["id"]: p for p in frozen_read(self.analysis / "scores.json")}
         self.rows = {k: dict(v) for k, v in self.points.items()}
+        recommendations = self.analysis / "recommendations.json"
+        self.recommendation_ids = []
+        if recommendations.exists():
+            self.validate(recommendations)
+            self.recommendation_ids = frozen_read(recommendations).get("ids", [])
         self.details = {}
         self.obstruction_scenarios = {}
         self.groups = {}
@@ -303,6 +308,7 @@ class Run:
             synthetic=self.config.get("input_kind") == "synthetic_fixture",
             candidates=pts,
             groups=self.groups,
+            recommendation_ids=self.recommendation_ids,
             review_ids=(
                 sum(self.groups.values(), [])
                 if self.experimental

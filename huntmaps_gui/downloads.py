@@ -108,8 +108,18 @@ def review_info(paths, new_bytes, providers=None, processing_bytes=0):
 def baseline_review_signature(plan):
     from .approach_service import digest
 
+    from .storage import read_json
+
+    config = read_json(plan["config"], {}) if plan.get("config") else {}
+    settings = {
+        k: v
+        for k, v in config.items()
+        if k in ["radius_m", "observation_minutes", "candidate_count", "search"]
+    }
     return digest(
         dict(
-            sources=plan.get("acquisition_hash"), allowance=plan.get("max_download_mb")
+            sources=plan.get("acquisition_hash"),
+            allowance=plan.get("max_download_mb"),
+            settings=settings or plan.get("settings"),
         )
     )

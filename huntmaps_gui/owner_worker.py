@@ -57,9 +57,65 @@ def main():
         return ready
 
     owner_data.provision = provision
-    from glassing.owner import main as owner_main
+    import subprocess
 
-    return owner_main()
+    original_run = subprocess.run
+
+    def run(command, *args, **kwargs):
+        if isinstance(command, list) and command[1:4] == [
+            "-m",
+            "glassing.transfer",
+            "all",
+        ]:
+            from .storage import read_json
+
+            config = command[command.index("--config") + 1]
+            if read_json(config, {}).get("search"):
+                command = [
+                    sys.executable,
+                    "-m",
+                    "huntmaps_gui.search_worker",
+                    "--config",
+                    config,
+                ]
+        return original_run(command, *args, **kwargs)
+
+    subprocess.run = run
+    from glassing import owner
+
+    original_write = owner.write
+
+    def write(path, value):
+        from pathlib import Path
+
+        if Path(path).name == "manifest.json":
+            from . import search, search_worker
+            from .storage import read_json
+
+            config = read_json(Path(path).parent / "scouting.json", {})
+            if config.get("search"):
+                value.update(
+                    {
+                        str(Path(module.__file__)): owner.sha(module.__file__)
+                        for module in [search, search_worker]
+                    }
+                )
+        return original_write(path, value)
+
+    owner.write = write
+    from glassing import owner_results
+
+    original_handoff = owner_results.handoff
+
+    def handoff(config, root):
+        original_handoff(config, root)
+        if config.get("search"):
+            from .search import guidance
+
+            guidance(config, root)
+
+    owner_results.handoff = handoff
+    return owner.main()
 
 
 if __name__ == "__main__":

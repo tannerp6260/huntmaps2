@@ -77,6 +77,11 @@ function App() {
   const [inspectStage, setInspectStage] = useState(false);
   const [workflow, setWorkflow] = useState<Workflow | null>(null);
   const [listOpen, setListOpen] = useState(false);
+  const [recommendationCount, setRecommendationCount] = useState(20);
+  const [nearbyRadius, setNearbyRadius] = useState(30);
+  const [treeThreshold, setTreeThreshold] = useState(10);
+  const [coverageStatus, setCoverageStatus] = useState('');
+  const [coverageRetry, setCoverageRetry] = useState(0);
   const [sortMode, setSortMode] = useState('coverage');
   const [planningApproaches, setPlanningApproaches] = useState(false);
   const filterId = appliedFilter?.profile.id || '';
@@ -244,7 +249,14 @@ function App() {
     /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(name) &&
     Number.isInteger(count) &&
     count >= 12 &&
-    count <= 200 &&
+    count <= 5000 &&
+    Number.isInteger(recommendationCount) &&
+    recommendationCount >= 1 &&
+    recommendationCount <= Math.min(200, count) &&
+    [10, 30, 60, 120].includes(nearbyRadius) &&
+    Number.isFinite(treeThreshold) &&
+    treeThreshold >= 0 &&
+    treeThreshold <= 100 &&
     Number.isInteger(budget) &&
     budget >= 1 &&
     Number.isSafeInteger(budget) &&
@@ -260,6 +272,11 @@ function App() {
       radius !== plan.settings?.radius_m ||
       minutes !== plan.settings?.observation_minutes ||
       count !== plan.settings?.candidate_count ||
+      recommendationCount !==
+        (plan.settings?.search?.recommendation_count ??
+          Math.min(20, plan.settings?.candidate_count ?? count)) ||
+      nearbyRadius !== (plan.settings?.search?.nearby_radius_m ?? 30) ||
+      treeThreshold !== (plan.settings?.search?.tree_threshold_percent ?? 10) ||
       budget !== plan.max_download_mb ||
       (!!preparedOptions && preparedOptions !== JSON.stringify({ sampling, includeNetwork })));
   const planJob = jobs.find((j) => j.plan === planId);
@@ -267,7 +284,7 @@ function App() {
   const planComplete = planJob?.kind === 'baseline' && planJob.status === 'complete';
   useEffect(() => {
     setDownload(false);
-  }, [name, radius, minutes, count, budget]);
+  }, [name, radius, minutes, count, recommendationCount, nearbyRadius, treeThreshold, budget]);
   const [areaMode, setAreaMode] = useState<'draw' | 'import'>('draw'),
     [drawing, setDrawing] = useState(false),
     [goLat, setGoLat] = useState(''),
@@ -371,8 +388,8 @@ function App() {
           setManualPoints(m);
           setRun(r);
           setAnnotations(a);
-          setGroup('all');
-          setSelected(r.groups.West?.[0] || r.candidates[0]?.id || '');
+          setGroup(r.recommendation_ids?.length ? 'recommended' : 'all');
+          setSelected(r.recommendation_ids?.[0] || r.groups.West?.[0] || r.candidates[0]?.id || '');
           if (training.active && training.progress?.lesson === 'area' && !training.draft)
             map.current?.fitBounds(r.bounds, { padding: 60, duration: 0 });
           if (
@@ -594,6 +611,7 @@ function App() {
               ? !!workflow?.points[p.id]?.dismissed
               : !workflow?.points[p.id]?.dismissed) &&
             (group === 'all' ||
+              (group === 'recommended' && !!run?.recommendation_ids?.includes(p.id)) ||
               group === 'dismissed' ||
               (group === 'review'
                 ? run?.review_ids.includes(p.id)
@@ -718,6 +736,8 @@ function App() {
       },
       api,
       setError,
+      setCoverageStatus,
+      coverageRetry,
     );
   }, [
     ready,
@@ -734,6 +754,7 @@ function App() {
     hiddenViews,
     activeManual?.id,
     workingGeometryStamp,
+    coverageRetry,
     filterId,
   ]);
   useEffect(() => {
@@ -856,6 +877,9 @@ function App() {
           radius_m: radius,
           observation_minutes: minutes,
           candidate_count: count,
+          recommendation_count: recommendationCount,
+          nearby_radius_m: nearbyRadius,
+          tree_threshold_percent: treeThreshold,
           max_download_mb: budget,
           ...(sampling ? { access_sampling: sampling } : {}),
           ...(includeNetwork ? { include_network: true } : {}),
@@ -896,6 +920,11 @@ function App() {
         setRadius(p.settings.radius_m);
         setMinutes(p.settings.observation_minutes);
         setCount(p.settings.candidate_count);
+        setRecommendationCount(
+          p.settings.search?.recommendation_count ?? Math.min(20, p.settings.candidate_count),
+        );
+        setNearbyRadius(p.settings.search?.nearby_radius_m ?? 30);
+        setTreeThreshold(p.settings.search?.tree_threshold_percent ?? 10);
         setBudget(p.max_download_mb);
         const recoveredSampling = p.access_sampling
           ? {
@@ -931,6 +960,7 @@ function App() {
           ? !!workflow?.points[p.id]?.dismissed
           : !workflow?.points[p.id]?.dismissed) &&
         (group === 'all' ||
+          (group === 'recommended' && !!run?.recommendation_ids?.includes(p.id)) ||
           group === 'dismissed' ||
           (group === 'review'
             ? run?.review_ids.includes(p.id)
@@ -951,6 +981,11 @@ function App() {
       return (
         (appliedFilter.candidates.find((p) => p.id === b.id)?.matching_km2 ?? -1) -
           (appliedFilter.candidates.find((p) => p.id === a.id)?.matching_km2 ?? -1) || original
+      );
+    if (group === 'recommended')
+      return (
+        (run?.recommendation_ids?.indexOf(a.id) ?? 0) -
+        (run?.recommendation_ids?.indexOf(b.id) ?? 0)
       );
     return sortMode === 'engine'
       ? Number(b.metrics.baseline_score ?? b.metrics.selective_score ?? -1) -
@@ -1372,7 +1407,12 @@ function App() {
                   value={group}
                   onChange={(e) => setGroup(e.target.value)}
                 >
-                  <option value="all">All setups</option>
+                  <option value="all">All evaluated setups</option>
+                  {!!run.recommendation_ids?.length && (
+                    <option value="recommended">
+                      Recommended setups ({run.recommendation_ids.length})
+                    </option>
+                  )}
                   <option value="dismissed">Dismissed</option>
                   {run.review_ids.length > 0 && (
                     <option value="review">Saved review positions ({run.review_ids.length})</option>
@@ -1392,7 +1432,7 @@ function App() {
                   <p>Opening saved results…</p>
                 ) : (
                   <>
-                    {group === 'all' && !training.active ? (
+                    {['all', 'recommended'].includes(group) && !training.active ? (
                       sorted.map(renderCandidate)
                     ) : (
                       <>
@@ -1524,6 +1564,22 @@ function App() {
         </aside>
         <main className="map-pane">
           <div ref={mapEl} className="map" />
+          {coverageStatus && (
+            <div className="coverage-status" role="status" aria-live="polite">
+              {coverageStatus.startsWith('Loading') && <progress aria-label="Loading coverage" />}
+              <span>{coverageStatus}</span>
+              {coverageStatus.startsWith('Coverage incomplete') && (
+                <button
+                  onClick={() => {
+                    setError('');
+                    setCoverageRetry((v) => v + 1);
+                  }}
+                >
+                  Retry coverage
+                </button>
+              )}
+            </div>
+          )}
           {ready && run && (
             <TerrainControls map={map.current!} runId={run.id} drawing={drawing} newArea={newRun} />
           )}
@@ -1821,7 +1877,19 @@ function App() {
                 setName={setName}
                 setRadius={setRadius}
                 setCount={setCount}
+                recommendationCount={recommendationCount}
+                setRecommendationCount={setRecommendationCount}
+                nearbyRadius={nearbyRadius}
+                setNearbyRadius={setNearbyRadius}
+                treeThreshold={treeThreshold}
+                setTreeThreshold={setTreeThreshold}
               />
+              {plan?.settings && !plan.settings.search && (
+                <p className="hint">
+                  This recovered plan retains its saved sampler. Use a new run name and review a new
+                  plan to apply expanded search.
+                </p>
+              )}
               <details>
                 <summary>More options · sampling restrictions</summary>
                 <AccessSampling
@@ -1855,7 +1923,8 @@ function App() {
               </small>
               {!settingsValid && (
                 <p className="error">
-                  Use a valid new run name, 12–200 trial locations and a positive integer MB
+                  Use 12–5,000 evaluations and 1–200 recommendations (no more than evaluations), a
+                  0–100% tree-cover threshold, a valid new run name and a positive integer MB
                   transfer ceiling.
                 </p>
               )}
@@ -1877,8 +1946,10 @@ function App() {
                   <p className="hint">
                     Prepared settings: {(plan.settings?.radius_m || 0) / 1000} km ·{' '}
                     {plan.settings?.observation_minutes} minutes assumed inspection time ·{' '}
-                    {plan.settings?.candidate_count} initial locations to evaluate. Starting this
-                    plan uses these saved settings.
+                    {plan.settings?.candidate_count} maximum locations to evaluate;{' '}
+                    {plan.settings?.search?.recommendation_count ?? 20} setups to recommend. Nearby
+                    mapped tree cover is a preference, not verified clearance. Starting this plan
+                    uses these saved settings.
                   </p>
                   {planFailed && (
                     <p className="error" role="alert">
@@ -2156,6 +2227,37 @@ function App() {
                             . {selectedFilter.access.status} under the applied access limits; not
                             cumulative approach gain.
                           </p>
+                        )}
+                        {typeof detail.metrics.foreground_category === 'string' && (
+                          <div className="notice">
+                            <strong>
+                              Nearby setup cover · {String(detail.metrics.foreground_category)}
+                            </strong>
+                            <p>
+                              {num(
+                                typeof detail.metrics.foreground_tree_mean === 'number'
+                                  ? detail.metrics.foreground_tree_mean * 100
+                                  : undefined,
+                                1,
+                              )}
+                              % mapped tree cover ·{' '}
+                              {num(
+                                typeof detail.metrics.foreground_shrub_mean === 'number'
+                                  ? detail.metrics.foreground_shrub_mean * 100
+                                  : undefined,
+                                1,
+                              )}
+                              % mapped shrub cover ·{' '}
+                              {num(Number(detail.metrics.foreground_known_fraction) * 100, 0)}%
+                              known tree coverage within{' '}
+                              {String(detail.metrics.foreground_radius_m)} m.
+                            </p>
+                            <small>
+                              Potential clearing evidence only. Coarse mapping cannot verify a small
+                              opening, eye-height branches or clear sightlines. Blue coverage uses
+                              bare-earth terrain.
+                            </small>
+                          </div>
                         )}
                         <h3>Cover across {appliedFilter ? 'original ' : ''}visible terrain</h3>
                         <div className="breakdown">

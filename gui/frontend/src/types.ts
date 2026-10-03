@@ -20,6 +20,7 @@ export type Run = {
   experimental: boolean;
   candidates: Candidate[];
   groups: Record<string, string[]>;
+  recommendation_ids?: string[];
   review_ids: string[];
   synthetic: boolean;
   boundary: GeoJSON.FeatureCollection;
@@ -106,7 +107,16 @@ export type BaselinePlan = DownloadReviewInfo & {
   max_download_mb: number;
   required_data?: string;
   boundary?: GeoJSON.FeatureCollection;
-  settings: { radius_m: number; observation_minutes: number; candidate_count: number };
+  settings: {
+    radius_m: number;
+    observation_minutes: number;
+    candidate_count: number;
+    search?: {
+      recommendation_count: number;
+      nearby_radius_m: number;
+      tree_threshold_percent: number;
+    };
+  };
   acquisition?: {
     already_cached_bytes?: number;
     cached_keys?: string[];

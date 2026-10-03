@@ -1280,3 +1280,31 @@ summary:focus-visible {
 .download-review input {
   max-width: 170px;
 }
+
+.coverage-status {
+  position: absolute;
+  top: 130px;
+  right: 14px;
+  pointer-events: none;
+  z-index: 5;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 12px;
+  background: #f7faf0;
+  color: #173b31;
+  border-radius: 5px;
+  box-shadow: 0 2px 8px #0003;
+  max-width: max(150px, calc(100% - 260px));
+  flex-wrap: wrap;
+}
+.coverage-status progress {
+  width: 70px;
+}
+
+.coverage-status button {
+  pointer-events: auto;
+}
+.coverage-status span {
+  overflow-wrap: anywhere;
+}

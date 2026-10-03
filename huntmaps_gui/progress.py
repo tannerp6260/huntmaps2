@@ -67,7 +67,8 @@ def emit(phase, label, completed=0, total=None, force=False, **extra):
         )
         if phase != "download":
             value.pop("bytes_per_s", None)
-            value.pop("remaining_s", None)
+            if "remaining_s" not in extra:
+                value.pop("remaining_s", None)
         if force or now - _last_write >= 1:
             write(path, value)
             _last_write = now

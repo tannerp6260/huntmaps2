@@ -56,6 +56,14 @@ export default function CandidateCard({
         </small>
         {matching !== undefined && <small>{num(matching)} km² matching visible terrain</small>}
       </button>
+      {typeof p.metrics.foreground_category === 'string' && (
+        <small className="hint">
+          {p.metrics.foreground_category} ·{' '}
+          {typeof p.metrics.foreground_tree_mean === 'number'
+            ? `${(p.metrics.foreground_tree_mean * 100).toFixed(0)}% tree cover nearby`
+            : 'tree cover unknown'}
+        </small>
+      )}
       {onDecision && (
         <div className="candidate-actions">
           <button disabled={busy || shortlisted} onClick={() => onDecision('shortlist')}>

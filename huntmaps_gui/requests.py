@@ -52,7 +52,10 @@ class Preparation(Payload):
     radius_m: Literal[500, 1000, 1500, 2000, 2500, 3000] = 2000
     observation_minutes: int = Field(default=30, ge=5, le=120)
     max_download_mb: int = Field(default=600, ge=1)
-    candidate_count: int = Field(default=150, ge=12, le=200)
+    candidate_count: int = Field(default=150, ge=12, le=5000)
+    recommendation_count: int = Field(default=20, ge=1, le=200)
+    nearby_radius_m: Literal[10, 30, 60, 120] = 30
+    tree_threshold_percent: float = Field(default=10, ge=0, le=100)
     access_sampling: dict | None = None
     include_network: StrictBool = False
 

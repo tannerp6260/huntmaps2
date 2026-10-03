@@ -30,7 +30,7 @@ verification. Existing CLI commands continue to work.
 1. Open a completed run in the header. The initial Soap Creek neighborhood review
    is explicitly experimental; choose **soap-creek-v1 · baseline** to see the
    unchanged normal analysis. Opening results starts no analysis or source acquisition; enabled online imagery requests display tiles.
-2. The initial list shows **All setups**, ordered by terrain-visible area. Original
+2. Expanded-search runs open **Recommended setups**, preferring low mapped nearby tree cover and then terrain-visible area. **All evaluated setups** retains every calculated location, ordered by terrain-visible area. Existing runs retain their original results. Original
    engine ranking and the historical leading collection remain optional. Select A0075, V010 or V008 to inspect
    coordinates, parent relationship, target area, cover breakdown and uncertainty.
 3. **Compare** selects up to three. Colored layers retain each individual saved
@@ -57,22 +57,22 @@ Choose **New baseline run**, import GeoJSON/KML/KMZ, explicitly select a polygon
 candidate layers are hidden in this preview. Cached context belongs to the open
 run; it is not proof that new-area data are available.
 
-Review the suggested run name and view radius. Trial count and sampling controls
-are under More options. Inspection minutes are a calculation detail: new GUI runs
+Review the suggested run name, view radius, search effort and recommendation count.
+Custom evaluation budgets, nearby-cover preferences and sampling controls are under More options. Inspection minutes are a calculation detail: new GUI runs
 use 30; recovered runs retain saved values. Check metadata before choosing the
 reviewed download allowance.
 The existing hunt context is inherited from the transfer template: GMU54 second
 rifle 2026, personal dates unset and light assumptions hypothetical. This small form
 does not introduce new coefficients or permit arbitrary shell commands.
 
-Click **Prepare acquisition plan**. The unchanged owner CLI checks cached data and
+Click **Review downloads**. The unchanged owner CLI checks cached data and
 can request catalog metadata (up to its existing 5 MB response limit). It does not
 perform bulk downloads. Review source items, estimate, cap, errors and required-data
 text in the interface. Only explicitly checking **Allow this plan's bulk downloads**
 permits bulk transfer. The existing streaming cap and validation remain authoritative.
 If the estimate exceeds the cap or source planning fails, analysis remains blocked.
 
-Click **Start / resume baseline**. One background process group runs at a time.
+Click **Generate setups**. One background process group runs at a time.
 The job panel shows elapsed time, actual wrapper stages, newly saved engine artifacts,
 last engine record, and an expandable real subprocess log. Counts of saved masks are
 counts, not invented completion percentages. Completed results appear in the run
@@ -87,10 +87,10 @@ prepared/reviewed again before downloads. After a descriptor/source failure, rep
 the named source or choose a fresh run; the GUI does not bypass checksum validation.
 
 Existing budget defaults remain: 3 million raster cells, 1536 MiB analysis address
-space, 900 seconds per engine command and 800 MB output budget. GUI transfer allowances
+space, 900 seconds per engine batch and 800 MB output budget. GUI transfer allowances
 are suggested after metadata review, with no fixed upper MB cap; storage checks
 retain 20 GiB free. The form supports radius 500–3000 m in 500 m steps and
-12–200 primary candidates. New GUI runs retain the 30-minute engine assumption;
+12–5,000 locations in expanded GUI search, with a separate 1–200 recommendation count. Quick/Thorough/Deep budgets are 150/600/2,000. Nearby-cover preferences are editable; coarse mapping cannot guarantee a clearing. New GUI runs retain the 30-minute engine assumption;
 recovered runs preserve saved settings. The engine can reject areas
 whose buffered grid or source support exceeds its limits.
 
@@ -317,3 +317,5 @@ not evidence that a distance threshold found no qualifying terrain.
 For an existing failed preparation, restart the GUI, use **Refresh plan / recover
 partial preparation**, review the updated estimate and start/resume. Covering cached
 networks are reused without another download; prior completed runs are preserved.
+
+Coverage appears together once the selected setup’s current viewport tiles are loaded. The map shows Loading coverage, Coverage ready or Coverage incomplete with Retry. See [workflow guidance](WORKFLOW.md) for expanded search, checkpoints and resource guards.

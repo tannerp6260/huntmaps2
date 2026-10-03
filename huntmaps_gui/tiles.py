@@ -1,7 +1,9 @@
-from .display_cache import bounded, touch
+from .display_cache import touch, evict, pin
+from .storage import locked
 
 """GDAL EPSG:3857 XYZ raster adapter. Nearest sampling for saved categorical cells."""
 
+from contextlib import ExitStack, contextmanager
 import hashlib
 import io
 import threading
@@ -13,6 +15,19 @@ from glassing import core
 from .catalog import STATE, safe_path
 
 LOCK = threading.RLock()
+WORKERS = threading.BoundedSemaphore(2)
+TILE_LOCKS = [threading.Lock() for _ in range(64)]
+
+
+@contextmanager
+def cache_cleanup():
+    try:
+        yield
+    finally:
+        with locked(STATE / "maintenance"), LOCK:
+            evict()
+
+
 COLORS = [(0, 192, 232), (255, 103, 130), (170, 111, 255)]
 CLASS_COLORS = np.array(
     [
@@ -129,56 +144,67 @@ def sources(run, layer, ident, color):
     return [path], key
 
 
-@bounded
 def tile(run, layer, ident, z, x, y, color=0):
     if not (0 <= z <= 20 and 0 <= x < 2**z and 0 <= y < 2**z and 0 <= color <= 2):
         raise ValueError("Invalid tile coordinate")
-    with LOCK:
-        paths, key = sources(run, layer, ident, color)
-        for path in paths:
-            touch(path)
-        if not paths:
-            return transparent()
-        cache = STATE / "cache" / "tiles" / fingerprint(paths) / f"{z}-{x}-{y}.png"
-        if cache.exists():
-            touch(cache)
-            return cache.read_bytes()
-        half = 20037508.342789244
-        size = half * 2 / 2**z
-        bounds = [
-            -half + x * size,
-            half - (y + 1) * size,
-            -half + (x + 1) * size,
-            half - y * size,
-        ]
-        # GDAL warps each actual georeferenced source into an exact Web Mercator tile.
-        # Fine cached aerial clips follow context clips in the mosaic.
-        ds = gdal.Warp(
-            "",
-            [str(p) for p in paths],
-            format="MEM",
-            dstSRS="EPSG:3857",
-            outputBounds=bounds,
-            width=256,
-            height=256,
-            resampleAlg="near" if layer != "imagery" else "bilinear",
-            dstAlpha=True,
-            multithread=False,
-            warpOptions=["INIT_DEST=0"],
-        )
-        if ds is None:
-            raise ValueError("Local raster reprojection failed")
-        a = ds.ReadAsArray()
-        if a.shape[0] == 3:
-            a = np.concatenate([a, np.full((1, 256, 256), 255, dtype="uint8")])
-        png = io.BytesIO()
-        Image.fromarray(a[:4].transpose(1, 2, 0).astype("uint8"), "RGBA").save(
-            png, format="PNG"
-        )
-        data = png.getvalue()
-        cache.parent.mkdir(parents=True, exist_ok=True)
-        cache.write_bytes(data)
-        return data
+    with WORKERS, cache_cleanup(), ExitStack() as held:
+        with locked(STATE / "maintenance"), LOCK:
+            paths, key = sources(run, layer, ident, color)
+            for path in paths:
+                touch(path)
+            if not paths:
+                return transparent()
+            cache = STATE / "cache" / "tiles" / fingerprint(paths) / f"{z}-{x}-{y}.png"
+            if cache.exists():
+                touch(cache)
+                return cache.read_bytes()
+            held.enter_context(pin(paths))
+        with TILE_LOCKS[
+            int(hashlib.sha256(str(cache).encode()).hexdigest()[:8], 16)
+            % len(TILE_LOCKS)
+        ]:
+            if cache.exists():
+                return cache.read_bytes()
+            half = 20037508.342789244
+            size = half * 2 / 2**z
+            bounds = [
+                -half + x * size,
+                half - (y + 1) * size,
+                -half + (x + 1) * size,
+                half - y * size,
+            ]
+            # GDAL warps each actual georeferenced source into an exact Web Mercator tile.
+            # Fine cached aerial clips follow context clips in the mosaic.
+            ds = gdal.Warp(
+                "",
+                [str(p) for p in paths],
+                format="MEM",
+                dstSRS="EPSG:3857",
+                outputBounds=bounds,
+                width=256,
+                height=256,
+                resampleAlg="near" if layer != "imagery" else "bilinear",
+                dstAlpha=True,
+                multithread=False,
+                warpOptions=["INIT_DEST=0"],
+            )
+            if ds is None:
+                raise ValueError("Local raster reprojection failed")
+            a = ds.ReadAsArray()
+            if a.shape[0] == 3:
+                a = np.concatenate([a, np.full((1, 256, 256), 255, dtype="uint8")])
+            png = io.BytesIO()
+            Image.fromarray(a[:4].transpose(1, 2, 0).astype("uint8"), "RGBA").save(
+                png, format="PNG"
+            )
+            data = png.getvalue()
+            cache.parent.mkdir(parents=True, exist_ok=True)
+            with locked(STATE / "maintenance"), LOCK:
+                if not cache.exists():
+                    temp = cache.with_suffix(".tmp")
+                    temp.write_bytes(data)
+                    temp.replace(cache)
+            return data
 
 
 def transparent():

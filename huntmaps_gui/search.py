@@ -1,0 +1,343 @@
+"""Normal GUI search; frozen terrain calculations and historical generators stay intact."""
+
+import shutil
+import math
+import time
+from pathlib import Path
+import numpy as np
+from osgeo import gdal
+from glassing import core, transfer
+from .progress import emit
+from .downloads import check_space
+from .storage import write
+
+VERSION = 1
+
+
+def validate(c):
+    options = c.get("search", {})
+    budget = c.get("candidate_count")
+    count = options.get("recommendation_count")
+    threshold = options.get("tree_threshold_percent")
+    if (
+        options.get("version") != VERSION
+        or type(budget) is not int
+        or not 12 <= budget <= 5000
+    ):
+        raise ValueError("Expanded search requires version 1 and 12–5000 evaluations")
+    if type(count) is not int or not 1 <= count <= min(200, budget):
+        raise ValueError(
+            "Recommendations must be 1–200 and cannot exceed the evaluation budget"
+        )
+    if (
+        options.get("nearby_radius_m") not in [10, 30, 60, 120]
+        or type(threshold) not in [int, float]
+        or not math.isfinite(threshold)
+        or not 0 <= threshold <= 100
+    ):
+        raise ValueError(
+            "Choose a supported nearby-cover radius and a finite 0–100% threshold"
+        )
+
+
+def nearby_cover(tree, shrub, gt, point, radius=30, threshold=10):
+    """Circular cell-centre neighborhood; missing/outside cells remain unknown."""
+    n = math.ceil(radius / abs(gt[1]))
+    rr, cc = np.mgrid[
+        point["row"] - n : point["row"] + n + 1, point["col"] - n : point["col"] + n + 1
+    ]
+    inside = ((rr - point["row"]) ** 2 + (cc - point["col"]) ** 2) * gt[
+        1
+    ] ** 2 <= radius**2
+    valid = inside & (rr >= 0) & (rr < tree.shape[0]) & (cc >= 0) & (cc < tree.shape[1])
+    tv = tree[rr[valid], cc[valid]]
+    sv = shrub[rr[valid], cc[valid]]
+    known = np.isfinite(tv) & (tv >= 0) & (tv <= 1)
+    sknown = np.isfinite(sv) & (sv >= 0) & (sv <= 1)
+    fraction = float(known.sum() / inside.sum())
+    mean = float(tv[known].mean()) if known.any() else None
+    category = (
+        "insufficient coverage"
+        if fraction < 0.8
+        else "low mapped tree cover" if mean < threshold / 100 else "other known cover"
+    )
+    return dict(
+        foreground_tree_mean=mean,
+        foreground_known_fraction=fraction,
+        foreground_shrub_mean=float(sv[sknown].mean()) if sknown.any() else None,
+        foreground_radius_m=radius,
+        foreground_category=category,
+    )
+
+
+def rank(rows):
+    order = {
+        "low mapped tree cover": 0,
+        "other known cover": 1,
+        "insufficient coverage": 2,
+    }
+    return sorted(
+        rows, key=lambda p: (order[p["foreground_category"]], -p["raw_km2"], p["id"])
+    )
+
+
+def refine(points, grid, budget, seen, radius=150, spacing=50):
+    ds, a, gt, masks = grid
+    result = []
+    # Round robin across leaders, so a small budget does not favor the first leader.
+    offsets = [
+        (dx, dy)
+        for dx in range(-radius, radius + 1, spacing)
+        for dy in range(-radius, radius + 1, spacing)
+        if 0 < dx * dx + dy * dy <= radius * radius
+    ]
+    offsets.sort(key=lambda v: (v[0] * v[0] + v[1] * v[1], v))
+    for dx, dy in offsets:
+        for p in points[:10]:
+            x, y = p["x"] + dx, p["y"] + dy
+            r, col = math.floor((y - gt[3]) / gt[5]), math.floor((x - gt[0]) / gt[1])
+            if (
+                not (
+                    0 <= r < a.shape[0]
+                    and 0 <= col < a.shape[1]
+                    and masks["observer"][r, col]
+                )
+                or (r, col) in seen
+            ):
+                continue
+            seen.add((r, col))
+            x, y = core.xy(gt, r, col)
+            result.append(
+                dict(
+                    id=f"R{len(result)+1:04}",
+                    group="refinement",
+                    parent=p["id"],
+                    x=x,
+                    y=y,
+                    row=r,
+                    col=col,
+                    provenance=["normal_search_local_refinement"],
+                    access=core.UNKNOWN,
+                )
+            )
+            if len(result) >= budget:
+                return result
+    return result
+
+
+def candidates(c):
+    root = Path(c["work"])
+    bc = transfer.read(root / "core_config.json")
+    sampling = root / "sampling"
+    sampling.mkdir(exist_ok=True)
+    bc.update(
+        candidate_count=max(1, int(c["candidate_count"] * 0.8)), work=str(sampling)
+    )
+    # Give the unchanged generator its own matching preparation record. Main
+    # preparation/configuration remains sealed for evaluation and verification.
+    meta = transfer.read(root / "prepared.json")
+    meta["config"] = bc
+    for name in ["dem", "target", "observer"]:
+        shutil.copy2(root / (name + ".tif"), sampling / (name + ".tif"))
+    transfer.dump(sampling / "prepared.json", meta)
+    core.generate(bc)
+    auto = transfer.read(sampling / "candidates.json")
+    for point in auto:
+        point.update(group="automated", id="A" + point["id"][1:])
+    manual = transfer.read(root / "manual_import.json")
+    ds, a, gt, masks = core.load_grid(bc)
+    for point in manual:
+        point["row"] = math.floor((point["y"] - gt[3]) / gt[5])
+        point["col"] = math.floor((point["x"] - gt[0]) / gt[1])
+        x, y = core.xy(gt, point["row"], point["col"])
+        point["containing_cell_centre_offset_m"] = math.hypot(
+            x - point["x"], y - point["y"]
+        )
+        if not masks["observer"][point["row"], point["col"]]:
+            raise ValueError(
+                "Manual location falls in a raster-excluded boundary cell; never snap silently"
+            )
+    transfer.dump(root / "pool.json", auto + manual)
+
+
+def score(c):
+    root = Path(c["work"])
+    options = c["search"]
+    grid = core.load_grid(transfer.read(root / "core_config.json"))
+    tree, shrub = [
+        gdal.Open(str(root / (k + ".tif"))).ReadAsArray() for k in ["tree", "shrub"]
+    ]
+    pool = transfer.read(root / "pool.json")
+    identity = dict(
+        version=VERSION,
+        prepared=core.digest(root / "input_identity.json"),
+        algorithm=core.digest(Path(__file__)),
+        pool=core.digest(root / "pool.json"),
+    )
+    checkpoint = root / "search-checkpoint.json"
+    saved = transfer.read(checkpoint) if checkpoint.exists() else {}
+    rows, patches = (
+        (saved.get("rows", []), saved.get("patches", {}))
+        if saved.get("identity") == identity
+        else ([], {})
+    )
+    done = {p["id"] for p in rows}
+    start = time.monotonic()
+    initial = len(rows)
+    total = c["candidate_count"] + sum(p["group"] == "manual" for p in pool)
+
+    def evaluate(points):
+        nonlocal rows, patches
+        for offset in range(0, len(points), 20):
+            batch = [p for p in points[offset : offset + 20] if p["id"] not in done]
+            if not batch:
+                continue
+            check_space(root)
+            size = sum(p.stat().st_size for p in root.rglob("*") if p.is_file())
+            anticipated = len(batch) * (
+                (2 * c["radius_m"] / c["resolution_m"] + 3) ** 2 * 2 + 150000
+            )
+            if size + anticipated >= c["disk_bytes"]:
+                raise ValueError(
+                    "Search output limit reached; checkpoint retained. Use a smaller search in a new run."
+                )
+            import signal
+
+            signal.alarm(c["runtime_s"])
+            scored, ps = transfer.evaluate(c, batch)
+            signal.alarm(0)
+            for p in scored:
+                p.update(
+                    nearby_cover(
+                        tree,
+                        shrub,
+                        grid[2],
+                        p,
+                        options["nearby_radius_m"],
+                        options["tree_threshold_percent"],
+                    )
+                )
+            rows.extend(scored)
+            patches.update(ps)
+            done.update(p["id"] for p in scored)
+            write(checkpoint, dict(identity=identity, rows=rows, patches=patches))
+            elapsed = time.monotonic() - start
+            measured = len(rows) - initial
+            remaining = (
+                max(0, total - len(rows)) * elapsed / measured if measured else None
+            )
+            emit(
+                "processing",
+                "Searching observation setups",
+                len(rows),
+                total,
+                force=True,
+                remaining_s=remaining,
+            )
+
+    write(checkpoint, dict(identity=identity, rows=rows, patches=patches))
+    emit("processing", "Searching observation setups", len(rows), total, force=True)
+    evaluate(pool)
+    leaders = rank([p for p in rows if p["group"] == "automated"])
+    extras = refine(
+        leaders,
+        grid,
+        c["candidate_count"] - sum(p["group"] == "automated" for p in pool),
+        {(p["row"], p["col"]) for p in pool},
+    )
+    evaluate(extras)
+    recommended = rank([p for p in rows if p["group"] != "manual"])[
+        : options["recommendation_count"]
+    ]
+    selected = {p["id"] for p in recommended}
+    for p in rows:
+        p["recommended"] = p["id"] in selected
+    transfer.dump(root / "scores.json", rows)
+    transfer.dump(root / "patches.json", patches)
+    transfer.dump(
+        root / "refinement.json",
+        dict(
+            points=[p for p in rows if p["group"] == "refinement"],
+            centres=list(dict.fromkeys(p["parent"] for p in extras)),
+            primary_pool_unchanged=True,
+            warning="Normal-run search extension; historical diagnostics unchanged",
+        ),
+    )
+    # Historical leading collection remains the inherited engine ranking.
+    leading = sorted(
+        [p for p in rows if p["group"] == "automated"],
+        key=lambda p: (-p["selective_score"], p["id"]),
+    )[:5] + [p for p in rows if p["group"] == "manual"]
+    transfer.dump(root / "leading.json", leading)
+    transfer.dump(
+        root / "recommendations.json",
+        dict(
+            version=VERSION,
+            options=options,
+            evaluated_count=len(rows),
+            budget=total,
+            ids=[p["id"] for p in recommended],
+            complete=True,
+            unused_budget=total - len(rows),
+        ),
+    )
+    vis = {}
+    for p in leading:
+        vs = gdal.Open(
+            str(root / "additional_visibility" / f'{p["id"]}_{c["radius_m"]}.tif')
+        )
+        _, _, mask = core.score_mask(
+            vs, grid[2], grid[1].shape, grid[3]["target"], p["x"], p["y"], c["radius_m"]
+        )
+        vg = vs.GetGeoTransform()
+        r = round((vg[3] - grid[2][3]) / grid[2][5])
+        col = round((vg[0] - grid[2][0]) / grid[2][1])
+        rr, cc = np.where(mask)
+        vis[p["id"]] = set(((rr + r) * grid[1].shape[1] + cc + col).tolist())
+    overlap = []
+    for i, p in enumerate(leading):
+        for other in leading[i + 1 :]:
+            u, v = vis[p["id"]], vis[other["id"]]
+            inter = len(u & v)
+            union = len(u | v)
+            overlap.append(
+                dict(
+                    a=p["id"],
+                    b=other["id"],
+                    shared_km2=inter * grid[2][1] ** 2 / 1e6,
+                    jaccard=inter / union if union else None,
+                    fraction_a=inter / len(u) if u else None,
+                    fraction_b=inter / len(v) if v else None,
+                    distance_m=math.hypot(p["x"] - other["x"], p["y"] - other["y"]),
+                )
+            )
+    transfer.dump(root / "overlap.json", overlap)
+    emit(
+        "processing",
+        "Search complete; preparing review outputs",
+        len(rows),
+        len(rows),
+        force=True,
+    )
+
+
+def guidance(c, root):
+    summary = transfer.read(Path(c["work"]) / "recommendations.json")
+    text = "# Expanded setup search\n\n"
+    text += f"Evaluated {summary['evaluated_count']} locations against a maximum budget of {summary['budget']}; {summary['unused_budget']} evaluations unused. Recommended {len(summary['ids'])} setups.\n\n"
+    text += "Recommendations: " + ", ".join(summary["ids"]) + ".\n\n"
+    text += f"Broad terrain sampling uses 80% of the automated budget. The remaining 20% tests distinct nearby grid cells within 150 m of up to ten leading setups, at 50 m offsets. A small area may leave refinement budget unused.\n\n"
+    text += f"Prefer mapped mean tree cover below {c['search']['tree_threshold_percent']}% within {c['search']['nearby_radius_m']} m, requiring at least 80% known neighborhood coverage. Other known cover follows; insufficient coverage remains last. Within each category order by original terrain-visible area. Shrub cover is shown separately.\n\n"
+    text += "Coarse mapping cannot confirm a small clearing, individual trees or eye-height sightlines. Blue coverage uses bare-earth terrain. No global optimum, deer probability or verified access is claimed.\n\n"
+    text += "All evaluated setups remain available in the GUI, with exact destination exports. Historical engine leading collections, inspection indices and existing review exports remain available separately. The original inspection assumption and numerical terrain calculations are unchanged.\n\n"
+    text += "Search provenance: analysis/recommendations.json, scores.json, sampling/, search-metrics.json and implementation.json. Interrupted searches retain analysis/search-checkpoint.json. Per-batch memory/time, grid, output and free-storage guards remain enforced.\n"
+    (root / "SEARCH.md").write_text(text)
+    report = root / "REPORT.md"
+    value = report.read_text().replace(
+        "Local refinement is a density diagnostic and does not replace the original candidate pool.",
+        "Expanded normal search includes nearby alternatives in recommendations; see SEARCH.md. Historical diagnostic behavior remains unchanged.",
+    )
+    report.write_text(
+        value
+        + "\n## Expanded normal search\n\nSee [SEARCH.md](SEARCH.md) for the GUI recommendations and nearby-cover evidence. The leading alternatives above retain the inherited engine ranking and are separate from the GUI recommendation collection.\n"
+    )

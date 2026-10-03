@@ -454,11 +454,13 @@ def api_router(jobs: Jobs):
             radius not in [500, 1000, 1500, 2000, 2500, 3000]
             or not 5 <= minutes <= 120
             or not budget >= 1
-            or not 12 <= count <= 200
+            or not 12 <= count <= 5000
         ):
             raise ValueError(
-                "Use a supported radius, 5–120 minutes, 12–200 candidates and positive MB transfer allowance"
+                "Use a supported radius, 5–120 minutes, 12–5000 candidates and positive MB transfer allowance"
             )
+        if body.get("recommendation_count", min(20, count)) > count:
+            raise ValueError("Recommendations cannot exceed the search budget")
         ident = uuid.uuid4().hex
         folder = STATE / "plans"
         folder.mkdir(parents=True, exist_ok=True)
@@ -477,6 +479,12 @@ def api_router(jobs: Jobs):
             radius_m=radius,
             observation_minutes=minutes,
             candidate_count=count,
+            search=dict(
+                version=1,
+                recommendation_count=min(count, body.get("recommendation_count", 20)),
+                nearby_radius_m=body.get("nearby_radius_m", 30),
+                tree_threshold_percent=body.get("tree_threshold_percent", 10),
+            ),
             normal_scouting=True,
             manual_points=None,
             download_bytes=budget * 1000000,
@@ -561,7 +569,7 @@ def api_router(jobs: Jobs):
             settings={
                 k: v
                 for k, v in read(p["config"]).items()
-                if k in ["radius_m", "observation_minutes", "candidate_count"]
+                if k in ["radius_m", "observation_minutes", "candidate_count", "search"]
             },
         )
 

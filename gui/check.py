@@ -173,6 +173,33 @@ def main():
                 "workflow-owner",
                 work / "workspace",
             )
+            fixture = work / "workspace/workflow-fixture.json"
+            search_config = json.loads(fixture.read_text())
+            search_config["search"] = dict(
+                version=1,
+                recommendation_count=5,
+                nearby_radius_m=30,
+                tree_threshold_percent=10,
+            )
+            search_fixture = work / "workspace/search-fixture.json"
+            search_fixture.write_text(json.dumps(search_config))
+            env["PYTHONPATH"] = str(ROOT)
+            run(
+                [
+                    sys.executable,
+                    "-m",
+                    "huntmaps_gui.owner_worker",
+                    "run",
+                    "--area",
+                    "workflow-fixture/observer.geojson",
+                    "--source-config",
+                    "search-fixture.json",
+                    "--name",
+                    "search-fixture",
+                ],
+                "search-owner",
+                work / "workspace",
+            )
             with socket.socket() as sock:
                 sock.bind(("127.0.0.1", 0))
                 port = sock.getsockname()[1]
@@ -269,6 +296,7 @@ def main():
             for script in (
                 "browser-workflow-check.mjs",
                 "browser-transfer-check.mjs",
+                "browser-coverage-search-check.mjs",
                 "browser-check.mjs",
                 "browser-training-check.mjs",
                 "browser-first-person-check.mjs",

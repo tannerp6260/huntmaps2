@@ -263,7 +263,7 @@ const descriptions = {
   minutes:
     'An existing scoring assumption used to choose portions of a view that could be inspected within a limited time. It can change inspection scores and rankings, but does not change terrain-visible coverage. It is not a recommended stop duration. Default: 30 minutes.',
   count:
-    'How many initial potential glassing locations to evaluate across your observer area, using broad-area and terrain-based sampling with minimum spacing. More locations take longer; this is not a top-X shortlist or guaranteed optimum. If too many separated locations cannot fit, the run fails with an explanation. Default: 150.',
+    'Maximum locations to evaluate before recommending setups: 80% broad terrain sampling and up to 20% nearby refinement. Setups recommended is a separate control. More evaluations take longer and do not guarantee an optimum. If broad samples cannot fit at the required spacing, reduce the budget. Default: Quick, up to 150.',
   budget:
     'Maximum authorized bulk source downloads for this analysis, in megabytes. Review the acquisition estimate before allowing downloads. This is separate from processing/output limits and online basemap browsing. Default: 600 MB.',
 };

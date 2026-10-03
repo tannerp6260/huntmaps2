@@ -38,14 +38,20 @@ export function updateMapLayers(
   }: LayerState,
   api: (path: string) => Promise<GeoJSON.GeoJSON>,
   setError: (message: string) => void,
+  setCoverage: (message: string) => void,
+  retry = 0,
 ) {
   let disposed = false;
-  for (const l of [...m.getStyle().layers].reverse())
-    if (l.id.startsWith('raster-') || l.id.startsWith('sector-')) m.removeLayer(l.id);
-  for (const id of Object.keys(m.getStyle().sources))
-    if (id.startsWith('raster-') || id.startsWith('sector-')) m.removeSource(id);
+  const wanted = new Set<string>();
+  const coverage: { key: string; alpha: number }[] = [];
   const addRaster = (layer: string, id: string, alpha: number, color = 0) => {
-    const key = `raster-${layer}-${id}`;
+    const key = `raster-${layer}-${id}-${run.id}-${['visible', 'classes'].includes(layer) ? filterId || 'base' : 'base'}-${working[id]?.revision || 'original'}-${color}-${layer === 'visible' ? retry : 0}`;
+    wanted.add(key);
+    if (layer === 'visible') coverage.push({ key, alpha });
+    if (m.getSource(key)) {
+      m.setPaintProperty(key, 'raster-opacity', layer === 'visible' ? 0 : alpha);
+      return;
+    }
     const useWorking = !!working[id];
     m.addSource(key, {
       type: 'raster',
@@ -61,9 +67,10 @@ export function updateMapLayers(
         type: 'raster',
         source: key,
         paint: {
-          'raster-opacity': alpha,
+          'raster-opacity': layer === 'visible' ? 0 : alpha,
           'raster-resampling': layer === 'imagery' ? 'linear' : 'nearest',
           'raster-fade-duration': 0,
+          'raster-opacity-transition': { duration: 0, delay: 0 },
         },
       },
       'boundary-fill',
@@ -86,28 +93,87 @@ export function updateMapLayers(
   ids.forEach((id, i) => {
     if (visibility && (!compare.length || !hiddenViews.includes(id)))
       addRaster('visible', id, opacity, i);
-    if (sectors && !working[id] && (!compare.length || !hiddenViews.includes(id)))
-      api(`/runs/${run.id}/sectors/${id}`)
-        .then((data) => {
-          if (disposed) return;
-          const key = 'sector-' + id;
-          m.addSource(key, { type: 'geojson', data });
-          m.addLayer(
-            {
-              id: key,
-              type: 'line',
-              source: key,
-              paint: { 'line-color': colors[i], 'line-width': 2, 'line-dasharray': [2, 2] },
-            },
-            'candidate-halo',
-          );
-        })
-        .catch((e) => {
-          if (!disposed) setError(e instanceof Error ? e.message : String(e));
-        });
+    const sectorKey = `sector-${run.id}-${id}`;
+    if (sectors && !working[id] && (!compare.length || !hiddenViews.includes(id))) {
+      wanted.add(sectorKey);
+      if (m.getLayer(sectorKey)) m.setPaintProperty(sectorKey, 'line-color', colors[i]);
+      if (!m.getSource(sectorKey))
+        api(`/runs/${run.id}/sectors/${id}`)
+          .then((data) => {
+            if (disposed || m.getSource(sectorKey)) return;
+            const key = sectorKey;
+            m.addSource(key, { type: 'geojson', data });
+            m.addLayer(
+              {
+                id: key,
+                type: 'line',
+                source: key,
+                paint: { 'line-color': colors[i], 'line-width': 2, 'line-dasharray': [2, 2] },
+              },
+              'candidate-halo',
+            );
+          })
+          .catch((e) => {
+            if (!disposed) setError(e instanceof Error ? e.message : String(e));
+          });
+    }
   });
   if (classes && selected && !newRun && !activeManual) addRaster('classes', selected, opacity);
+  for (const layer of [...m.getStyle().layers].reverse())
+    if ((layer.id.startsWith('raster-') || layer.id.startsWith('sector-')) && !wanted.has(layer.id))
+      m.removeLayer(layer.id);
+  for (const key of Object.keys(m.getStyle().sources))
+    if ((key.startsWith('raster-') || key.startsWith('sector-')) && !wanted.has(key))
+      m.removeSource(key);
+  let failed = false;
+  let revealed = false;
+  const label = ids.join(', ');
+  const pending = () => {
+    revealed = false;
+    if (!coverage.length) {
+      setCoverage('');
+      return;
+    }
+    coverage.forEach(({ key }) => {
+      if (m.getLayer(key)) m.setPaintProperty(key, 'raster-opacity', 0);
+    });
+    setCoverage(`${failed ? 'Coverage incomplete' : 'Loading coverage'} · ${label}`);
+  };
+  const check = () => {
+    if (disposed || revealed || !coverage.length || failed || m.isMoving()) return;
+    if (coverage.every(({ key }) => m.getSource(key) && m.isSourceLoaded(key))) {
+      revealed = true;
+      coverage.forEach(({ key, alpha }) => m.setPaintProperty(key, 'raster-opacity', alpha));
+      setCoverage(`Coverage ready · ${label}`);
+    }
+  };
+  const error = (event: unknown) => {
+    const sourceId =
+      event && typeof event === 'object' && 'sourceId' in event ? String(event.sourceId) : '';
+    if (coverage.some(({ key }) => key === sourceId)) {
+      failed = true;
+      pending();
+      setCoverage(`Coverage incomplete · ${label}`);
+    }
+  };
+  const loading = (event: { sourceId?: string }) => {
+    if (!failed && coverage.some(({ key }) => key === event.sourceId)) pending();
+  };
+  pending();
+  m.on('movestart', pending);
+  m.on('moveend', check);
+  m.on('sourcedataloading', loading);
+  m.on('sourcedata', check);
+  m.on('idle', check);
+  m.on('error', error);
+  check();
   return () => {
     disposed = true;
+    m.off('movestart', pending);
+    m.off('moveend', check);
+    m.off('sourcedataloading', loading);
+    m.off('sourcedata', check);
+    m.off('idle', check);
+    m.off('error', error);
   };
 }
