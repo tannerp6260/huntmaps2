@@ -131,7 +131,7 @@ class GroundDiagnostics(unittest.TestCase):
             folder=Path(d)/'first-person/sources';folder.mkdir(parents=True,exist_ok=True);worker.write(folder/'ledger.json',dict(received_bytes=fp.LIMIT-1))
             stream=io.BytesIO(b'abc');stream.url=src['url'];stream.status=200;stream.headers={}
             with patch('urllib.request.urlopen',return_value=stream):
-                with self.assertRaisesRegex(ValueError,'transfer cap'):worker.acquire(src,True)
+                with self.assertRaisesRegex(ValueError,'transfer allowance'):worker.acquire(src,True)
             self.assertEqual(worker.read(folder/'ledger.json')['received_bytes'],fp.LIMIT-1)
     def test_resume_requires_range_identity(self):
         with tempfile.TemporaryDirectory() as d,configured(AppConfig(state_dir=Path(d))):

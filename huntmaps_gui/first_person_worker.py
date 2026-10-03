@@ -65,6 +65,20 @@ def discover(ident):
             coverage={cid: 0 for cid in p["candidates"]},
             source_note="Existing DEM only. Fine ground and measured vegetation unavailable.",
         )
+        from .approach_service import digest
+
+        p["review_signature"] = digest(
+            {
+                k: p.get(k)
+                for k in (
+                    "sources",
+                    "snapshots",
+                    "acquisition",
+                    "fidelity",
+                    "download_cap_bytes",
+                )
+            }
+        )
         write(fp.HOME / "plans" / (ident + ".json"), p)
         return
     sources = {}
@@ -167,6 +181,24 @@ def discover(ident):
                 0, s["bytes"] - (partial.stat().st_size if partial.exists() else 0)
             )
         )
+    for s in entries:
+        if not s["cached"]:
+            folder = fp.HOME / "sources"
+            receipts = read(folder / (s["key"] + ".ranges.json"), {})
+            offset = s["bytes"] - s["remaining_bytes"]
+            reused = 0
+            for start in range(offset, s["bytes"], 8 * 1024 * 1024):
+                end = min(start + 8 * 1024 * 1024 - 1, s["bytes"] - 1)
+                target = folder / (s["key"] + f".range-{start}-{end}")
+                partial = target.with_suffix(target.suffix + ".partial")
+                if target.exists() and target.name in receipts:
+                    fp.verify_file(target, receipts[target.name])
+                    reused += target.stat().st_size
+                elif partial.exists():
+                    if partial.stat().st_size > end - start + 1:
+                        raise ValueError("Range partial larger than expected")
+                    reused += partial.stat().st_size
+            s["remaining_bytes"] = max(0, s["remaining_bytes"] - reused)
     estimated = sum(s["remaining_bytes"] for s in entries)
     spent = read(fp.HOME / "sources" / "ledger.json", {}).get("received_bytes", 0)
     p.update(
@@ -175,20 +207,32 @@ def discover(ident):
         acquisitions=acquisitions,
         needs_acquisition_selection=needs_selection,
         estimated_new_bytes=estimated,
-        download_cap_bytes=suggested_mb(estimated, 500) * 1_000_000,
-        suggested_download_mb=suggested_mb(estimated, 500),
-        already_received_bytes=spent,
-        errors=(
-            []
-            if estimated + spent <= fp.LIMIT
-            else [
-                "Source estimate plus previous transfers exceeds the 500 MB pilot budget. Cached-only preparation is still available."
-            ]
+        download_cap_bytes=(
+            p["download_cap_bytes"]
+            if p.get("prepared")
+            else suggested_mb(estimated) * 1_000_000
         ),
+        suggested_download_mb=suggested_mb(estimated),
+        already_received_bytes=spent,
+        errors=[],
         coverage={
             cid: sum(cid in s["candidates"] for s in entries) for cid in p["candidates"]
         },
         source_note="Catalog bounds do not guarantee ground-return coverage. Fine-data gaps remain unknown.",
+    )
+    from .approach_service import digest
+
+    p["review_signature"] = digest(
+        {
+            k: p.get(k)
+            for k in (
+                "sources",
+                "snapshots",
+                "acquisition",
+                "fidelity",
+                "download_cap_bytes",
+            )
+        }
     )
     write(fp.HOME / "plans" / (ident + ".json"), p)
     fp.stage(
@@ -243,16 +287,22 @@ def parallel_ranges(s, part, offset):
                     raise ValueError("Unexpected lidar range host")
                 with partial.open("ab" if done else "wb") as f:
                     while True:
+                        from .downloads import check_space
+                        from .progress import received
+
+                        check_space(folder, 1024 * 1024)
                         block = response.read(1024 * 1024)
                         if not block:
                             break
+                        received(len(block), s["url"])
                         with lock:
+                            check_space(folder, len(block))
                             ledger = read(
                                 folder / "ledger.json", dict(received_bytes=0)
                             )
                             if ledger["received_bytes"] + len(block) > fp.LIMIT:
                                 raise ValueError(
-                                    "500 MB cumulative pilot transfer cap reached; partial ranges retained"
+                                    "Reviewed transfer allowance reached; partial ranges retained"
                                 )
                             before = ledger["received_bytes"]
                             ledger["received_bytes"] += len(block)
@@ -265,9 +315,11 @@ def parallel_ranges(s, part, offset):
                                     + str(round(ledger["received_bytes"] / 1e6, 1))
                                     + " MB actually received"
                                 )
-                        f.write(block)
-                        if f.tell() > size:
-                            raise ValueError("Source range exceeds reviewed byte count")
+                            f.write(block)
+                            if f.tell() > size:
+                                raise ValueError(
+                                    "Source range exceeds reviewed byte count"
+                                )
         if partial.stat().st_size != size:
             raise ValueError("Incomplete lidar byte range; safe partial retained")
         h = digest(partial)
@@ -284,6 +336,9 @@ def parallel_ranges(s, part, offset):
     # One preparation job, at most eight bounded HTTP connections; never parallel analysis.
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
         pieces = list(executor.map(fetch, ranges))
+    from .downloads import check_space
+
+    check_space(folder, s["bytes"])
     assembled = part.with_suffix(".assembling")
     with assembled.open("wb") as out:
         if offset:
@@ -347,13 +402,18 @@ def acquire(s, allow):
             else:
                 with part.open("ab" if offset else "wb") as f:
                     while True:
+                        from .downloads import check_space
+                        from .progress import received
+
+                        check_space(folder, 1024 * 1024)
                         block = r.read(1024 * 1024)
                         if not block:
                             break
+                        received(len(block), s["url"])
                         ledger = read(folder / "ledger.json", dict(received_bytes=0))
                         if ledger["received_bytes"] + len(block) > fp.LIMIT:
                             raise ValueError(
-                                "500 MB cumulative pilot transfer cap reached; partial source retained."
+                                "Reviewed transfer allowance reached; partial source retained."
                             )
                         # Account before writing to keep crashes conservative.
                         ledger["received_bytes"] += len(block)
@@ -1054,10 +1114,12 @@ def publish(run, cid, sources):
     )
 
 
-def prepare(ident, allow):
+def prepare(ident, allow, review_signature=None):
     p = fp.plan(ident)
     if not p.get("prepared"):
         raise ValueError("Review the first-person source plan first")
+    if review_signature is not None and review_signature != p.get("review_signature"):
+        raise ValueError("Source plan or allowance changed; review and approve again")
     if p.get("needs_acquisition_selection"):
         raise ValueError(
             "Select one recorded lidar acquisition or choose terrain-only; overlapping acquisitions cannot be mixed"
@@ -1072,7 +1134,12 @@ def prepare(ident, allow):
     if allow and p.get("errors"):
         raise ValueError("; ".join(p["errors"]))
     spent = read(fp.HOME / "sources" / "ledger.json", {}).get("received_bytes", 0)
-    fp.LIMIT = min(fp.LIMIT, spent + p.get("download_cap_bytes", fp.LIMIT))
+    fp.LIMIT = spent + p.get("download_cap_bytes", fp.LIMIT)
+    from .downloads import check_space
+    from .progress import start_download, emit, flush_download
+
+    check_space(fp.HOME, 3 * (p["estimated_new_bytes"] if allow else 0) + 800_000_000)
+    start_download(p["estimated_new_bytes"] if allow else 0)
     sources = []
     for s in p["sources"]:
         path, h = acquire(s, allow)
@@ -1080,12 +1147,22 @@ def prepare(ident, allow):
             sources.append((s, path, h))
     run = fp.scene_run(p.get("run_id", fp.RUN))
     failures = {}
-    for cid in p["candidates"]:
+    flush_download()
+    emit("processing", "Preparing scenes", 0, len(p["candidates"]), force=True)
+    for index, cid in enumerate(p["candidates"]):
+        check_space(fp.HOME, 800_000_000)
         try:
             publish(run, cid, sources)
         except (ValueError, RuntimeError, MemoryError) as e:
             failures[cid] = str(e)
             fp.stage(cid + " could not prepare: " + str(e))
+        emit(
+            "processing",
+            "Preparing scenes",
+            index + 1,
+            len(p["candidates"]),
+            force=True,
+        )
     p.update(failures=failures, completed=True, finished=time.time())
     write(fp.HOME / "plans" / (ident + ".json"), p)
     if failures:
@@ -1094,6 +1171,13 @@ def prepare(ident, allow):
             + json.dumps(failures)
             + ". Other validated bundles were retained."
         )
+    emit(
+        "processing",
+        "Views ready",
+        len(p["candidates"]),
+        len(p["candidates"]),
+        force=True,
+    )
     fp.stage("Views ready; existing scores, masks and coordinates unchanged")
 
 
@@ -1102,6 +1186,7 @@ def main():
     ap.add_argument("operation", choices=["plan", "prepare"])
     ap.add_argument("ident")
     ap.add_argument("--download", action="store_true")
+    ap.add_argument("--review-signature")
     args = ap.parse_args()
     resource.setrlimit(resource.RLIMIT_AS, (1536 * 1024**2, 1536 * 1024**2))
     signal.signal(
@@ -1115,8 +1200,11 @@ def main():
         if args.operation == "plan":
             discover(args.ident)
         else:
-            prepare(args.ident, args.download)
+            prepare(args.ident, args.download, args.review_signature)
     except Exception as e:
+        from .progress import flush_download
+
+        flush_download()
         print("GUI JOB: " + str(e), flush=True)
         raise
 

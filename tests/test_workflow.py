@@ -307,9 +307,10 @@ class WorkflowJourney(unittest.TestCase):
         response = self.client.put(
             f"/api/first-person/plans/{selected}/allowance",
             headers=self.headers,
-            json=dict(max_download_mb=501),
+            json=dict(max_download_mb=2500),
         )
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["download_cap_bytes"], 2_500_000_000)
         response = self.client.put(
             f"/api/first-person/plans/{selected}/allowance",
             headers=self.headers,
@@ -324,14 +325,60 @@ class WorkflowJourney(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "reviewed transfer allowance"):
                 worker.prepare(selected, True)
 
+    def test_dismiss_undo_restore_stale_and_legacy_records(self):
+        before = self.decision("shortlist")
+        dismissed = self.decision("dismiss")
+        self.assertTrue(dismissed["points"][self.cid]["dismissed"])
+        self.assertFalse(dismissed["points"][self.cid]["shortlisted"])
+        revision = dismissed["revision"]
+        restored = self.decision("undo", undo_revision=revision)
+        self.assertTrue(restored["points"][self.cid]["shortlisted"])
+        self.assertFalse(restored["points"][self.cid]["dismissed"])
+        dismissed = self.decision("dismiss")
+        self.decision("remove")
+        self.decision("undo", expected=400, undo_revision=dismissed["revision"])
+        self.decision("dismiss")
+        self.decision("restore")
+        self.assertFalse(workflow.get(self.run)["points"][self.cid]["dismissed"])
+        self.decision("dismiss")
+        self.assertTrue(self.decision("shortlist")["points"][self.cid]["shortlisted"])
+        saved = workflow.records(self.run)
+        saved["version"] = 1
+        saved["points"][self.cid].pop("dismissed", None)
+        write(workflow.path(self.run), saved)
+        self.assertFalse(workflow.get(self.run)["points"][self.cid]["dismissed"])
+
+    def test_download_consent_rejects_changed_scene_allowance(self):
+        ident = fp.new_plan(self.run, [self.cid], fidelity="terrain")
+        worker.discover(ident)
+        p = fp.plan(ident)
+        signature = p["review_signature"]
+        self.client.put(
+            f"/api/first-person/plans/{ident}/allowance",
+            headers=self.headers,
+            json=dict(max_download_mb=2500),
+        )
+        with patch.object(
+            self.client.app.state.jobs,
+            "start",
+            side_effect=AssertionError("Outdated consent must not start work"),
+        ):
+            response = self.client.post(
+                f"/api/first-person/plans/{ident}/start",
+                headers=self.headers,
+                json=dict(download=True, review_signature=signature),
+            )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("consent", response.text)
+
     def test_allowance_rounding_caps_and_unknown_versions(self):
         for estimate, expected in [
             (0, 10),
             (1, 10),
             (10_000_000, 20),
             (100_000_000, 120),
-            (1_900_000_000, 1900),
-            (2_000_000_000, 1900),
+            (1_900_000_000, 2280),
+            (2_000_000_000, 2400),
         ]:
             self.assertEqual(suggested_mb(estimate), expected)
         self.assertEqual(suggested_mb(500_000_000, 500), 500)

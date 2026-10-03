@@ -268,6 +268,7 @@ def main():
                 raise RuntimeError("Dedicated test server did not become ready")
             for script in (
                 "browser-workflow-check.mjs",
+                "browser-transfer-check.mjs",
                 "browser-check.mjs",
                 "browser-training-check.mjs",
                 "browser-first-person-check.mjs",

@@ -6,6 +6,8 @@ export type Workflow = {
     {
       point: { id: string; longitude: number; latitude: number; revision: string };
       shortlisted: boolean;
+      dismissed?: boolean;
+      undo_revision?: number;
       legacy: boolean;
       approach: { scenario: string; alternative: number; seal: string } | null;
       viewed: string | null;
@@ -20,6 +22,7 @@ export default function WorkflowPanel({
   workflow,
   cid,
   inspect,
+  pending = false,
   onDecision,
   onInspect,
   onApproaches,
@@ -29,6 +32,7 @@ export default function WorkflowPanel({
   workflow: Workflow | null;
   cid: string;
   inspect: boolean;
+  pending?: boolean;
   onDecision: (cid: string, action: string, extra?: Record<string, unknown>) => Promise<void>;
   onInspect: () => void;
   onApproaches: () => void;
@@ -68,11 +72,17 @@ export default function WorkflowPanel({
       <h3>{inspect ? 'Inspect and confirm' : 'Setup decision'}</h3>
       {p?.legacy && <small>Legacy Keep candidate; original annotation preserved.</small>}
       <div className="candidate-actions">
-        <button onClick={() => onDecision(cid, 'shortlist')} disabled={!cid}>
+        <button
+          onClick={() => onDecision(cid, 'shortlist')}
+          disabled={!cid || pending || p?.shortlisted}
+        >
           {p?.shortlisted ? 'Shortlisted' : 'Shortlist'}
         </button>
-        <button onClick={() => onDecision(cid, 'remove')} disabled={!cid}>
-          Remove
+        <button
+          onClick={() => onDecision(cid, 'remove')}
+          disabled={!cid || pending || !p?.shortlisted}
+        >
+          Remove from shortlist
         </button>
       </div>
       {inspect && (
@@ -102,13 +112,13 @@ export default function WorkflowPanel({
               </a>
             </p>
           )}
-          <button onClick={onInspect} disabled={!cid}>
+          <button onClick={onInspect} disabled={!cid || pending}>
             Inspect current setup
           </button>
           <button onClick={onApproaches}>Return to approaches</button>
           <button
             className="primary wide"
-            disabled={!p?.approach || !p?.viewed}
+            disabled={pending || !p?.approach || !p?.viewed}
             onClick={() => onDecision(cid, 'confirm')}
           >
             {p?.confirmed ? 'Setup confirmed' : 'Confirm setup'}

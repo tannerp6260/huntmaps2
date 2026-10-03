@@ -164,8 +164,8 @@ def network_plan(bounds, budget_mb):
         raise ValueError(
             "USFS query too large; narrow the travel area (maximum 0.05 square degrees)"
         )
-    if not 1 <= budget_mb <= 1900:
-        raise ValueError("Download cap must be 1–1900 MB")
+    if type(budget_mb) is not int or budget_mb < 1:
+        raise ValueError("Download allowance must be a positive integer MB value")
     ident = uuid.uuid4().hex
     value = dict(
         version=1,
@@ -210,6 +210,13 @@ def acquire(ident, remaining_bytes):
             dict(networks=records, downloaded_bytes=0),
         )
         return records
+    from .downloads import check_space
+    from .progress import start_download, received, flush_download, progress_path, emit
+
+    progress_file = progress_path()
+    if not progress_file or not progress_file.exists():
+        start_download(p["estimated_bytes"])
+    check_space(STATE, 3 * p["estimated_bytes"])
     responses = []
     used = 0
     for item in p["items"]:
@@ -225,7 +232,20 @@ def acquire(ident, remaining_bytes):
         )
         url = item["url"] + "/query?" + urllib.parse.urlencode(params)
         with urllib.request.urlopen(url, timeout=30) as response:
-            data = response.read(min(LIMIT, cap - used) + 1)
+            chunks = []
+            size = 0
+            while size <= min(LIMIT, cap - used):
+                check_space(STATE, 1024 * 1024)
+                block = response.read(
+                    min(1024 * 1024, min(LIMIT, cap - used) + 1 - size)
+                )
+                if not block:
+                    break
+                chunks.append(block)
+                size += len(block)
+                received(len(block), url)
+            data = b"".join(chunks)
+            flush_download()
         used += len(data)
         if len(data) > LIMIT or used > cap:
             raise ValueError("Network response exceeds approved budget; no fallback")
@@ -239,6 +259,7 @@ def acquire(ident, remaining_bytes):
                 "USFS query failed or truncated; narrow query or import checked lines"
             )
         responses.append((item, data, url))
+    emit("processing", "Validating mapped roads/trails", force=True)
     results = [
         save_network(data, ".geojson", item["kind"], url, coverage=p["bounds"])
         for item, data, url in responses
@@ -246,6 +267,13 @@ def acquire(ident, remaining_bytes):
     write(
         STATE / "network-plans" / f"{ident}-result.json",
         dict(networks=results, downloaded_bytes=used),
+    )
+    emit(
+        "processing",
+        "Mapped roads/trails ready",
+        len(results),
+        len(results),
+        force=True,
     )
     return results
 

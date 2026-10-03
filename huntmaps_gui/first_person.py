@@ -20,7 +20,7 @@ HOME = ConfigPath("state_dir", "first-person")
 VERSION = 6
 CURVATURE = 6 / 7
 EARTH = 6378137.0
-LIMIT = 500_000_000
+LIMIT = 10_000_000
 
 
 def stage(text):

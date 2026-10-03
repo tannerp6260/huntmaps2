@@ -55,7 +55,12 @@ def router(jobs):
 
     @r.post("/network-plans")
     def network_plan(body: dict = Body(...)):
-        return network.network_plan(body["bounds"], body["max_download_mb"])
+        from .downloads import review_info
+
+        p = network.network_plan(body["bounds"], body["max_download_mb"])
+        return dict(
+            p, **review_info([STATE], p["estimated_bytes"], ["apps.fs.usda.gov"])
+        )
 
     @r.get("/network-plans/{ident}")
     def network_result(ident):
@@ -72,6 +77,9 @@ def router(jobs):
         p = read_json(STATE / "network-plans" / f"{network.checked_id(ident)}.json")
         if not p:
             raise ValueError("Review network plan first")
+        from .downloads import check_space
+
+        check_space(STATE, 3 * p["estimated_bytes"])
         # The caller may link an analysis plan; its reviewed estimate consumes budget.
         remaining = p["max_download_mb"] * 1000000
         if body.get("analysis_plan"):

@@ -44,6 +44,8 @@ class Jobs:
         self.wait_threads = []
         self.storage_errors = []
         for p in self.folder.glob("*.json"):
+            if p.name.endswith(".progress"):
+                continue
             try:
                 j = read(p)
                 if not isinstance(j, dict) or not all(
@@ -98,6 +100,8 @@ class Jobs:
     def _list(self, include_logs=True):
         result = []
         for p in self.folder.glob("*.json"):
+            if p.name.endswith(".progress"):
+                continue
             try:
                 j = read(p)
                 if not isinstance(j, dict) or not all(
@@ -118,6 +122,12 @@ class Jobs:
                     )
                 )
                 continue
+            try:
+                progress = read(self.folder / (j["id"] + ".progress"))
+            except ValueError:
+                progress = None
+            if isinstance(progress, dict):
+                j["progress"] = progress
             j.setdefault("stage", "Stage unavailable; inspect the job log")
             j["elapsed_s"] = round((j.get("finished") or time.time()) - j["started"], 1)
             log = self.folder / (j["id"] + ".log")
@@ -213,8 +223,9 @@ class Jobs:
                 OMP_NUM_THREADS="1",
                 MPLCONFIGDIR=str(self.config.state_dir / "mpl"),
             )
+            env["HUNTMAPS_PROGRESS_FILE"] = str(self.folder / (ident + ".progress"))
             self.process = subprocess.Popen(
-                command,
+                [sys.executable, "-u", "-m", "huntmaps_gui.guarded_job", *command],
                 cwd=cwd or self.config.source_dir,
                 env=env,
                 stdout=log,

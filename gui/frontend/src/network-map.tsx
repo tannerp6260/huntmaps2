@@ -1,3 +1,5 @@
+import DownloadReview from './download-review';
+import JobProgress from './job-progress';
 import { networkResponse, type DisplayNetwork } from './network-response';
 import { useEffect, useRef, useState } from 'react';
 import { Popup, type Map, type GeoJSONSource } from 'maplibre-gl';
@@ -287,6 +289,7 @@ export default function NetworkMap({
           <p>
             {plan.provider}: up to {plan.estimated_bytes / 1000000} MB. {plan.note}
           </p>
+          <DownloadReview plan={plan} bytes={plan.estimated_bytes ?? null} />
           <p>Bounds: {plan.bounds.join(', ')}. Source date unknown until inspected.</p>
           <label>
             <input
@@ -296,15 +299,19 @@ export default function NetworkMap({
             />
             Approve this reviewed network download
           </label>
-          <button disabled={!approved || active || busy} onClick={download}>
+          <button
+            disabled={!approved || active || busy || plan.storage?.blocked}
+            onClick={download}
+          >
             Download mapped roads/trails
           </button>
         </div>
       )}
       {job && (
-        <p role="status">
+        <div role="status">
+          <JobProgress job={job} />
           Network acquisition {job.status}: {job.error || job.stage}
-        </p>
+        </div>
       )}
       {error && (
         <p role="alert" className="error">

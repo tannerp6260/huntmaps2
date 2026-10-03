@@ -51,11 +51,12 @@ class Preparation(Payload):
     polygon: str | int
     radius_m: Literal[500, 1000, 1500, 2000, 2500, 3000] = 2000
     observation_minutes: int = Field(default=30, ge=5, le=120)
-    max_download_mb: int = Field(default=600, ge=1, le=1900)
+    max_download_mb: int = Field(default=600, ge=1)
     candidate_count: int = Field(default=150, ge=12, le=200)
     access_sampling: dict | None = None
     include_network: StrictBool = False
 
 
 class Start(Payload):
+    review_signature: str | None = None
     download: StrictBool = False

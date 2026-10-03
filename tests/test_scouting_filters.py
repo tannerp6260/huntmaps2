@@ -292,8 +292,10 @@ class ScoutingFilterTests(unittest.TestCase):
                 load_networks([v["id"]], 32613)
             with self.assertRaises(ValueError):
                 network_plan([-108, 37, -106, 39], 600)
+            larger = network_plan([-107, 38, -106.99, 38.01], 2500)
+            self.assertEqual(larger["max_download_mb"], 2500)
             with self.assertRaises(ValueError):
-                network_plan([-107, 38, -106.99, 38.01], 1901)
+                network_plan([-107, 38, -106.99, 38.01], 0)
 
     def test_reviewed_budget_no_fallback_and_kmz(self):
         import io, zipfile, json

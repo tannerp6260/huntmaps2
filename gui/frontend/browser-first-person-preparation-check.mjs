@@ -13,7 +13,7 @@ try{
  await page.getByRole('button',{name:'Prepare using cached sources only',exact:true}).waitFor();await page.waitForFunction(()=>!document.querySelector('.fp-preparation button:last-of-type')?.disabled);
  const pid=await page.evaluate(()=>localStorage.getItem('huntmaps-first-person-plan'));
  const plan=await (await page.request.get(base+'/api/first-person/plans/'+pid)).json();assert.equal(plan.estimated_new_bytes,0);assert.ok(plan.sources.every(s=>s.cached));
- assert.equal(await page.getByLabel('Allow this plan’s source downloads within 500 MB',{exact:true}).isChecked(),false);
+ assert.equal(await page.getByLabel(/Allow this plan’s source downloads within/).isChecked(),false);
  await page.screenshot({path:out+'/06-acquisition-plan.png',fullPage:true});
  await page.getByRole('button',{name:'Prepare using cached sources only',exact:true}).click();
  let job;

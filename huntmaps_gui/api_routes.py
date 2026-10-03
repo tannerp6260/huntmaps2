@@ -64,7 +64,24 @@ def api_router(jobs: Jobs):
 
     @router.get("/api/first-person/plans/{ident}")
     def fp_get_plan(ident):
-        return fp.plan(ident)
+        p = fp.plan(ident)
+        from .downloads import review_info, provider_estimates
+
+        return dict(
+            p,
+            review_required=bool(p.get("prepared") and not p.get("review_signature")),
+            errors=[e for e in p.get("errors", []) if "500 MB pilot budget" not in e],
+            **review_info(
+                [fp.HOME],
+                p.get("estimated_new_bytes", 0),
+                provider_estimates(p.get("sources", []), "remaining_bytes"),
+                800_000_000
+                + max(
+                    (s["bytes"] for s in p.get("sources", []) if not s.get("cached")),
+                    default=0,
+                ),
+            ),
+        )
 
     @router.put("/api/first-person/plans/{ident}/allowance")
     def fp_allowance(ident, body: dict = Body(...)):
@@ -77,9 +94,25 @@ def api_router(jobs: Jobs):
                 )
             p = fp.plan(ident)
             cap = body.get("max_download_mb")
-            if type(cap) is not int or not 10 <= cap <= 500:
-                raise ValueError("Choose a 10–500 MB scene transfer ceiling")
+            if type(cap) is not int or not cap >= 10:
+                raise ValueError(
+                    "Choose an integer scene transfer allowance of at least 10 MB"
+                )
             p["download_cap_bytes"] = cap * 1_000_000
+            from .approach_service import digest
+
+            p["review_signature"] = digest(
+                {
+                    k: p.get(k)
+                    for k in (
+                        "sources",
+                        "snapshots",
+                        "acquisition",
+                        "fidelity",
+                        "download_cap_bytes",
+                    )
+                }
+            )
             write(fp.HOME / "plans" / (ident + ".json"), p)
             return p
 
@@ -89,6 +122,28 @@ def api_router(jobs: Jobs):
         p = fp.plan(ident)
         if not p.get("prepared"):
             raise ValueError("Review the source plan first")
+        from .downloads import check_space
+
+        check_space(
+            fp.HOME,
+            3 * (p.get("estimated_new_bytes", 0) if body.get("download") else 0)
+            + (
+                max(
+                    (s["bytes"] for s in p.get("sources", []) if not s.get("cached")),
+                    default=0,
+                )
+                if body.get("download")
+                else 0
+            )
+            + 800_000_000,
+        )
+        if body.get("download") and (
+            not p.get("review_signature")
+            or body.get("review_signature") != p["review_signature"]
+        ):
+            raise ValueError(
+                "Source plan changed or consent is outdated; refresh and approve the current scene plan"
+            )
         return jobs.start(
             [
                 sys.executable,
@@ -98,7 +153,11 @@ def api_router(jobs: Jobs):
                 "prepare",
                 ident,
             ]
-            + (["--download"] if body.get("download") is True else []),
+            + (
+                ["--download", "--review-signature", body["review_signature"]]
+                if body.get("download") is True
+                else []
+            ),
             "first-person-prepare",
             plan=ident,
         )
@@ -394,11 +453,11 @@ def api_router(jobs: Jobs):
         if (
             radius not in [500, 1000, 1500, 2000, 2500, 3000]
             or not 5 <= minutes <= 120
-            or not 1 <= budget <= 1900
+            or not budget >= 1
             or not 12 <= count <= 200
         ):
             raise ValueError(
-                "Use a supported radius, 5–120 minutes, 12–200 candidates and 1–1900 MB download budget"
+                "Use a supported radius, 5–120 minutes, 12–200 candidates and positive MB transfer allowance"
             )
         ident = uuid.uuid4().hex
         folder = STATE / "plans"
@@ -459,9 +518,9 @@ def api_router(jobs: Jobs):
                 else None
             )
             cap = body.get("max_download_mb")
-            if not p or type(cap) is not int or not 10 <= cap <= 1900:
+            if not p or type(cap) is not int or not cap >= 10:
                 raise ValueError(
-                    "Choose a prepared plan and a 10–1900 MB transfer ceiling"
+                    "Choose a prepared plan and an integer transfer allowance of at least 10 MB"
                 )
             if (WORKSPACE / "results" / p["name"] / "manifest.json").exists():
                 raise ValueError("Completed run preserved")
@@ -481,8 +540,23 @@ def api_router(jobs: Jobs):
         p = read(STATE / "plans" / (ident + ".json"))
         if not p:
             raise ValueError("Unknown plan")
+        from .downloads import (
+            review_info,
+            provider_estimates,
+            baseline_review_signature,
+        )
+
         return dict(
             p,
+            review_signature=baseline_review_signature(p),
+            **review_info(
+                [WORKSPACE, STATE],
+                p.get("acquisition", {}).get("estimated_bytes", 0),
+                provider_estimates(
+                    p.get("acquisition", {}).get("items", []), "estimated_bytes"
+                ),
+                processing_bytes=2 * 1024**3,
+            ),
             boundary=read(WORKSPACE / "results" / p["name"] / "observer.geojson"),
             settings={
                 k: v
@@ -497,6 +571,18 @@ def api_router(jobs: Jobs):
         p = plan(ident)
         if not p.get("prepared"):
             raise ValueError("Prepare and review the acquisition plan first")
+        from .downloads import check_space
+
+        check_space(
+            WORKSPACE,
+            3 * p.get("acquisition", {}).get("estimated_bytes", 0) + 2 * 1024**3,
+        )
+        if body.get("download") and body.get("review_signature") != p.get(
+            "review_signature"
+        ):
+            raise ValueError(
+                "Source plan changed; review and approve the current acquisition plan"
+            )
         if p.get("acquisition", {}).get("errors"):
             raise ValueError("Fix acquisition plan errors before starting")
         if (
@@ -510,7 +596,11 @@ def api_router(jobs: Jobs):
             )
         return jobs.start(
             [sys.executable, "-u", "-m", "huntmaps_gui.worker", "run", ident]
-            + (["--download"] if body.get("download") is True else []),
+            + (
+                ["--download", "--review-signature", body["review_signature"]]
+                if body.get("download") is True
+                else []
+            ),
             "baseline",
             p["name"],
             ident,

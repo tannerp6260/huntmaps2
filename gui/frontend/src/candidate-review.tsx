@@ -3,6 +3,8 @@ const num = (value: unknown) => (typeof value === 'number' ? value.toFixed(3) : 
 export default function CandidateCard({
   p,
   shortlisted,
+  dismissed,
+  busy,
   onDecision,
   matching,
   selected,
@@ -16,6 +18,8 @@ export default function CandidateCard({
 }: {
   p: Candidate;
   shortlisted?: boolean;
+  dismissed?: boolean;
+  busy?: boolean;
   onDecision?: (action: string) => void;
   matching?: number;
   selected: string;
@@ -54,10 +58,12 @@ export default function CandidateCard({
       </button>
       {onDecision && (
         <div className="candidate-actions">
-          <button onClick={() => onDecision('shortlist')}>
+          <button disabled={busy || shortlisted} onClick={() => onDecision('shortlist')}>
             {shortlisted ? 'Shortlisted' : 'Shortlist'}
           </button>
-          <button onClick={() => onDecision('remove')}>Dismiss</button>
+          <button disabled={busy} onClick={() => onDecision(dismissed ? 'restore' : 'dismiss')}>
+            {dismissed ? 'Restore' : 'Dismiss'}
+          </button>
         </div>
       )}
       <div className="candidate-actions">

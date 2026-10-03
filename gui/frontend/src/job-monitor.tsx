@@ -1,3 +1,4 @@
+import JobProgress from './job-progress';
 import JobLogs from './job-logs';
 import type { Job } from './types';
 export default function JobMonitor({
@@ -59,6 +60,7 @@ export default function JobMonitor({
             )}
           </div>
           <p>{j.stage}</p>
+          <JobProgress job={j} />
           {j.engine_event && (
             <p className="hint">
               Latest engine record: {j.engine_event.stage || j.engine_event.command || 'see log'}{' '}

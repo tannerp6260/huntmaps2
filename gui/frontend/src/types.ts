@@ -1,3 +1,4 @@
+import type { DownloadReviewInfo } from './download-review';
 export type Candidate = {
   name?: string;
   working_revision?: string;
@@ -28,6 +29,15 @@ export type Run = {
   warning: string;
 };
 export type Job = {
+  progress?: {
+    phase: string;
+    label: string;
+    completed: number;
+    total: number | null;
+    updated: number;
+    bytes_per_s?: number | null;
+    remaining_s?: number | null;
+  };
   id: string;
   name: string;
   kind: string;
@@ -86,7 +96,9 @@ export type AcquisitionItem = {
   status?: string;
   provider?: string;
 };
-export type BaselinePlan = {
+export type BaselinePlan = DownloadReviewInfo & {
+  acquisition_hash?: string;
+  review_signature?: string;
   id: string;
   name: string;
   prepared: boolean;
@@ -104,7 +116,9 @@ export type BaselinePlan = {
     items: AcquisitionItem[];
   };
 };
-export type FirstPersonPlan = {
+export type FirstPersonPlan = DownloadReviewInfo & {
+  review_required?: boolean;
+  review_signature?: string;
   download_cap_bytes: number;
   candidates: string[];
   id: string;

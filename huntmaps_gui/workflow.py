@@ -5,7 +5,7 @@ from .config import STATE
 from .storage import read_json, write, locked
 from .approach_service import digest
 
-VERSION = 1
+VERSION = 2
 
 
 def path(run):
@@ -17,7 +17,9 @@ def path(run):
 
 def records(run):
     value = read_json(path(run), dict(version=VERSION, revision=0, points={}))
-    if value.get("version") != VERSION or not isinstance(value.get("points"), dict):
+    if value.get("version") not in (1, VERSION) or not isinstance(
+        value.get("points"), dict
+    ):
         raise ValueError(
             "Unsupported workflow record; preserve it and restore a compatible backup"
         )
@@ -79,7 +81,8 @@ def get(run, jobs=None):
         except (KeyError, ValueError):
             continue
         same = saved.get("point") == current
-        shortlisted = saved.get("shortlisted", cid in legacy)
+        dismissed = saved.get("dismissed", False)
+        shortlisted = saved.get("shortlisted", cid in legacy) and not dismissed
         selected = (
             selection(run, cid, saved.get("approach"), jobs)
             if same and shortlisted
@@ -103,6 +106,8 @@ def get(run, jobs=None):
         result[cid] = dict(
             point=current,
             shortlisted=shortlisted,
+            dismissed=dismissed,
+            undo_revision=saved.get("undo_revision"),
             legacy=not bool(saved),
             approach=selected,
             viewed=viewed,
@@ -126,16 +131,39 @@ def decide(run, cid, body, jobs=None):
             from .approach_service import point_snapshot
 
             old = dict(
-                shortlisted=old.get("shortlisted", cid in point_snapshot(run, jobs)[1])
+                shortlisted=old.get("shortlisted", cid in point_snapshot(run, jobs)[1]),
+                dismissed=old.get("dismissed", False),
             )
         entry = dict(old, point=current)
         action = body.get("action")
-        if action in ("shortlist", "remove"):
+        if action in ("shortlist", "remove", "dismiss", "restore"):
+            entry.pop("undo", None)
+            entry.pop("undo_revision", None)
+            if action == "dismiss":
+                entry["undo"] = {
+                    k: v for k, v in old.items() if k not in ("undo", "undo_revision")
+                }
+                entry["undo_revision"] = value["revision"] + 1
+            entry["dismissed"] = (
+                old.get("dismissed", False)
+                if action == "remove"
+                else action == "dismiss"
+            )
             entry["shortlisted"] = action == "shortlist"
-            if action == "remove" or not old.get("shortlisted"):
-                entry["confirmed"] = False
-            if action == "remove":
+            entry["confirmed"] = False
+            if action in ("remove", "dismiss", "restore"):
                 entry.pop("approach", None)
+        elif action == "undo":
+            if (
+                old.get("undo_revision") != value["revision"]
+                or body.get("undo_revision") != value["revision"]
+            ):
+                raise ValueError(
+                    "Decision changed; use Restore instead of outdated Undo"
+                )
+            entry = dict(old["undo"], point=current)
+            entry.pop("undo", None)
+            entry.pop("undo_revision", None)
         elif action == "unselect":
             entry.pop("approach", None)
             entry["confirmed"] = False
@@ -191,10 +219,11 @@ def decide(run, cid, body, jobs=None):
             entry["confirmed"] = True
         else:
             raise ValueError(
-                "Choose shortlist, remove, unselect, approach, viewed or confirm"
+                "Choose shortlist, dismiss, restore, undo, remove, unselect, approach, viewed or confirm"
             )
         entry["updated"] = time.time()
         value["points"][cid] = entry
+        value["version"] = VERSION
         value["revision"] += 1
         write(path(run), value)
     return get(run, jobs)

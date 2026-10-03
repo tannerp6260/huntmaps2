@@ -21,6 +21,18 @@ try {
  const run=await (await page.request.get(api)).json();
  const listIds=()=>page.locator('.candidate-select strong').allTextContents().then(ids=>ids.map(id=>id.trim().split(' · ')[0]));
  assert.deepEqual(await listIds(),[...run.candidates].sort((a,b)=>b.metrics.raw_km2-a.metrics.raw_km2).map(p=>p.id));
+ const card=page.locator('[data-tour="setup-A0001"]');
+ await card.getByRole('button',{name:'Dismiss',exact:true}).click();
+ await page.waitForFunction(()=>!document.querySelector('[data-tour="setup-A0001"]'));
+ await page.getByRole('button',{name:'Undo',exact:true}).click();
+ await card.waitFor();
+ await card.getByRole('button',{name:'Dismiss',exact:true}).click();
+ await page.waitForFunction(()=>!document.querySelector('[data-tour="setup-A0001"]'));
+ await page.getByLabel('Saved neighborhood').selectOption('dismissed');
+ await card.getByRole('button',{name:'Restore',exact:true}).click();
+ await page.waitForFunction(()=>!document.querySelector('[data-tour="setup-A0001"]'));
+ await page.getByLabel('Saved neighborhood').selectOption('all');
+ await card.waitFor();
  await page.getByLabel('Setup order').selectOption('engine');
  assert.deepEqual(await listIds(),[...run.candidates].sort((a,b)=>(b.metrics.baseline_score??b.metrics.selective_score??-1)-(a.metrics.baseline_score??a.metrics.selective_score??-1)).map(p=>p.id));
  await page.getByLabel('Setup order').selectOption('coverage');

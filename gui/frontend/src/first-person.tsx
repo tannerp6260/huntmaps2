@@ -1,3 +1,5 @@
+import DownloadReview from './download-review';
+import JobProgress from './job-progress';
 import JobLogs from './job-logs';
 import { useEffect, useRef, useState } from 'react';
 import PositionMap from './position-map';
@@ -128,6 +130,9 @@ export default function FirstPerson({
     [busy, setBusy] = useState(false),
     [refresh, setRefresh] = useState(0),
     [sceneVersion, setSceneVersion] = useState(0);
+  useEffect(() => {
+    setAllow(false);
+  }, [plan?.review_signature]);
   useEffect(() => {
     if (plan?.download_cap_bytes) setTransferLimit(plan.download_cap_bytes / 1e6);
   }, [plan?.download_cap_bytes]);
@@ -415,7 +420,8 @@ export default function FirstPerson({
           <summary>Prepare local fine terrain and lidar</summary>
           <p>
             Preparation uses exact waypoints from this run. Existing scores and outputs stay
-            unchanged. New source downloads are capped at 500 MB; cached sources are reused.
+            unchanged. New downloads require a reviewed allowance; storage checks keep 20 GiB free.
+            Cached sources are reused.
           </p>
           <button
             disabled={busy || active}
@@ -489,19 +495,22 @@ export default function FirstPerson({
                 {(plan.sources?.filter((s) => s.cached).reduce((sum, s) => sum + s.bytes, 0) || 0) /
                   1e6}{' '}
                 MB. Suggested transfer ceiling:{' '}
-                {Math.min(
-                  500,
-                  Math.max(10, Math.ceil((plan.estimated_new_bytes * 1.2) / 1e7) * 10),
-                )}{' '}
-                MB; the separate cumulative cap remains 500 MB.
+                {Math.min(Math.max(10, Math.ceil((plan.estimated_new_bytes * 1.2) / 1e7) * 10))} MB;
+                storage checks keep 20 GiB free.
               </p>
+              <DownloadReview plan={plan} bytes={plan.estimated_new_bytes ?? null} />
+              {plan.review_required && (
+                <p>
+                  Check the source plan again before approving new downloads. Cached preparation
+                  remains available.
+                </p>
+              )}
               <details>
                 <summary>Custom scene transfer ceiling</summary>
                 <input
                   aria-label="Scene download allowance"
                   type="number"
                   min="10"
-                  max="500"
                   value={transferLimit}
                   onChange={(e) => setTransferLimit(+e.target.value)}
                 />
@@ -529,10 +538,17 @@ export default function FirstPerson({
                 <input
                   type="checkbox"
                   checked={allow}
-                  disabled={active || !plan.prepared || !!plan.errors?.length}
+                  disabled={
+                    active ||
+                    !plan.prepared ||
+                    !!plan.errors?.length ||
+                    plan.storage?.blocked ||
+                    plan.review_required
+                  }
                   onChange={(e) => setAllow(e.target.checked)}
                 />
-                Allow this plan’s source downloads within 500 MB
+                Allow this plan’s source downloads within{' '}
+                {Math.round(plan.download_cap_bytes / 1e6)} MB
               </label>
               <button
                 disabled={
@@ -543,7 +559,10 @@ export default function FirstPerson({
                     .needs_acquisition_selection
                 }
                 onClick={() =>
-                  action('/api/first-person/plans/' + planId + '/start', { download: allow })
+                  action('/api/first-person/plans/' + planId + '/start', {
+                    download: allow,
+                    review_signature: plan.review_signature,
+                  })
                 }
               >
                 {allow ? 'Download and prepare views' : 'Prepare using cached sources only'}
@@ -552,6 +571,7 @@ export default function FirstPerson({
           )}
           {job && (
             <div className="fp-job" role="status">
+              <JobProgress job={job} />
               <b>{job.status}</b> · {job.stage} · {job.elapsed_s || 0} s{' '}
               {active && (
                 <button
@@ -842,7 +862,8 @@ export default function FirstPerson({
                         {updateJob && (
                           <section className="fp-update-job" role="status">
                             <b>{updateJob.status}</b> · {updateJob.stage} ·{' '}
-                            {updateJob.elapsed_s || 0} s{' '}
+                            {updateJob.elapsed_s || 0} s
+                            <JobProgress job={updateJob} />{' '}
                             {['running', 'cancelling'].includes(updateJob.status) && (
                               <button
                                 disabled={updateJob.status === 'cancelling'}

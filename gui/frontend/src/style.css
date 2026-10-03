@@ -1265,3 +1265,18 @@ summary:focus-visible {
     display: block;
   }
 }
+
+.job-progress progress {
+  display: block;
+  width: 100%;
+  height: 14px;
+  accent-color: #31574a;
+  margin: 8px 0;
+}
+.job-progress small,
+.download-review small {
+  display: block;
+}
+.download-review input {
+  max-width: 170px;
+}

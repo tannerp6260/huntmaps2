@@ -1,3 +1,5 @@
+import DownloadReview from './download-review';
+import JobProgress from './job-progress';
 import { networkResponse } from './network-response';
 import { useEffect, useRef, useState } from 'react';
 import type { Map, GeoJSONSource } from 'maplibre-gl';
@@ -706,12 +708,14 @@ export default function ScoutingTools({
           <p>For automatic USFS acquisition, keep a setup and draw/import the travel area below.</p>
         )}
         {networkJob && (
-          <p role="status" className={networkJob.status === 'failed' ? 'error' : 'hint'}>
+          <div role="status" className={networkJob.status === 'failed' ? 'error' : 'hint'}>
+            <JobProgress job={networkJob} />
             Network acquisition {networkJob.status}: {networkJob.error || networkJob.stage}
-          </p>
+          </div>
         )}
         {networkPlan && (
           <div className="plan">
+            <DownloadReview plan={networkPlan} bytes={networkPlan.estimated_bytes ?? null} />
             <p>
               {networkPlan.provider}: up to {(networkPlan.estimated_bytes / 1e6).toFixed(0)} MB ·
               shared {budget} MB cap. {networkPlan.note}

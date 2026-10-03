@@ -70,13 +70,17 @@ checks catalog metadata and lists source dates, sizes and cached status. The sou
 download checkbox starts unchecked. **Prepare using cached sources only** cannot
 bulk-download missing lidar. Review the plan before explicitly enabling downloads.
 
-The pilot cap is 500 MB of new source payload cumulatively, including bytes from
-interrupted attempts. Complete cached sources are checksum-verified. Partial range
+Each source plan has an explicitly approved allowance for new payload. The old
+500 MB lifetime pilot cap is removed; historical transfer totals remain informational.
+Review shows approximate download time, cached reuse and storage headroom.
+A 20 GiB free-space reserve replaces fixed transfer caps. Complete cached sources are checksum-verified. Partial range
 receipts support safe continuation; cancellation retains partial files and valid
 published scenes. After restart, unfinished jobs become interrupted. Review the
 source plan and run preparation again. One preparation or analysis job runs at a
-time. The panel shows actual stages, elapsed time and an expandable subprocess log,
-without invented percentages.
+time. The panel shows transferred bytes, approximate remaining download time and
+progress bars. Processing shows counted items where available and an indeterminate
+bar otherwise. A completed stage does not imply a completed job. Elapsed time,
+cancellation and an expandable subprocess log remain available.
 
 Preparation has a 1536 MiB address-space limit, 900 seconds per preparation stage
 and an 800 MB derived-cache budget. Sources, plans and immutable scene bundles live

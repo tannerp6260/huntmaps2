@@ -1,3 +1,5 @@
+import DownloadReview from './download-review';
+import JobProgress from './job-progress';
 import NetworkMap from './network-map';
 import AccessSampling, { type Sampling } from './access-sampling';
 import ScoutingTools, { type AppliedFilter } from './scouting-tools';
@@ -245,7 +247,7 @@ function App() {
     count <= 200 &&
     Number.isInteger(budget) &&
     budget >= 1 &&
-    budget <= 1900 &&
+    Number.isSafeInteger(budget) &&
     Number.isInteger(minutes) &&
     minutes >= 5 &&
     minutes <= 120;
@@ -588,14 +590,18 @@ function App() {
       features: (newRun ? [] : shownCandidates)
         .filter(
           (p) =>
-            group === 'all' ||
-            (group === 'review'
-              ? run?.review_ids.includes(p.id)
-              : group === 'ungrouped'
-                ? !p.neighborhood
-                : p.neighborhood === group) ||
-            p.id === selected ||
-            compare.includes(p.id),
+            (group === 'dismissed'
+              ? !!workflow?.points[p.id]?.dismissed
+              : !workflow?.points[p.id]?.dismissed) &&
+            (group === 'all' ||
+              group === 'dismissed' ||
+              (group === 'review'
+                ? run?.review_ids.includes(p.id)
+                : group === 'ungrouped'
+                  ? !p.neighborhood
+                  : p.neighborhood === group) ||
+              p.id === selected ||
+              compare.includes(p.id)),
         )
         .map((p) => ({
           type: 'Feature' as const,
@@ -610,18 +616,34 @@ function App() {
           geometry: { type: 'Point' as const, coordinates: [p.longitude, p.latitude] },
         })),
     });
-  }, [ready, run, selected, compare, group, newRun, activeManual?.id, workingGeometryStamp]);
+  }, [
+    ready,
+    run,
+    selected,
+    compare,
+    group,
+    newRun,
+    activeManual?.id,
+    workingGeometryStamp,
+    workflow?.revision,
+  ]);
   useEffect(() => {
     if (ready)
       (map.current!.getSource('manual-observers') as GeoJSONSource).setData({
         type: 'FeatureCollection',
-        features: (newRun ? [] : shownManual).map((p) => ({
-          type: 'Feature' as const,
-          properties: { id: p.id, record: JSON.stringify(p) },
-          geometry: { type: 'Point' as const, coordinates: [p.longitude, p.latitude] },
-        })),
+        features: (newRun ? [] : shownManual)
+          .filter((p) =>
+            group === 'dismissed'
+              ? workflow?.points[p.id]?.dismissed
+              : !workflow?.points[p.id]?.dismissed,
+          )
+          .map((p) => ({
+            type: 'Feature' as const,
+            properties: { id: p.id, record: JSON.stringify(p) },
+            geometry: { type: 'Point' as const, coordinates: [p.longitude, p.latitude] },
+          })),
       });
-  }, [ready, manualGeometryStamp, newRun, workingGeometryStamp]);
+  }, [ready, manualGeometryStamp, newRun, workingGeometryStamp, workflow?.revision, group]);
   useEffect(() => {
     if (!ready || !run || !selected || newRun) return;
     const p = shownCandidates.find((p) => p.id === selected);
@@ -853,7 +875,10 @@ function App() {
     if (training.active || planDirty || !settingsValid) return;
     try {
       setError('');
-      await api(`/plans/${planId}/start`, { method: 'POST', body: JSON.stringify({ download }) });
+      await api(`/plans/${planId}/start`, {
+        method: 'POST',
+        body: JSON.stringify({ download, review_signature: plan?.review_signature }),
+      });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -902,7 +927,11 @@ function App() {
           (inspectStage
             ? !!workflow?.points[p.id]?.approach
             : !!workflow?.points[p.id]?.shortlisted)) &&
+        (group === 'dismissed'
+          ? !!workflow?.points[p.id]?.dismissed
+          : !workflow?.points[p.id]?.dismissed) &&
         (group === 'all' ||
+          group === 'dismissed' ||
           (group === 'review'
             ? run?.review_ids.includes(p.id)
             : group === 'ungrouped'
@@ -939,6 +968,13 @@ function App() {
     if (currentRunRef.current === ident) setWorkflow(value);
     return value;
   };
+  const [decisionBusy, setDecisionBusy] = useState(false);
+  const [decisionFeedback, setDecisionFeedback] = useState('');
+  const [undoDecision, setUndoDecision] = useState<{ cid: string; revision: number } | null>(null);
+  useEffect(() => {
+    setDecisionFeedback('');
+    setUndoDecision(null);
+  }, [runId]);
   const decisionQueue = useRef<Promise<void>>(Promise.resolve());
   const decide = (cid: string, action: string, extra: Record<string, unknown> = {}) => {
     const ident = runId;
@@ -946,6 +982,7 @@ function App() {
       shownManual.find((p) => p.id === cid) || shownCandidates.find((p) => p.id === cid);
     const expectedPoint = workflow?.points[cid]?.point;
     const submit = async () => {
+      setDecisionBusy(true);
       try {
         if (currentRunRef.current !== ident) return;
         const state = await api(`/runs/${ident}/workflow`);
@@ -962,10 +999,19 @@ function App() {
           method: 'PUT',
           body: JSON.stringify({ action, revision: state.revision, point, ...extra }),
         });
-        if (currentRunRef.current === ident)
+        if (currentRunRef.current === ident) {
           setWorkflow((old) => (!old || value.revision >= old.revision ? value : old));
+          if (['shortlist', 'dismiss', 'restore', 'remove', 'undo'].includes(action)) {
+            setDecisionFeedback(
+              `${cid}: ${action === 'dismiss' ? 'dismissed' : action === 'restore' || action === 'undo' ? 'restored' : action === 'remove' ? 'removed from shortlist' : 'shortlisted'}.`,
+            );
+            setUndoDecision(action === 'dismiss' ? { cid, revision: value.revision } : null);
+          }
+        }
       } catch (e) {
         if (currentRunRef.current === ident) setError(String(e));
+      } finally {
+        setDecisionBusy(false);
       }
     };
     decisionQueue.current = decisionQueue.current.catch(() => {}).then(submit);
@@ -1005,6 +1051,8 @@ function App() {
       key={p.id}
       p={p}
       shortlisted={workflow?.points[p.id]?.shortlisted}
+      dismissed={workflow?.points[p.id]?.dismissed}
+      busy={decisionBusy}
       onDecision={training.active ? undefined : (action) => decide(p.id, action)}
       matching={appliedFilter?.candidates.find((row) => row.id === p.id)?.matching_km2}
       selected={selected}
@@ -1211,6 +1259,22 @@ function App() {
           </button>
         </div>
       )}
+      {decisionFeedback && (
+        <p role="status">
+          {decisionFeedback}{' '}
+          {undoDecision && (
+            <button
+              disabled={decisionBusy || workflow?.revision !== undoDecision.revision}
+              onClick={() =>
+                decide(undoDecision.cid, 'undo', { undo_revision: undoDecision.revision })
+              }
+            >
+              Undo
+            </button>
+          )}
+        </p>
+      )}
+
       <div className="workspace">
         <aside className={'sidebar ' + (listOpen ? 'drawer-open' : '')}>
           {newRun ? (
@@ -1283,11 +1347,7 @@ function App() {
             <>
               <div className="section-title">
                 <h2>Observer setups</h2>
-                <span>
-                  {group === 'all'
-                    ? run?.candidates.length || 0
-                    : `${visibleCandidates.length} / ${run?.candidates.length || 0}`}
-                </span>
+                <span>{`${visibleCandidates.length} / ${run?.candidates.length || 0}`}</span>
               </div>
               <label>
                 Order
@@ -1313,6 +1373,7 @@ function App() {
                   onChange={(e) => setGroup(e.target.value)}
                 >
                   <option value="all">All setups</option>
+                  <option value="dismissed">Dismissed</option>
                   {run.review_ids.length > 0 && (
                     <option value="review">Saved review positions ({run.review_ids.length})</option>
                   )}
@@ -1346,49 +1407,76 @@ function App() {
                 <section className="manual-list">
                   <h3>Provisional waypoints</h3>
                   <small>Orange pins · updated positions can have terrain shading</small>
-                  {shownManual.map((p) => (
-                    <div
-                      className={'candidate ' + (activeManual?.id === p.id ? 'active' : '')}
-                      key={p.id}
-                    >
-                      <button
-                        className="candidate-select"
-                        onClick={() => chooseManual(p)}
-                        aria-label={'Select waypoint ' + p.name}
+                  {shownManual
+                    .filter((p) =>
+                      group === 'dismissed'
+                        ? workflow?.points[p.id]?.dismissed
+                        : !workflow?.points[p.id]?.dismissed,
+                    )
+                    .map((p) => (
+                      <div
+                        className={'candidate ' + (activeManual?.id === p.id ? 'active' : '')}
+                        key={p.id}
                       >
-                        <strong>{p.name}</strong>
-                        <span>
-                          Near {p.anchor} · {p.status}
-                          {p.revision ? ' · terrain view ready' : ''}
-                        </span>
-                        <small>
-                          {p.latitude.toFixed(7)}, {p.longitude.toFixed(7)}
-                        </small>
-                      </button>
-                      <>
-                        {p.revision && (
+                        <button
+                          className="candidate-select"
+                          onClick={() => chooseManual(p)}
+                          aria-label={'Select waypoint ' + p.name}
+                        >
+                          <strong>{p.name}</strong>
+                          <span>
+                            Near {p.anchor} · {p.status}
+                            {p.revision ? ' · terrain view ready' : ''}
+                          </span>
+                          <small>
+                            {p.latitude.toFixed(7)}, {p.longitude.toFixed(7)}
+                          </small>
+                        </button>
+                        {!training.active && (
+                          <div className="candidate-actions">
+                            <button
+                              disabled={decisionBusy || workflow?.points[p.id]?.shortlisted}
+                              onClick={() => decide(p.id, 'shortlist')}
+                            >
+                              {workflow?.points[p.id]?.shortlisted ? 'Shortlisted' : 'Shortlist'}
+                            </button>
+                            <button
+                              disabled={decisionBusy}
+                              onClick={() =>
+                                decide(
+                                  p.id,
+                                  workflow?.points[p.id]?.dismissed ? 'restore' : 'dismiss',
+                                )
+                              }
+                            >
+                              {workflow?.points[p.id]?.dismissed ? 'Restore' : 'Dismiss'}
+                            </button>
+                          </div>
+                        )}
+                        <>
+                          {p.revision && (
+                            <label>
+                              <input
+                                type="checkbox"
+                                aria-label={'Compare waypoint ' + p.name}
+                                checked={compare.includes(p.id)}
+                                onChange={() => toggleCompare(p.id)}
+                              />
+                              Compare
+                            </label>
+                          )}
                           <label>
                             <input
                               type="checkbox"
-                              aria-label={'Compare waypoint ' + p.name}
-                              checked={compare.includes(p.id)}
-                              onChange={() => toggleCompare(p.id)}
+                              aria-label={'Export waypoint ' + p.name}
+                              checked={exportIds.includes(p.id)}
+                              onChange={() => toggleExport(p.id)}
                             />
-                            Compare
+                            Export
                           </label>
-                        )}
-                        <label>
-                          <input
-                            type="checkbox"
-                            aria-label={'Export waypoint ' + p.name}
-                            checked={exportIds.includes(p.id)}
-                            onChange={() => toggleExport(p.id)}
-                          />
-                          Export
-                        </label>
-                      </>
-                    </div>
-                  ))}
+                        </>
+                      </div>
+                    ))}
                 </section>
               )}
               <div className="export-box" data-tour="export-panel">
@@ -1767,8 +1855,8 @@ function App() {
               </small>
               {!settingsValid && (
                 <p className="error">
-                  Use a valid new run name, 12–200 trial locations and a reviewed 1–1900 MB transfer
-                  ceiling.
+                  Use a valid new run name, 12–200 trial locations and a positive integer MB
+                  transfer ceiling.
                 </p>
               )}
               {error && (
@@ -1785,6 +1873,7 @@ function App() {
               {plan && (
                 <div className="plan">
                   <h3>{plan.name} acquisition plan</h3>
+                  <JobProgress job={planJob} />
                   <p className="hint">
                     Prepared settings: {(plan.settings?.radius_m || 0) / 1000} km ·{' '}
                     {plan.settings?.observation_minutes} minutes assumed inspection time ·{' '}
@@ -1803,13 +1892,12 @@ function App() {
                       <p>
                         Allowance is a transfer ceiling, not a quality setting. Suggested:{' '}
                         {Math.min(
-                          1900,
                           Math.max(
                             10,
                             Math.ceil(((plan.acquisition?.estimated_bytes || 0) * 1.2) / 1e7) * 10,
                           ),
                         )}{' '}
-                        MB. Estimates near 1900 MB have limited headroom.
+                        MB. Storage checks retain 20 GiB free.
                       </p>
                       <details>
                         <summary>Custom transfer limit</summary>
@@ -1817,7 +1905,6 @@ function App() {
                           aria-label="Maximum download size (MB)"
                           type="number"
                           min="10"
-                          max="1900"
                           value={budget}
                           onChange={(e) => setBudget(+e.target.value)}
                         />
@@ -1844,12 +1931,11 @@ function App() {
                         {num((plan.acquisition?.estimated_bytes || 0) / 1e6, 1)} MB estimated ·{' '}
                         {plan.max_download_mb} MB cap
                       </b>
-                      {(plan.acquisition?.estimated_bytes || 0) > 1900e6 && (
-                        <p className="error">
-                          This estimate exceeds the 1900 MB ceiling. Reduce the area or settings
-                          before continuing.
-                        </p>
-                      )}
+                      <DownloadReview
+                        plan={plan}
+                        bytes={plan.acquisition?.estimated_bytes ?? null}
+                      />
+
                       <p>
                         Already cached:{' '}
                         {num((plan.acquisition?.already_cached_bytes || 0) / 1e6, 1)} MB ·{' '}
@@ -1888,7 +1974,7 @@ function App() {
                           checked={download}
                           onChange={(e) => setDownload(e.target.checked)}
                         />
-                        Allow this plan's bulk downloads within the cap
+                        Approve this plan's new downloads within {plan.max_download_mb} MB
                       </label>
                       <button
                         className="primary wide"
@@ -1897,6 +1983,7 @@ function App() {
                           planDirty ||
                           !settingsValid ||
                           (!planComplete && !plan.sources_ready && !download) ||
+                          (!planComplete && !!plan.storage?.blocked) ||
                           !!plan.acquisition?.errors?.length ||
                           (plan.acquisition?.estimated_bytes || 0) > plan.max_download_mb * 1e6
                         }
@@ -1932,10 +2019,6 @@ function App() {
                   </button>
                 </div>
               )}
-              <div className="notice">
-                Experimental vegetation analysis for new areas is unavailable. Soap Creek's saved
-                experiment is available only in its own review.
-              </div>
             </>
           ) : (
             <>
@@ -1978,6 +2061,7 @@ function App() {
                   workflow={workflow}
                   cid={activeManual?.id || selected}
                   inspect={inspectStage}
+                  pending={decisionBusy}
                   onDecision={decide}
                   onInspect={() => setFirstPerson(true)}
                   onApproaches={() => {

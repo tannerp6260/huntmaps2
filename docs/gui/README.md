@@ -87,9 +87,11 @@ prepared/reviewed again before downloads. After a descriptor/source failure, rep
 the named source or choose a fresh run; the GUI does not bypass checksum validation.
 
 Existing budget defaults remain: 3 million raster cells, 1536 MiB analysis address
-space, 900 seconds per engine command, 800 MB output budget; GUI download cap defaults
-to 600 MB. The form supports radius 500–3000 m in 500 m steps, 5–120 minutes,
-12–200 primary candidates and 1–1900 MB download caps. The engine can reject areas
+space, 900 seconds per engine command and 800 MB output budget. GUI transfer allowances
+are suggested after metadata review, with no fixed upper MB cap; storage checks
+retain 20 GiB free. The form supports radius 500–3000 m in 500 m steps and
+12–200 primary candidates. New GUI runs retain the 30-minute engine assumption;
+recovered runs preserve saved settings. The engine can reject areas
 whose buffered grid or source support exceeds its limits.
 
 ## Installation and development
@@ -211,8 +213,10 @@ shows damaged-record diagnostics instead of silently emptying your records.
 The workflow bar stays visible above the map. Preparation reviews sources and budgets;
 bulk downloads require the displayed consent. Edited run settings are marked unapplied:
 use a new plan and name for changed inputs. Unchanged partial jobs can still resume.
-Preparation failures show their job status and error beside the plan. Download caps
-above 1900 MB are rejected before submission.
+Preparation failures show their job status and error beside the plan. Download review
+shows estimated transfer time and storage headroom. Larger allowances require concrete
+plan approval and sufficient storage; byte-based progress and processing stages remain
+visible during work. See [the current workflow](WORKFLOW.md).
 
 **Observer access and visible-terrain filters** starts off. Enable maximum proximity
 (default 0.5 miles, roads and trails) or maximum height above the nearest mapped line
@@ -285,8 +289,8 @@ these records do not certify current vehicle suitability, legal access or safety
 
 Draw/import an observer area or open a run to use **Review road/trail download**
 when coverage is unconfirmed. Review the bounded USFS query, then explicitly approve
-its download. Existing 20 MB network response limits, 1900 MB maximum shared cap,
-single active job, cancellation and no-provider-fallback rules apply. Large areas
+its download. Existing 20 MB network response limits, the reviewed shared allowance,
+the 20 GiB storage reserve, single active job, cancellation and no-provider-fallback rules apply. Large areas
 must be narrowed. Saved lines work offline; line presence does not establish full
 coverage, and missing lines do not establish absence of access.
 The compact type legend lists classifications present in loaded networks. Layer

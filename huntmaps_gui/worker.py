@@ -14,7 +14,7 @@ from .config import WORKSPACE
 
 def run(args):
     return subprocess.run(
-        [sys.executable, "-u", "-m", "glassing.owner", *args], cwd=WORKSPACE
+        [sys.executable, "-u", "-m", "huntmaps_gui.owner_worker", *args], cwd=WORKSPACE
     ).returncode
 
 
@@ -27,9 +27,17 @@ def main():
     ap.add_argument("action", choices=["prepare", "run"])
     ap.add_argument("plan")
     ap.add_argument("--download", action="store_true")
+    ap.add_argument("--review-signature")
     a = ap.parse_args()
     path = STATE / "plans" / (a.plan + ".json")
     p = read(path)
+    if a.review_signature:
+        from .downloads import baseline_review_signature
+
+        if not p.get("prepared") or baseline_review_signature(p) != a.review_signature:
+            raise ValueError(
+                "Source plan or allowance changed; review and approve again"
+            )
     args = [
         "--area",
         p["area"],
@@ -149,6 +157,11 @@ def main():
         raise ValueError(
             "Combined reviewed acquisition exceeds the shared download cap"
         )
+    from .downloads import check_space
+    from .progress import start_download, emit
+
+    check_space(WORKSPACE, 3 * acquisition["estimated_bytes"] + 2 * 1024**3)
+    start_download(acquisition["estimated_bytes"])
     if p.get("include_network") and cached is None:
         if not a.download:
             raise ValueError("Explicitly allow this plan’s network bulk downloads")
