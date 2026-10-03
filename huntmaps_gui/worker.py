@@ -22,6 +22,100 @@ def plan_digest(plan):
     return hashlib.sha256(json.dumps(plan, sort_keys=True).encode()).hexdigest()
 
 
+def approval_inventory(config, acquisition):
+    """Source requests, independent of missing-file lists and cache bookkeeping."""
+
+    def source(value):
+        if isinstance(value, list):
+            return [source(v) for v in value]
+        if not isinstance(value, dict):
+            return value
+        if value.get("url"):
+            return {
+                k: value[k]
+                for k in [
+                    "url",
+                    "required_bounds",
+                    "request_padding_m",
+                    "catalog_source_id",
+                    "acquisition_date",
+                ]
+                if k in value
+            }
+        return {k: value[k] for k in ["path", "sha256"] if k in value}
+
+    net = acquisition.get("network_plan", {})
+    sources = {k: source(v) for k, v in config.get("data", {}).items()}
+    for item in acquisition.get("items", []):
+        if item.get("url") and item.get("key"):
+            sources[item["key"]] = source(item)
+    return dict(
+        version=2,
+        sources=sources,
+        network={k: net[k] for k in ["bounds", "items", "provider"] if k in net},
+    )
+
+
+def refresh_source_display(plan, root):
+    """Publish verified reuse after acquisition even if subsequent analysis fails."""
+    from glassing.transfer import source
+
+    config = read(root / "scouting.json", {})
+    cached, size = [], 0
+    for key, descriptor in config.get("data", {}).items():
+        if key not in [
+            "dem",
+            "tree",
+            "shrub",
+            "herb",
+            "summer",
+            "winter",
+        ] or not isinstance(descriptor, dict):
+            continue
+        try:
+            checked = dict(descriptor)
+            if checked.get("path") and not Path(checked["path"]).is_absolute():
+                checked["path"] = str(WORKSPACE / checked["path"])
+            path = Path(source(checked))
+        except (ValueError, OSError, TypeError):
+            continue
+        cached.append(key)
+        size += path.stat().st_size
+        approved = plan.get("approval_inventory", {}).get("sources", {}).get(key)
+        actual = approval_inventory({"data": {key: descriptor}}, {})["sources"][key]
+        if approved == actual:
+            plan.setdefault("approved_checksums", {}).setdefault(
+                key, descriptor["sha256"]
+            )
+    display = dict(plan.get("acquisition", {}))
+    items = []
+    for item in display.get("items", []):
+        descriptor = config.get("data", {}).get(item.get("key"))
+        if item.get("key") in cached and descriptor.get("url") == item.get("url"):
+            continue
+        items.append(item)
+    display.update(
+        items=items,
+        estimated_bytes=sum(i.get("estimated_bytes", 0) for i in items),
+        already_cached_bytes=size,
+        cached_keys=cached,
+    )
+    plan["acquisition"] = display
+    network_ready = (
+        not plan.get("include_network")
+        or read(STATE / "network-plans" / (plan["network_plan"] + "-result.json"))
+        is not None
+    )
+    plan["sources_ready"] = (
+        all(
+            key in cached
+            for key in ["dem", "tree", "shrub", "herb", "summer", "winter"]
+        )
+        and network_ready
+    )
+    return plan
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("action", choices=["prepare", "run"])
@@ -99,7 +193,12 @@ def main():
     if acquisition is None:
         return code or 2
     current_config = read(root / "scouting.json", {})
-    cached_keys = read(root / "acquisition.json", {}).get("cached_keys", [])
+    cached_keys = [
+        key
+        for key in ["dem", "tree", "shrub", "herb", "summer", "winter"]
+        if isinstance(current_config.get("data", {}).get(key), dict)
+        and current_config["data"][key].get("path")
+    ]
     cached_bytes = 0
     for key in cached_keys:
         descriptor = current_config.get("data", {}).get(key)
@@ -112,6 +211,12 @@ def main():
     acquisition = dict(
         acquisition, already_cached_bytes=cached_bytes, cached_keys=cached_keys
     )
+    inventory = approval_inventory(current_config, acquisition)
+    checksums = {
+        k: v["sha256"]
+        for k, v in current_config.get("data", {}).items()
+        if isinstance(v, dict) and v.get("sha256")
+    }
     if (
         a.action == "prepare"
         and p.get("estimate_first")
@@ -129,9 +234,17 @@ def main():
             cwd=WORKSPACE,
         ).returncode
     if a.action == "prepare":
+        if p.get("acquisition_hash") and p.get("approval_version") != 2:
+            p["approval_migrated"] = True
+            p["recovery_notice"] = (
+                "Legacy approval refreshed. Verified downloads are retained; interrupted transfer bytes from older jobs may be unknown."
+            )
         p.update(
             acquisition=acquisition,
             acquisition_hash=plan_digest(acquisition),
+            approval_inventory=inventory,
+            approval_version=2,
+            approved_checksums=checksums,
             prepared=True,
             required_data=(
                 (root / "DATA_REQUIRED.md").read_text()
@@ -149,14 +262,45 @@ def main():
         return 0
     if not p.get("prepared"):
         raise ValueError("Prepare and review the acquisition plan first")
-    if plan_digest(acquisition) != p["acquisition_hash"]:
+    if p.get("approval_version") != 2:
+        raise ValueError(
+            "Legacy approval requires one refresh and review; downloaded files are retained"
+        )
+    if inventory != p.get("approval_inventory") or any(
+        checksums.get(k) != v for k, v in p.get("approved_checksums", {}).items()
+    ):
         raise ValueError(
             "Acquisition plan changed. Prepare again and review the new estimate before starting."
         )
+    # Refresh display accounting without changing approval of identical requests.
+    p.update(acquisition=acquisition)
+    write(path, p)
     if acquisition["estimated_bytes"] > p["max_download_mb"] * 1000000:
         raise ValueError(
             "Combined reviewed acquisition exceeds the shared download cap"
         )
+    ledger = STATE / "plans" / (a.plan + "-transfer.json")
+    accounting = read(ledger)
+    if accounting is None:
+        # Legacy completed source transfers have manifests; unknown interrupted
+        # bytes cannot be reconstructed and are disclosed during migration.
+        entries = read(root / "downloads" / "manifest.json", {})
+        accounting = dict(
+            received_bytes=sum(v.get("bytes", 0) for v in entries.values()),
+            legacy_partial_bytes_unknown=p.get("approval_migrated", False),
+        )
+        if p.get("include_network") and cached:
+            accounting["received_bytes"] += cached.get("downloaded_bytes", 0)
+    accounting["ceiling_bytes"] = p["max_download_mb"] * 1000000
+    write(ledger, accounting)
+    if (
+        accounting["received_bytes"] >= accounting["ceiling_bytes"]
+        and acquisition["estimated_bytes"]
+    ):
+        raise ValueError(
+            "Cumulative download allowance exhausted; review a larger allowance before retrying"
+        )
+    os.environ["HUNTMAPS_TRANSFER_LEDGER"] = str(ledger)
     from .downloads import check_space
     from .progress import start_download, emit
 
@@ -169,7 +313,12 @@ def main():
 
         acquire(
             p["network_plan"],
-            p["max_download_mb"] * 1000000 - original_acquisition["estimated_bytes"],
+            max(
+                0,
+                accounting["ceiling_bytes"]
+                - accounting["received_bytes"]
+                - original_acquisition["estimated_bytes"],
+            ),
         )
         cached = read(STATE / "network-plans" / (p["network_plan"] + "-result.json"))
     if p.get("include_network"):
@@ -257,6 +406,7 @@ def main():
         flush=True,
     )
     code = run(["run", *args] + (["--download"] if a.download else []))
+    write(path, refresh_source_display(p, root))
     if code == 0:
         print("STAGE Baseline report and GIS exports complete", flush=True)
     return code

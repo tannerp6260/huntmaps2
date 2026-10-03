@@ -2,7 +2,7 @@ import {chromium} from 'playwright';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 if (!process.env.HUNTMAPS_URL || !process.env.HUNTMAPS_SCREENSHOTS) throw Error('Run through ./gui/check');
-const base=process.env.HUNTMAPS_URL,out=process.env.HUNTMAPS_SCREENSHOTS;
+const base=process.env.HUNTMAPS_URL,out=process.env.HUNTMAPS_SCREENSHOTS,runId=process.env.HUNTMAPS_WORKFLOW_RUN||'workflow-fixture';
 fs.mkdirSync(out,{recursive:true});
 const browser=await chromium.launch({executablePath:process.env.HUNTMAPS_BROWSER||'/usr/bin/google-chrome',headless:true,args:['--no-sandbox','--enable-unsafe-swiftshader','--use-gl=angle','--use-angle=swiftshader']});
 const page=await browser.newPage({viewport:{width:1500,height:1050}}), errors=[], decisions=[];
@@ -12,12 +12,13 @@ await page.addInitScript(()=>localStorage.setItem('huntmaps-online-imagery','off
 await page.route('**/*',r=>r.request().url().startsWith(base)||r.request().url().startsWith('blob:')?r.continue():r.abort());
 try {
  await page.goto(base);
- await page.getByLabel('Run selector').selectOption('workflow-fixture');
+ await page.getByLabel('Run selector').selectOption(runId);
+ if(runId!=='workflow-fixture')await page.getByLabel('Saved neighborhood').selectOption('all');
  await page.getByLabel('Select A0001',{exact:true}).click();
- const api=`${base}/api/runs/workflow-fixture`;
+ const api=`${base}/api/runs/${runId}`;
  const p=await (await page.request.get(api+'/candidates/A0001')).json();
  const initial=await (await page.request.get(api+'/workflow')).json();
- if(initial.points.A0001?.shortlisted) {await page.request.put(api+'/workflow/A0001',{headers:{'X-HuntMaps':'local'},data:{action:'remove',revision:initial.revision,point:initial.points.A0001.point}});await page.reload();await page.getByLabel('Run selector').selectOption('workflow-fixture');await page.getByLabel('Select A0001',{exact:true}).click();}
+ if(initial.points.A0001?.shortlisted) {await page.request.put(api+'/workflow/A0001',{headers:{'X-HuntMaps':'local'},data:{action:'remove',revision:initial.revision,point:initial.points.A0001.point}});await page.reload();await page.getByLabel('Run selector').selectOption(runId);await page.getByLabel('Select A0001',{exact:true}).click();}
  const run=await (await page.request.get(api)).json();
  const listIds=()=>page.locator('.candidate-select strong').allTextContents().then(ids=>ids.map(id=>id.trim().split(' · ')[0]));
  assert.deepEqual(await listIds(),[...run.candidates].sort((a,b)=>b.metrics.raw_km2-a.metrics.raw_km2).map(p=>p.id));
@@ -77,7 +78,7 @@ try {
  await page.screenshot({path:out+'/05-confirmed-900.png',fullPage:true});
  await nav.getByRole('button',{name:/1 · Find setups/}).click();
  await page.reload();
- await page.getByLabel('Run selector').selectOption('workflow-fixture');
+ await page.getByLabel('Run selector').selectOption(runId);
  await page.waitForFunction(()=>document.querySelector('.workflow-stages').textContent.includes('1 confirmed'));
  const state=await (await page.request.get(api+'/workflow')).json();
  assert.equal(state.points.A0001.confirmed,true);

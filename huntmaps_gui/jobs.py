@@ -289,10 +289,9 @@ class Jobs:
                         ("SCOUT:", "GUI JOB:", "ValueError:", "FileNotFoundError:")
                     )
                 ]
-                j["error"] = (
-                    (diagnostics[-1] + " " if diagnostics else "Job failed. ")
-                    + "Review the acquisition plan and log below. Fix the named source, area or budget, then refresh the plan or use a new run name. Partial files were retained."
-                )
+                from .failures import summarize
+
+                j.update(summarize(lines))
             if status == "failed" and j["kind"].startswith("first-person"):
                 j["error"] = (
                     (

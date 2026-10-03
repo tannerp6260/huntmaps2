@@ -557,6 +557,9 @@ def api_router(jobs: Jobs):
         return dict(
             p,
             review_signature=baseline_review_signature(p),
+            transferred_bytes=read(
+                STATE / "plans" / (ident + "-transfer.json"), {}
+            ).get("received_bytes", 0),
             **review_info(
                 [WORKSPACE, STATE],
                 p.get("acquisition", {}).get("estimated_bytes", 0),
@@ -585,9 +588,9 @@ def api_router(jobs: Jobs):
             WORKSPACE,
             3 * p.get("acquisition", {}).get("estimated_bytes", 0) + 2 * 1024**3,
         )
-        if body.get("download") and body.get("review_signature") != p.get(
+        if (body.get("download") or body.get("review_signature")) and body.get(
             "review_signature"
-        ):
+        ) != p.get("review_signature"):
             raise ValueError(
                 "Source plan changed; review and approve the current acquisition plan"
             )
@@ -607,6 +610,11 @@ def api_router(jobs: Jobs):
             + (
                 ["--download", "--review-signature", body["review_signature"]]
                 if body.get("download") is True
+                else []
+            )
+            + (
+                ["--review-signature", body["review_signature"]]
+                if body.get("review_signature") and not body.get("download")
                 else []
             ),
             "baseline",

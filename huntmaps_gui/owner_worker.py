@@ -14,6 +14,14 @@ def initialize(self, root, budget):
     _original_init(self, root, budget)
     # A reviewed GUI allowance covers new transfer, not already verified cached files.
     self.budget = budget
+    import os
+    from .storage import read_json
+
+    if os.environ.get("HUNTMAPS_TRANSFER_LEDGER"):
+        ledger = read_json(os.environ["HUNTMAPS_TRANSFER_LEDGER"], {})
+        self.budget = min(
+            budget, max(0, ledger["ceiling_bytes"] - ledger["received_bytes"])
+        )
 
 
 def get(self, name, url, **metadata):
@@ -26,8 +34,8 @@ def get(self, name, url, **metadata):
         def tracked(size=-1):
             check_space(self.root, max(0, size))
             block = read(size)
-            check_space(self.root, len(block))
             received(len(block), url)
+            check_space(self.root, len(block))
             return block
 
         response.read = tracked

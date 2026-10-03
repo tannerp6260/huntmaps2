@@ -35,7 +35,11 @@ export default function JobMonitor({
               <>
                 {!j.kind.startsWith('first-person') && j.kind !== 'waypoint-update' && (
                   <button disabled={trainingActive} onClick={() => onAction(j, 'resume')}>
-                    Review / resume plan
+                    {j.recovery_action === 'adjust'
+                      ? 'Review sampling settings'
+                      : j.recovery_action === 'review'
+                        ? 'Review source plan'
+                        : 'Review / resume plan'}
                   </button>
                 )}
                 {j.kind === 'waypoint-update' && (
@@ -68,6 +72,7 @@ export default function JobMonitor({
             </p>
           )}
           {j.error && <p className="error">{j.error}</p>}
+          {j.failed_stage && <small>Failed during: {j.failed_stage}</small>}
           <JobLogs id={j.id} label="Actual subprocess log" />
         </div>
       ))}

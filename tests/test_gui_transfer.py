@@ -236,6 +236,12 @@ class TransferSafety(unittest.TestCase):
                 json=dict(download=True, review_signature=signature),
             )
             self.assertEqual(response.status_code, 400)
+            cached_response = client.post(
+                "/api/plans/" + ident + "/start",
+                headers={"X-HuntMaps": "local"},
+                json=dict(download=False, review_signature=signature),
+            )
+            self.assertEqual(cached_response.status_code, 400)
         with patch(
             "sys.argv",
             ["worker", "run", ident, "--download", "--review-signature", signature],

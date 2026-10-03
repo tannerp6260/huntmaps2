@@ -21,6 +21,13 @@ export type Run = {
   candidates: Candidate[];
   groups: Record<string, string[]>;
   recommendation_ids?: string[];
+  search_summary?: {
+    evaluated_count: number;
+    budget: number;
+    unused_budget: number;
+    sampling?: { spacing_m: number | null };
+    exhaustion_reason?: string | null;
+  };
   review_ids: string[];
   synthetic: boolean;
   boundary: GeoJSON.FeatureCollection;
@@ -48,6 +55,9 @@ export type Job = {
   elapsed_s: number;
   logs: string;
   error?: string;
+  failure_code?: string;
+  failed_stage?: string;
+  recovery_action?: 'review' | 'adjust' | 'retry';
   engine_event?: { stage?: string; command?: string; wall_s?: number };
 };
 
@@ -98,6 +108,8 @@ export type AcquisitionItem = {
   provider?: string;
 };
 export type BaselinePlan = DownloadReviewInfo & {
+  transferred_bytes?: number;
+  recovery_notice?: string;
   acquisition_hash?: string;
   review_signature?: string;
   id: string;

@@ -18,6 +18,7 @@ def main():
     if not c.get("normal_scouting") or not c.get("search"):
         raise ValueError("Expanded search requires a normal GUI run")
     search.validate(c)
+    search.guard_checkpoint(root)
     transfer.verify(c)
     resource.setrlimit(
         resource.RLIMIT_AS, (c["memory_mb"] * 1024**2, resource.RLIM_INFINITY)
@@ -34,7 +35,7 @@ def main():
         signal.alarm(c["runtime_s"])
         print("STAGE " + stage, flush=True)
         if stage == "prepare":
-            transfer.prepare(c)
+            search.prepare(c)
         else:
             transfer.guard_prepared(c)
             transfer.guard_products(root)
@@ -73,7 +74,7 @@ def main():
                     "actionability",
                 ]
             ],
-            "candidates": ["pool.json"],
+            "candidates": ["pool.json", "sampling_summary.json"],
             "access": ["approaches.json"],
             "score": [
                 "scores.json",

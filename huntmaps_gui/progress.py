@@ -104,6 +104,17 @@ def start_download(total):
 def received(count, url):
     """Called after a network read, before publication; shared range threads serialize."""
     global _last_write
+    ledger_name = os.environ.get("HUNTMAPS_TRANSFER_LEDGER")
+    if ledger_name and count:
+        ledger = Path(ledger_name)
+        with locked(ledger):
+            record = read_json(ledger, {})
+            record["received_bytes"] = record.get("received_bytes", 0) + count
+            write(ledger, record)
+            if record["received_bytes"] > record["ceiling_bytes"]:
+                raise ValueError(
+                    "Cumulative download allowance exceeded; partial files retained. Review a larger allowance before retrying"
+                )
     path = progress_path()
     if path is None:
         return

@@ -118,8 +118,21 @@ def baseline_review_signature(plan):
     }
     return digest(
         dict(
-            sources=plan.get("acquisition_hash"),
+            sources=(
+                plan.get("approval_inventory")
+                if plan.get("approval_version") == 2
+                else plan.get("acquisition_hash")
+            ),
             allowance=plan.get("max_download_mb"),
             settings=settings or plan.get("settings"),
+            sampling=plan.get("access_sampling"),
+            network=plan.get("include_network", False),
+            boundary=(
+                __import__("hashlib")
+                .sha256(Path(plan["area"]).read_bytes())
+                .hexdigest()
+                if plan.get("area") and Path(plan["area"]).is_file()
+                else None
+            ),
         )
     )

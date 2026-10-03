@@ -131,9 +131,11 @@ class Run:
         self.rows = {k: dict(v) for k, v in self.points.items()}
         recommendations = self.analysis / "recommendations.json"
         self.recommendation_ids = []
+        self.search_summary = None
         if recommendations.exists():
             self.validate(recommendations)
-            self.recommendation_ids = frozen_read(recommendations).get("ids", [])
+            self.search_summary = frozen_read(recommendations)
+            self.recommendation_ids = self.search_summary.get("ids", [])
         self.details = {}
         self.obstruction_scenarios = {}
         self.groups = {}
@@ -309,6 +311,7 @@ class Run:
             candidates=pts,
             groups=self.groups,
             recommendation_ids=self.recommendation_ids,
+            search_summary=self.search_summary,
             review_ids=(
                 sum(self.groups.values(), [])
                 if self.experimental

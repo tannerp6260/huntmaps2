@@ -226,6 +226,28 @@ assert len(transfer.read('results/search-analysis/search-checkpoint.json')['rows
             metrics = json.loads((analysis / "search-metrics.json").read_text())
             print("Expanded search fixture metrics:", json.dumps(metrics))
             run(
+                "-c",
+                """from pathlib import Path
+import hashlib
+from glassing import transfer
+from huntmaps_gui import search_worker
+import sys
+root=Path('results/search-analysis')
+checkpoint=root/'search-checkpoint.json'
+original=checkpoint.read_bytes()
+stale=transfer.read(checkpoint);stale['identity']['algorithm']='outdated'
+transfer.dump(checkpoint,stale)
+before={str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in root.rglob('*') if p.is_file()}
+sys.argv=['search_worker','--config','fixture.json']
+try:search_worker.main()
+except ValueError as error:assert 'checkpoint is incompatible' in str(error)
+else:raise AssertionError('Incompatible checkpoint must be rejected')
+after={str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in root.rglob('*') if p.is_file()}
+assert before==after
+checkpoint.write_bytes(original)
+""",
+            )
+            run(
                 "-m",
                 "huntmaps_gui.owner_worker",
                 "run",

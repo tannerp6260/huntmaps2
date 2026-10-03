@@ -103,6 +103,11 @@ class GuiBaselineWorker(unittest.TestCase):
                     self.assertIn(
                         "Baseline report and GIS exports complete", record["logs"]
                     )
+                    refreshed = read_json(state / "plans" / (key + ".json"))
+                    self.assertTrue(refreshed["sources_ready"])
+                    self.assertGreater(
+                        refreshed["acquisition"]["already_cached_bytes"], 0
+                    )
                     self.assertTrue(
                         (workspace / "results/gui-fixture/manifest.json").is_file()
                     )

@@ -173,7 +173,7 @@ Only complete valid local DEM coverage is supported. See [training](TRAINING.md)
 
 ## Clearer settings
 
-**Locations to evaluate** controls initial separated sampling across your polygon, not the number of top results. Open **How locations are chosen** for spatial and terrain sampling details. Too many locations for the area and spacing causes a clear failure. Nearby diagnostic alternatives can add results. **Advanced scoring settings → Assumed inspection time** retains the existing 30-minute assumption; it affects inspection scores and rankings, not raw terrain-visible area or a recommended stop duration. **View radius** is analysis distance, not guaranteed deer identification distance. **Maximum download size (MB)** limits analysis source acquisition, separate from processing limits and online map browsing.
+**Locations to evaluate** controls initial separated sampling across your polygon, not the number of top results. Open **How locations are chosen** for spatial and terrain sampling details. Small areas use denser broad sampling down to grid resolution; exhausted eligible cells finish with fewer evaluations and an explanation. Nearby diagnostic alternatives can add results. **Calculation details → Assumed inspection time** retains the existing 30-minute assumption; it affects inspection scores and rankings, not raw terrain-visible area or a recommended stop duration. **View radius** is analysis distance, not guaranteed deer identification distance. **Maximum download size (MB)** limits analysis source acquisition, separate from processing limits and online map browsing.
 
 Online map regression: with the GUI running, use `cd gui/frontend && npm run test:online`. It verifies live tiles, drawing, settings payload without preparing a real job, offline failure/retry, and 3D within local coverage.
 
@@ -319,3 +319,7 @@ partial preparation**, review the updated estimate and start/resume. Covering ca
 networks are reused without another download; prior completed runs are preserved.
 
 Coverage appears together once the selected setup’s current viewport tiles are loaded. The map shows Loading coverage, Coverage ready or Coverage incomplete with Retry. See [workflow guidance](WORKFLOW.md) for expanded search, checkpoints and resource guards.
+
+## Recovery and testing
+
+Small observer areas now use denser automated sampling down to grid resolution. Results disclose effective spacing and unused evaluation budget. Approved sources remain approved when they become verified cached files; retries retain cumulative transfer accounting. Older failed plans require one explicit refresh and review, preserving downloaded files. See [TESTING.md](TESTING.md) for the execution-level coverage matrix and acceptance procedure.

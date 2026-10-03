@@ -12,6 +12,7 @@ from .downloads import check_space
 from .storage import write
 
 VERSION = 1
+SAMPLING_VERSION = 2
 
 
 def validate(c):
@@ -130,22 +131,84 @@ def candidates(c):
     bc = transfer.read(root / "core_config.json")
     sampling = root / "sampling"
     sampling.mkdir(exist_ok=True)
-    bc.update(
-        candidate_count=max(1, int(c["candidate_count"] * 0.8)), work=str(sampling)
-    )
+    ds, a, gt, masks = core.load_grid(bc)
+    if not masks["observer"].any():
+        raise ValueError(
+            "No eligible observer cells remain; expand the boundary or adjust sampling restrictions"
+        )
+    manual = transfer.read(root / "manual_import.json")
+    allowed = masks["observer"].copy()
+    for point in manual:
+        point["row"] = math.floor((point["y"] - gt[3]) / gt[5])
+        point["col"] = math.floor((point["x"] - gt[0]) / gt[1])
+        if (
+            not (
+                0 <= point["row"] < allowed.shape[0]
+                and 0 <= point["col"] < allowed.shape[1]
+            )
+            or not masks["observer"][point["row"], point["col"]]
+        ):
+            raise ValueError(
+                "Manual location falls in a raster-excluded boundary cell; never snap silently"
+            )
+        allowed[point["row"], point["col"]] = False
+    requested = max(1, int(c["candidate_count"] * 0.8))
+    bc.update(candidate_count=min(requested, int(allowed.sum())), work=str(sampling))
     # Give the unchanged generator its own matching preparation record. Main
     # preparation/configuration remains sealed for evaluation and verification.
     meta = transfer.read(root / "prepared.json")
     meta["config"] = bc
     for name in ["dem", "target", "observer"]:
         shutil.copy2(root / (name + ".tif"), sampling / (name + ".tif"))
-    transfer.dump(sampling / "prepared.json", meta)
-    core.generate(bc)
-    auto = transfer.read(sampling / "candidates.json")
+    core.write_raster(
+        sampling / "observer.tif", allowed.astype("uint8"), gt, ds.GetProjection(), 0
+    )
+    meta["observer_sha256"] = core.digest(sampling / "observer.tif")
+    auto = []
+    spacing = None
+    if bc["candidate_count"]:
+        for spacing in sorted(
+            set([150, 100, 75, 50, 30, 20, abs(gt[1])]), reverse=True
+        ):
+            if spacing < abs(gt[1]):
+                continue
+            bc["spacing_m"] = spacing
+            meta["config"] = dict(bc)
+            transfer.dump(sampling / "prepared.json", meta)
+            try:
+                core.generate(bc)
+            except ValueError as error:
+                if not str(error).startswith(
+                    "Only "
+                ) or "separated candidates" not in str(error):
+                    raise
+                continue
+            auto = transfer.read(sampling / "candidates.json")
+            break
+        else:
+            # At grid resolution all eligible distinct cells are valid; protect
+            # against floating-point distances falling just below that spacing.
+            bc["spacing_m"] = abs(gt[1]) * (1 - 1e-9)
+            meta["config"] = dict(bc)
+            transfer.dump(sampling / "prepared.json", meta)
+            core.generate(bc)
+            auto = transfer.read(sampling / "candidates.json")
+            spacing = abs(gt[1])
+    transfer.dump(
+        root / "sampling_summary.json",
+        dict(
+            version=SAMPLING_VERSION,
+            requested_broad=requested,
+            actual_broad=len(auto),
+            spacing_m=spacing,
+            eligible_automated_cells=int(allowed.sum()),
+            exhaustion_reason=(
+                "Eligible cells exhausted" if len(auto) < requested else None
+            ),
+        ),
+    )
     for point in auto:
         point.update(group="automated", id="A" + point["id"][1:])
-    manual = transfer.read(root / "manual_import.json")
-    ds, a, gt, masks = core.load_grid(bc)
     for point in manual:
         point["row"] = math.floor((point["y"] - gt[3]) / gt[5])
         point["col"] = math.floor((point["x"] - gt[0]) / gt[1])
@@ -160,6 +223,37 @@ def candidates(c):
     transfer.dump(root / "pool.json", auto + manual)
 
 
+def prepare(c):
+    try:
+        return transfer.prepare(c)
+    except ValueError as error:
+        if str(error) == "Empty observer mask":
+            raise ValueError(
+                "No eligible observer cells remain; expand the boundary or adjust sampling restrictions"
+            ) from error
+        raise
+
+
+def guard_checkpoint(root, identity=None):
+    checkpoint = Path(root) / "search-checkpoint.json"
+    saved = transfer.read(checkpoint) if checkpoint.exists() else {}
+    if saved:
+        old = saved.get("identity", {})
+        compatible = (
+            old == identity
+            if identity is not None
+            else (
+                old.get("algorithm") == core.digest(Path(__file__))
+                and old.get("sampling_version") == SAMPLING_VERSION
+            )
+        )
+        if not compatible:
+            raise ValueError(
+                "Search checkpoint is incompatible with current inputs or implementation; retained unchanged. Use a new run name"
+            )
+    return saved
+
+
 def score(c):
     root = Path(c["work"])
     options = c["search"]
@@ -170,12 +264,13 @@ def score(c):
     pool = transfer.read(root / "pool.json")
     identity = dict(
         version=VERSION,
+        sampling_version=SAMPLING_VERSION,
         prepared=core.digest(root / "input_identity.json"),
         algorithm=core.digest(Path(__file__)),
         pool=core.digest(root / "pool.json"),
     )
     checkpoint = root / "search-checkpoint.json"
-    saved = transfer.read(checkpoint) if checkpoint.exists() else {}
+    saved = guard_checkpoint(root, identity)
     rows, patches = (
         (saved.get("rows", []), saved.get("patches", {}))
         if saved.get("identity") == identity
@@ -245,6 +340,9 @@ def score(c):
         c["candidate_count"] - sum(p["group"] == "automated" for p in pool),
         {(p["row"], p["col"]) for p in pool},
     )
+    requested_total = total
+    total = len(pool) + len(extras)
+    emit("processing", "Searching observation setups", len(rows), total, force=True)
     evaluate(extras)
     recommended = rank([p for p in rows if p["group"] != "manual"])[
         : options["recommendation_count"]
@@ -275,10 +373,16 @@ def score(c):
             version=VERSION,
             options=options,
             evaluated_count=len(rows),
-            budget=total,
+            budget=requested_total,
             ids=[p["id"] for p in recommended],
             complete=True,
-            unused_budget=total - len(rows),
+            unused_budget=requested_total - len(rows),
+            sampling=transfer.read(root / "sampling_summary.json"),
+            exhaustion_reason=(
+                "Eligible cells or nearby refinement opportunities exhausted"
+                if len(rows) < requested_total
+                else None
+            ),
         ),
     )
     vis = {}
@@ -327,6 +431,7 @@ def guidance(c, root):
     text += f"Evaluated {summary['evaluated_count']} locations against a maximum budget of {summary['budget']}; {summary['unused_budget']} evaluations unused. Recommended {len(summary['ids'])} setups.\n\n"
     text += "Recommendations: " + ", ".join(summary["ids"]) + ".\n\n"
     text += f"Broad terrain sampling uses 80% of the automated budget. The remaining 20% tests distinct nearby grid cells within 150 m of up to ten leading setups, at 50 m offsets. A small area may leave refinement budget unused.\n\n"
+    text += f"Effective broad spacing: {summary['sampling']['spacing_m']} m. Spacing decreases for small observer areas, down to the analysis grid resolution. {summary.get('exhaustion_reason') or ''}\n\n"
     text += f"Prefer mapped mean tree cover below {c['search']['tree_threshold_percent']}% within {c['search']['nearby_radius_m']} m, requiring at least 80% known neighborhood coverage. Other known cover follows; insufficient coverage remains last. Within each category order by original terrain-visible area. Shrub cover is shown separately.\n\n"
     text += "Coarse mapping cannot confirm a small clearing, individual trees or eye-height sightlines. Blue coverage uses bare-earth terrain. No global optimum, deer probability or verified access is claimed.\n\n"
     text += "All evaluated setups remain available in the GUI, with exact destination exports. Historical engine leading collections, inspection indices and existing review exports remain available separately. The original inspection assumption and numerical terrain calculations are unchanged.\n\n"

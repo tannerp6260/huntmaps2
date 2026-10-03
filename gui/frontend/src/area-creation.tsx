@@ -147,10 +147,10 @@ export default function AreaSettings({
           </p>
           <p>
             A fixed random seed makes the same inputs repeatable. More locations means more
-            processing, not a guaranteed optimum. If the requested count cannot fit at the required
-            spacing, the run stops with an explanation; reduce the count. Nearby refinement uses up
-            to 20% of the search budget; broad sampling uses 80%. A limited area may leave some
-            refinement budget unused.
+            processing, not a guaranteed optimum. Broad spacing starts at 150 m and decreases for
+            smaller areas, down to the analysis grid resolution. Exhausted eligible cells produce
+            fewer evaluations with an explanation. Nearby refinement uses up to 20% of the search
+            budget; broad sampling uses 80%. A limited area may leave some refinement budget unused.
           </p>
           <p>
             Recommendations prefer nearby low mapped tree cover, then terrain-visible area. All

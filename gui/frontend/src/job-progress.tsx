@@ -15,7 +15,13 @@ export default function JobProgress({ job }: { job: Job | undefined | null }) {
         : undefined;
   return (
     <div className="job-progress" role="status">
-      <strong>{p?.label || job.stage}</strong>
+      <strong>
+        {active
+          ? p?.label || job.stage
+          : job.failed_stage
+            ? `Failed during: ${job.failed_stage}`
+            : job.stage}
+      </strong>
       <progress
         aria-label={p?.phase === 'download' ? 'Download progress' : 'Task progress'}
         max={1}

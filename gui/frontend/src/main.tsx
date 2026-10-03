@@ -325,6 +325,24 @@ function App() {
     api('/runs')
       .then(setRunList)
       .catch((e) => setError(e instanceof Error ? e.message : String(e)));
+  const completedRunJobs = jobs
+    .filter((j) => j.kind === 'baseline' && j.status === 'complete')
+    .map((j) => j.id)
+    .join(',');
+  useEffect(() => {
+    if (!completedRunJobs) return;
+    let alive = true;
+    api('/runs')
+      .then((r) => {
+        if (alive) setRunList(r);
+      })
+      .catch((e) => {
+        if (alive) setError(e instanceof Error ? e.message : String(e));
+      });
+    return () => {
+      alive = false;
+    };
+  }, [completedRunJobs]);
   useEffect(() => {
     api('/runs')
       .then((r) => {
@@ -815,6 +833,7 @@ function App() {
     }
   }
   async function importFile(file: File) {
+    const session = intakeSession.current;
     try {
       setBusy(true);
       setError('');
@@ -824,6 +843,7 @@ function App() {
         method: 'POST',
         body: data,
       });
+      if (session !== intakeSession.current) return;
       setImported(i);
       setPolygon(i.choices.length === 1 ? '1' : '');
       setPlanId('');
@@ -865,6 +885,7 @@ function App() {
   }
   async function prepare() {
     if (training.active || !settingsValid) return;
+    const session = intakeSession.current;
     try {
       setBusy(true);
       setError('');
@@ -885,6 +906,7 @@ function App() {
           ...(includeNetwork ? { include_network: true } : {}),
         }),
       });
+      if (session !== intakeSession.current) return;
       setPlanId(j.plan);
       setPreparedOptions(JSON.stringify({ sampling, includeNetwork }));
       setPlan(null);
@@ -896,8 +918,9 @@ function App() {
     }
   }
   async function startPlan() {
-    if (training.active || planDirty || !settingsValid) return;
+    if (training.active || planDirty || !settingsValid || busy || running) return;
     try {
+      setBusy(true);
       setError('');
       await api(`/plans/${planId}/start`, {
         method: 'POST',
@@ -905,6 +928,8 @@ function App() {
       });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
     }
   }
   async function jobAction(j: Job, action: string) {
@@ -1384,6 +1409,20 @@ function App() {
                 <h2>Observer setups</h2>
                 <span>{`${visibleCandidates.length} / ${run?.candidates.length || 0}`}</span>
               </div>
+              {run?.search_summary && (
+                <p className="hint">
+                  Evaluated {run.search_summary.evaluated_count} of up to{' '}
+                  {run.search_summary.budget} locations. Broad spacing:{' '}
+                  {run.search_summary.sampling?.spacing_m ?? 'unavailable'} m.
+                  {run.search_summary.unused_budget > 0 && (
+                    <>
+                      {' '}
+                      {run.search_summary.unused_budget} evaluations unused:{' '}
+                      {run.search_summary.exhaustion_reason}.
+                    </>
+                  )}
+                </p>
+              )}
               <label>
                 Order
                 <select
@@ -2002,6 +2041,17 @@ function App() {
                         {num((plan.acquisition?.estimated_bytes || 0) / 1e6, 1)} MB estimated ·{' '}
                         {plan.max_download_mb} MB cap
                       </b>
+                      {!!plan.transferred_bytes && (
+                        <p className="hint">
+                          {num(plan.transferred_bytes / 1e6, 1)} MB transferred across this plan's
+                          attempts;{' '}
+                          {num(
+                            Math.max(0, plan.max_download_mb * 1e6 - plan.transferred_bytes) / 1e6,
+                            1,
+                          )}{' '}
+                          MB allowance remains.
+                        </p>
+                      )}
                       <DownloadReview
                         plan={plan}
                         bytes={plan.acquisition?.estimated_bytes ?? null}
@@ -2050,6 +2100,7 @@ function App() {
                       <button
                         className="primary wide"
                         disabled={
+                          busy ||
                           running ||
                           planDirty ||
                           !settingsValid ||
@@ -2078,6 +2129,7 @@ function App() {
                         : 'Preparing plan… check the job panel below.'}
                     </p>
                   )}
+                  {plan?.recovery_notice && <p className="hint">{plan.recovery_notice}</p>}
                   <button
                     disabled={running || planDirty}
                     onClick={() =>

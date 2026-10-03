@@ -135,6 +135,7 @@ def main():
                 "--check",
                 "huntmaps_gui",
                 "gui/check.py",
+                "gui/recovery_check.py",
                 "gui/preservation.py",
             ],
             "python-format",
@@ -142,6 +143,7 @@ def main():
         run(["npm", "run", "format:check"], "frontend-format", ROOT / "gui/frontend")
         run(["npm", "run", "build"], "frontend-build", ROOT / "gui/frontend")
         if not args.skip_browser:
+            run([sys.executable, "gui/recovery_check.py"], "browser-recovery-worker")
             for name in ("glassing", "configs"):
                 shutil.copytree(
                     ROOT / name,
