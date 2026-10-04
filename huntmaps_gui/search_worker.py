@@ -48,7 +48,13 @@ def main():
 
                 run(c)
             else:
-                from glassing.transfer_packet import run
+                if any(
+                    p["group"] == "automated"
+                    for p in transfer.read(root / "scores.json")
+                ):
+                    from glassing.transfer_packet import run
+                else:
+                    from .manual_packet import run
 
                 run(c)
         signal.alarm(0)
@@ -113,6 +119,8 @@ def main():
                 Path(c["model_lock"]),
                 Path(__file__),
                 Path(search.__file__),
+                Path(search.target_filters.__file__),
+                Path(__file__).with_name("manual_packet.py"),
             ]
             + list(Path("glassing").glob("transfer*.py"))
         },

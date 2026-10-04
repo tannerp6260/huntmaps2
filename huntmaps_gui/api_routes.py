@@ -546,6 +546,9 @@ def api_router(jobs: Jobs):
             )
         if body.get("recommendation_count", min(20, count)) > count:
             raise ValueError("Recommendations cannot exceed the search budget")
+        from .target_filters import validate as validate_targets
+
+        targets = validate_targets(body.get("target_filters"))
         ident = uuid.uuid4().hex
         folder = STATE / "plans"
         folder.mkdir(parents=True, exist_ok=True)
@@ -566,6 +569,9 @@ def api_router(jobs: Jobs):
             candidate_count=count,
             search=dict(
                 version=1,
+                ranking_version=2,
+                target_filters=targets,
+                avoid_dense_vegetation=body.get("avoid_dense_vegetation", False),
                 recommendation_count=min(count, body.get("recommendation_count", 20)),
                 recommendation_separation_m=body.get(
                     "recommendation_separation_m", 150

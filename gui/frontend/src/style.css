@@ -1342,3 +1342,13 @@ label:has(> input[type='checkbox']) input {
   place-content: center;
   pointer-events: auto;
 }
+
+.generation-status {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: #f4f7ef;
+  border: 1px solid #c4d2bd;
+  padding: 10px;
+  margin-bottom: 12px;
+}

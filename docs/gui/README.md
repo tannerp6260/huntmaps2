@@ -57,8 +57,8 @@ Choose **New baseline run**, import GeoJSON/KML/KMZ, explicitly select a polygon
 candidate layers are hidden in this preview. Cached context belongs to the open
 run; it is not proof that new-area data are available.
 
-Review the suggested run name, view distance, search thoroughness and spots to recommend.
-The explanation above settings introduces these controls. Custom evaluation budgets, suggestion spacing and surrounding vegetation preferences are under Advanced settings. Roads and trails are included by default; proximity sampling starts at 0.5 miles. Inspection minutes are a calculation detail: new GUI runs
+Review the suggested run name, view distance, locations to test and top spots to recommend.
+The explanation above settings introduces these controls. Choose target terrain before calculating; suggestion spacing and surrounding vegetation settings are under Advanced settings. Roads and trails are included by default; proximity sampling starts at 0.5 miles. Inspection minutes are a calculation detail: new GUI runs
 use 30; recovered runs retain saved values. Check metadata before choosing the
 reviewed download allowance.
 The existing hunt context is inherited from the transfer template: GMU54 second
@@ -89,7 +89,7 @@ Existing budget defaults remain: 3 million raster cells, 1536 MiB analysis addre
 space, 900 seconds per engine batch and 800 MB output budget. GUI transfer allowances
 are suggested after metadata review, with no fixed upper MB cap; storage checks
 retain 20 GiB free. The form supports radius 500–3000 m in 500 m steps and
-12–5,000 locations in expanded GUI search, with a separate 1–200 recommendation count. Quick/Thorough/Deep budgets are 150/600/2,000. Nearby-cover preferences are editable; coarse mapping cannot guarantee a clearing. New GUI runs retain the 30-minute engine assumption;
+12–5,000 locations in expanded GUI search, with a separate 1–200 recommendation count. The default is 150 locations and 20 recommendations. Choose target terrain before calculating; nearby standing-cover eligibility is optional and initially off. Coarse mapping cannot guarantee a clearing. New GUI runs retain the 30-minute engine assumption;
 recovered runs preserve saved settings. The engine can reject areas
 whose buffered grid or source support exceeds its limits.
 
@@ -172,7 +172,7 @@ Only complete valid local DEM coverage is supported. See [training](TRAINING.md)
 
 ## Clearer settings
 
-**Locations to evaluate** controls initial separated sampling across your polygon, not the number of top results. Open **How locations are chosen** for spatial and terrain sampling details. Small areas use denser broad sampling down to grid resolution; exhausted eligible cells finish with fewer evaluations and an explanation. Nearby diagnostic alternatives can add results. **Calculation details → Assumed inspection time** retains the existing 30-minute assumption; it affects inspection scores and rankings, not raw terrain-visible area or a recommended stop duration. **View radius** is analysis distance, not guaranteed deer identification distance. **Maximum download size (MB)** limits analysis source acquisition, separate from processing limits and online map browsing.
+**Locations to test** controls the calculation budget across your polygon; **Top spots to recommend** controls the initial suggestions. Open **Advanced settings → How this works** for spatial and terrain sampling details. Small areas use denser broad sampling down to grid resolution; exhausted eligible cells finish with fewer evaluations and an explanation. Nearby diagnostic alternatives can add results. **Calculation details → Assumed inspection time** retains the existing 30-minute assumption; it affects inspection scores and rankings, not raw terrain-visible area or a recommended stop duration. **View radius** is analysis distance, not guaranteed deer identification distance. **Maximum download size (MB)** limits analysis source acquisition, separate from processing limits and online map browsing.
 
 Online map regression: with the GUI running, use `cd gui/frontend && npm run test:online`. It verifies live tiles, drawing, settings payload without preparing a real job, offline failure/retry, and 3D within local coverage.
 
@@ -322,3 +322,9 @@ Coverage appears together once the selected setup’s current viewport tiles are
 ## Recovery and testing
 
 Small observer areas now use denser automated sampling down to grid resolution. Results disclose effective spacing and unused evaluation budget. Approved sources remain approved when they become verified cached files; retries retain cumulative transfer accounting. Older failed plans require one explicit refresh and review, preserving downloaded files. See [TESTING.md](TESTING.md) for the execution-level coverage matrix and acceptance procedure.
+
+### Filter-first viewpoint search
+
+Use Locations to test for the calculation budget and Top spots to recommend for the initial collection. Set Terrain I want to see before reviewing downloads. Recommendations maximize matching visible area while preserving total visibility and all evaluated locations. Avoid standing in dense vegetation is optional and off by default. Generation progress is shown directly in Step 1; saved approaches can be previewed while their selection requirements are unmet. See [WORKFLOW.md](WORKFLOW.md) for details.
+
+Implementation and verification evidence: [filter-first search report](FILTER_FIRST_SEARCH_2026-10-04.md).

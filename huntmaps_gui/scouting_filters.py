@@ -1,12 +1,17 @@
 """Immutable review filters over saved masks; obstruction DEM remains untouched."""
 
-import uuid
+import hashlib
+import json
+from functools import lru_cache
 import numpy as np
 from shapely.geometry import Point
+from pathlib import Path
 from .config import STATE
 from .storage import write, read_json, locked
 from .scouting_network import checked_id, load_networks
-from .approach_search import terrain_properties
+from . import target_filters
+
+PROFILE_ALGORITHM = "visible-terrain-v2"
 
 ASPECTS = ("N", "NE", "E", "SE", "S", "SW", "W", "NW")
 
@@ -20,10 +25,25 @@ def validate(value):
         elevation_m=None,
         slope_deg=None,
         aspects=[],
+        tree_percent=None,
+        shrub_percent=None,
+        avoid_dense_vegetation=False,
+        nearby_radius_m=30,
+        tree_threshold_percent=10,
     )
     if set(value) - set(defaults):
         raise ValueError("Unknown filter setting")
     defaults.update(value)
+    targets = target_filters.validate({k: defaults[k] for k in target_filters.KEYS})
+    defaults.update({k: targets[k] for k in target_filters.KEYS})
+    if (
+        type(defaults["avoid_dense_vegetation"]) is not bool
+        or defaults["nearby_radius_m"] not in (10, 30, 60, 120)
+        or not isinstance(defaults["tree_threshold_percent"], (int, float))
+        or not np.isfinite(defaults["tree_threshold_percent"])
+        or not 0 <= defaults["tree_threshold_percent"] <= 100
+    ):
+        raise ValueError("Use supported nearby vegetation eligibility settings")
     for k in ("distance_m", "height_m"):
         v = defaults[k]
         if v is not None and (not np.isfinite(v) or v < 0 or v > 100000):
@@ -55,9 +75,25 @@ def save(ident, value):
     _, sources = load_networks(
         settings["network_ids"], run.config["epsg"], settings["kinds"]
     )
+    cover_hashes = {
+        name: run.hashes[str((run.analysis / (name + ".tif")).resolve())]
+        for name in ("tree", "shrub")
+    }
+    identity = dict(
+        algorithm=PROFILE_ALGORITHM,
+        run_id=ident,
+        settings=settings,
+        sources=sources,
+        dem_sha256=run.hashes[str(run.dem_path.resolve())],
+        cover_hashes=cover_hashes,
+    )
     profile = dict(
+        algorithm=PROFILE_ALGORITHM,
         version=1,
-        id=uuid.uuid4().hex,
+        id=hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()[
+            :32
+        ],
+        cover_hashes=cover_hashes,
         run_id=ident,
         settings=settings,
         sources=sources,
@@ -76,18 +112,9 @@ def load(ident, run_id):
 
 
 def terrain_mask(dem, gt, settings):
-    slope, aspect = terrain_properties(dem, abs(gt[1]))
-    mask = np.ones(dem.shape, dtype=bool)
-    for key, a in [("elevation_m", dem), ("slope_deg", slope)]:
-        if settings[key] is not None:
-            low, high = settings[key]
-            mask &= np.isfinite(a) & (a >= low) & (a <= high)
-    if settings["aspects"]:
-        sectors = np.floor(((np.nan_to_num(aspect) + 22.5) % 360) / 45).astype(int)
-        mask &= np.isfinite(aspect) & np.isin(
-            sectors, [ASPECTS.index(a) for a in settings["aspects"]]
-        )
-    return mask
+    return target_filters.masks(
+        dem, gt, {k: settings.get(k) for k in target_filters.KEYS}
+    )[0]
 
 
 def access_evidence(point, lines, dem, gt, settings, index=None):
@@ -135,16 +162,66 @@ def access_evidence(point, lines, dem, gt, settings, index=None):
     )
 
 
+@lru_cache(maxsize=2)
+def prepared_masks(identity, paths, settings_json):
+    from osgeo import gdal
+
+    settings = json.loads(settings_json)
+    dem_ds = gdal.Open(paths[0])
+    dem = dem_ds.ReadAsArray().astype(float)
+    nodata = dem_ds.GetRasterBand(1).GetNoDataValue()
+    if nodata is not None:
+        dem[dem == nodata] = np.nan
+    tree = gdal.Open(paths[1]).ReadAsArray()
+    shrub = gdal.Open(paths[2]).ReadAsArray()
+    matching, unknown = target_filters.masks(
+        dem,
+        dem_ds.GetGeoTransform(),
+        {k: settings[k] for k in target_filters.KEYS},
+        tree,
+        shrub,
+    )
+    standing = (
+        target_filters.standing_mask(
+            tree,
+            abs(dem_ds.GetGeoTransform()[1]),
+            settings["nearby_radius_m"],
+            settings["tree_threshold_percent"],
+        )
+        if settings["avoid_dense_vegetation"]
+        else None
+    )
+    for array in (matching, unknown, standing):
+        if array is not None:
+            array.flags.writeable = False
+    return matching, unknown, standing
+
+
 class FilteredRun:
     def __init__(self, run, profile):
         self.run, self.profile = run, profile
-        self.settings = profile["settings"]
+        self.settings = validate(profile["settings"])
         self.dem_array = run.dem.ReadAsArray().astype(float)
         nodata = run.dem.GetRasterBand(1).GetNoDataValue()
         if nodata is not None:
             self.dem_array[self.dem_array == nodata] = np.nan
-        self.matching = terrain_mask(
-            self.dem_array, run.dem.GetGeoTransform(), self.settings
+        paths = tuple(
+            str(p.resolve())
+            for p in [
+                run.dem_path,
+                run.analysis / "tree.tif",
+                run.analysis / "shrub.tif",
+            ]
+        )
+        for path in paths:
+            run.validate(Path(path))
+        hashes = tuple(run.hashes[p] for p in paths)
+        if profile.get("cover_hashes") and profile["cover_hashes"] != {
+            name: hashes[i] for i, name in enumerate(("tree", "shrub"), 1)
+        }:
+            raise ValueError("Filter cover sources changed; apply a new profile")
+        self.matching, self.unknown, self.standing = prepared_masks(
+            hashes, paths, json.dumps(self.settings, sort_keys=True)
         )
         if profile.get("dem_sha256") != run.hashes[str(run.dem_path.resolve())]:
             raise ValueError("Filter terrain changed; explicitly apply a new profile")
@@ -164,9 +241,21 @@ class FilteredRun:
         mask, check = self.run.mask(ident)
         return mask & self.matching, dict(check, filter_profile=self.profile["id"])
 
+    def standing_at(self, point):
+        gt = self.dem.GetGeoTransform()
+        row, col = int(np.floor((point["y"] - gt[3]) / gt[5])), int(
+            np.floor((point["x"] - gt[0]) / gt[1])
+        )
+        return bool(
+            0 <= row < self.standing.shape[0]
+            and 0 <= col < self.standing.shape[1]
+            and self.standing[row, col]
+        )
+
     def results(self, ids):
         area = abs(self.dem.GetGeoTransform()[1] * self.dem.GetGeoTransform()[5]) / 1e6
         values = []
+        positions = {}
         for order, ident in enumerate(ids):
             p = self.run.points[ident]
             if ident in getattr(self.run, "working", {}):
@@ -177,6 +266,7 @@ class FilteredRun:
                     current["longitude"], current["latitude"]
                 )
                 p = dict(p, x=x, y=y)
+            positions[ident] = p
             original, _ = self.run.mask(ident)
             matching = original & self.matching
             access = access_evidence(
@@ -196,14 +286,56 @@ class FilteredRun:
                     id=ident,
                     original_km2=float(original.sum() * area),
                     matching_km2=float(matching.sum() * area),
+                    matching_unknown_km2=float((original & self.unknown).sum() * area),
                     access=access,
-                    qualifies=not enabled or access["status"] == "qualifies",
+                    qualifies=(not enabled or access["status"] == "qualifies")
+                    and (self.standing is None or self.standing_at(p)),
                     order=order,
                 )
             )
-        values.sort(key=lambda p: (not p["qualifies"], -p["matching_km2"], p["order"]))
+        values.sort(
+            key=lambda p: (
+                not p["qualifies"],
+                -p["matching_km2"],
+                -p["original_km2"],
+                p["id"],
+            )
+        )
+        from .search import spread_recommendations, rank
+
+        options = self.run.config.get("search", {})
+        rows = [
+            dict(
+                positions[p["id"]],
+                raw_km2=p["original_km2"],
+                matching_km2=p["matching_km2"],
+                standing_eligible=p["qualifies"],
+                group=positions[p["id"]].get("group", "automated"),
+            )
+            for p in values
+        ]
+        count = options.get("recommendation_count", 20)
+        separation = options.get("recommendation_separation_m", 0)
+        selected = spread_recommendations(rows, count, separation)
+        selected_ids = {p["id"] for p in selected}
+        import math
+
+        nearby = {
+            p["id"]: [
+                q["id"]
+                for q in rank(rows)
+                if q["id"] not in selected_ids
+                and q["group"] != "manual"
+                and math.hypot(p["x"] - q["x"], p["y"] - q["y"]) < separation
+            ]
+            for p in selected
+        }
         return dict(
-            profile=self.profile, candidates=values, sources=self.network_sources
+            profile=self.profile,
+            candidates=values,
+            sources=self.network_sources,
+            recommendation_ids=[p["id"] for p in selected],
+            nearby_ids=nearby,
         )
 
 

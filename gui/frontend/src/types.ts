@@ -22,6 +22,13 @@ export type Run = {
   groups: Record<string, string[]>;
   recommendation_ids?: string[];
   search_summary?: {
+    options?: {
+      ranking_version?: number;
+      target_filters?: import('./target-criteria').TargetCriteria;
+      avoid_dense_vegetation?: boolean;
+      nearby_radius_m?: number;
+      tree_threshold_percent?: number;
+    };
     evaluated_count: number;
     budget: number;
     unused_budget: number;
@@ -126,6 +133,9 @@ export type BaselinePlan = DownloadReviewInfo & {
     observation_minutes: number;
     candidate_count: number;
     search?: {
+      target_filters?: import('./target-criteria').TargetCriteria;
+      avoid_dense_vegetation?: boolean;
+      ranking_version?: number;
       recommendation_count: number;
       recommendation_separation_m?: number;
       nearby_radius_m: number;

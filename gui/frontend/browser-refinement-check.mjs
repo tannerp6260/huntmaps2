@@ -50,7 +50,7 @@ print(json.dumps(dict(key=key,sha256=meta['hashes']['context-vertices.bin'])))
   assert.equal(await page.getByRole('button',{name:'Draw on map',exact:true}).count(),0);
   assert.equal(await page.getByRole('button',{name:'Draw boundary',exact:true}).count(),1);
   await page.getByText('How we find places to glass',{exact:true}).waitFor();
-  await page.getByRole('button',{name:'Help: effort',exact:true}).click();
+  await page.getByRole('button',{name:'Help: count',exact:true}).click();
   await page.getByRole('tooltip').filter({hasText:'How many possible standing'}).waitFor();
   await page.keyboard.press('Escape');
   await page.getByText('More options · sampling restrictions',{exact:true}).click();

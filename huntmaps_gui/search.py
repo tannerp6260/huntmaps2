@@ -10,6 +10,7 @@ from glassing import core, transfer
 from .progress import emit
 from .downloads import check_space
 from .storage import write
+from . import target_filters
 
 VERSION = 1
 SAMPLING_VERSION = 2
@@ -20,6 +21,7 @@ def validate(c):
     budget = c.get("candidate_count")
     count = options.get("recommendation_count")
     threshold = options.get("tree_threshold_percent")
+    target_filters.validate(options.get("target_filters"))
     if (
         options.get("version") != VERSION
         or type(budget) is not int
@@ -72,6 +74,8 @@ def nearby_cover(tree, shrub, gt, point, radius=30, threshold=10):
 
 
 def rank(rows):
+    if rows and "matching_km2" in rows[0]:
+        return sorted(rows, key=lambda p: (-p["matching_km2"], -p["raw_km2"], p["id"]))
     order = {
         "low mapped tree cover": 0,
         "other known cover": 1,
@@ -87,7 +91,15 @@ def spread_recommendations(rows, count, separation):
     if not math.isfinite(separation) or not 0 <= separation <= 2000:
         raise ValueError("Recommendation separation must be 0–2000 metres")
     selected = []
-    for p in rank([p for p in rows if p["group"] != "manual"]):
+    for p in rank(
+        [
+            p
+            for p in rows
+            if p["group"] != "manual"
+            and p.get("standing_eligible", True)
+            and p.get("matching_km2", p["raw_km2"]) > 0
+        ]
+    ):
         if all(
             math.hypot(p["x"] - q["x"], p["y"] - q["y"]) >= separation for q in selected
         ):
@@ -153,6 +165,18 @@ def candidates(c):
         )
     manual = transfer.read(root / "manual_import.json")
     allowed = masks["observer"].copy()
+    if c["search"].get("avoid_dense_vegetation"):
+        tree = gdal.Open(str(root / "tree.tif")).ReadAsArray()
+        allowed &= target_filters.standing_mask(
+            tree,
+            abs(gt[1]),
+            c["search"]["nearby_radius_m"],
+            c["search"]["tree_threshold_percent"],
+        )
+        if not allowed.any() and not manual:
+            raise ValueError(
+                "No standing locations meet the nearby vegetation requirement; relax it or disable Avoid standing in dense vegetation"
+            )
     for point in manual:
         point["row"] = math.floor((point["y"] - gt[3]) / gt[5])
         point["col"] = math.floor((point["x"] - gt[0]) / gt[1])
@@ -277,11 +301,23 @@ def score(c):
         gdal.Open(str(root / (k + ".tif"))).ReadAsArray() for k in ["tree", "shrub"]
     ]
     pool = transfer.read(root / "pool.json")
+    matching, unknown = target_filters.masks(
+        grid[1], grid[2], options.get("target_filters"), tree, shrub
+    )
+    if options.get("avoid_dense_vegetation"):
+        grid[3]["observer"] &= target_filters.standing_mask(
+            tree,
+            abs(grid[2][1]),
+            options["nearby_radius_m"],
+            options["tree_threshold_percent"],
+        )
     identity = dict(
         version=VERSION,
         sampling_version=SAMPLING_VERSION,
         prepared=core.digest(root / "input_identity.json"),
         algorithm=core.digest(Path(__file__)),
+        search_options=options,
+        filters_algorithm=core.digest(Path(target_filters.__file__)),
         pool=core.digest(root / "pool.json"),
     )
     checkpoint = root / "search-checkpoint.json"
@@ -327,6 +363,27 @@ def score(c):
                         options["tree_threshold_percent"],
                     )
                 )
+            if options.get("ranking_version") == 2:
+                from glassing.review_maps import visible_mask
+
+                area = abs(grid[2][1] * grid[2][5]) / 1e6
+                for p in scored:
+                    vs = gdal.Open(
+                        str(
+                            root
+                            / "additional_visibility"
+                            / f'{p["id"]}_{c["radius_m"]}.tif'
+                        )
+                    )
+                    visible, _ = visible_mask(
+                        vs, grid[0], grid[3]["target"], p, c["radius_m"]
+                    )
+                    p.update(
+                        matching_km2=float((visible & matching).sum() * area),
+                        matching_unknown_km2=float((visible & unknown).sum() * area),
+                        standing_eligible=not options.get("avoid_dense_vegetation")
+                        or p["foreground_category"] == "low mapped tree cover",
+                    )
             rows.extend(scored)
             patches.update(ps)
             done.update(p["id"] for p in scored)
@@ -348,7 +405,15 @@ def score(c):
     write(checkpoint, dict(identity=identity, rows=rows, patches=patches))
     emit("processing", "Searching observation setups", len(rows), total, force=True)
     evaluate(pool)
-    leaders = rank([p for p in rows if p["group"] == "automated"])
+    leaders = rank(
+        [
+            p
+            for p in rows
+            if p["group"] == "automated"
+            and p.get("standing_eligible", True)
+            and p.get("matching_km2", p["raw_km2"]) > 0
+        ]
+    )
     extras = refine(
         leaders,
         grid,
@@ -404,7 +469,7 @@ def score(c):
                 for p in recommended
             },
             recommendation_note=(
-                "Fewer distinct spots fit the requested spacing; lower spacing or review All setups."
+                "Fewer spots have matching visible terrain and fit the eligibility/spacing requirements. Adjust filters or spacing, or review All setups."
                 if len(recommended) < options["recommendation_count"]
                 else None
             ),
@@ -465,7 +530,11 @@ def guidance(c, root):
     text += "Recommendations: " + ", ".join(summary["ids"]) + ".\n\n"
     text += f"Broad terrain sampling uses 80% of the automated budget. The remaining 20% tests distinct nearby grid cells within 150 m of up to ten leading setups, at 50 m offsets. A small area may leave refinement budget unused.\n\n"
     text += f"Effective broad spacing: {summary['sampling']['spacing_m']} m. Spacing decreases for small observer areas, down to the analysis grid resolution. {summary.get('exhaustion_reason') or ''}\n\n"
-    text += f"Prefer mapped mean tree cover below {c['search']['tree_threshold_percent']}% within {c['search']['nearby_radius_m']} m, requiring at least 80% known neighborhood coverage. Other known cover follows; insufficient coverage remains last. Within each category order by original terrain-visible area. Shrub cover is shown separately.\n\n"
+    if c["search"].get("ranking_version") == 2:
+        text += "Recommendations rank by visible area meeting all configured target-terrain criteria, then original visible area and stable point ID. Unknown required data does not count as matching area. Nearby vegetation eligibility applies only when enabled; zero-match points remain available but are not recommended.\n\n"
+        text += f"Saved target criteria: {c['search'].get('target_filters')}. Avoid standing in dense vegetation: {c['search'].get('avoid_dense_vegetation', False)}.\n\n"
+    else:
+        text += f"Prefer mapped mean tree cover below {c['search']['tree_threshold_percent']}% within {c['search']['nearby_radius_m']} m, requiring at least 80% known neighborhood coverage. Other known cover follows; insufficient coverage remains last. Within each category order by original terrain-visible area. Shrub cover is shown separately.\n\n"
     text += "Coarse mapping cannot confirm a small clearing, individual trees or eye-height sightlines. Blue coverage uses bare-earth terrain. No global optimum, deer probability or verified access is claimed.\n\n"
     text += "All evaluated setups remain available in the GUI, with exact destination exports. Historical engine leading collections, inspection indices and existing review exports remain available separately. The original inspection assumption and numerical terrain calculations are unchanged.\n\n"
     text += "Search provenance: analysis/recommendations.json, scores.json, sampling/, search-metrics.json and implementation.json. Interrupted searches retain analysis/search-checkpoint.json. Per-batch memory/time, grid, output and free-storage guards remain enforced.\n"

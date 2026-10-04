@@ -10,7 +10,7 @@ page.on('pageerror',e=>errors.push(e.message));
 await page.addInitScript(()=>localStorage.setItem('huntmaps-online-imagery','off'));
 await page.route('**/*',r=>r.request().url().startsWith(base)||r.request().url().startsWith('blob:')?r.continue():r.abort());
 let fail=false,slow=true;
-await page.route('**/tiles/visible/**',async r=>{
+await page.route(/\/(?:tiles\/visible|filtered-tiles)\//,async r=>{
  requests.push(r.request().url());
  if(slow) await new Promise(resolve=>setTimeout(resolve,600));
  if(fail) await r.fulfill({status:500,contentType:'text/plain',body:'Synthetic tile failure'}); else await r.continue();
@@ -39,6 +39,7 @@ try {
  await page.getByLabel('Select '+failedPoint,{exact:true}).click();
  await page.locator('.coverage-status').filter({hasText:'Coverage incomplete'}).waitFor({timeout:30000});
  await page.screenshot({path:out+'/02-incomplete-desktop.png',fullPage:true});
+ assert.ok(requests.some(v=>v.includes('/filtered-tiles/')&&v.includes('/'+failedPoint+'/')),'Failure must reach the active filtered overlay');
  fail=false;
  await page.getByRole('button',{name:'Retry coverage',exact:true}).click();
  await page.locator('.coverage-status').filter({hasText:'Coverage ready · '+failedPoint}).waitFor({timeout:30000});
@@ -76,15 +77,15 @@ try {
  await page.screenshot({path:out+'/05-help-900.png',fullPage:false});
  await page.keyboard.press('Escape'); await tooltip.waitFor({state:'hidden'});
  await page.setViewportSize({width:1500,height:1050});
- await page.getByLabel('Search effort').selectOption('2000');
- assert.equal(await page.getByLabel('Search effort').inputValue(),'2000');
- await page.getByLabel('Setups recommended').fill('12');
+ await page.getByLabel('Locations to test').fill('2000');
+ assert.equal(await page.getByLabel('Locations to test').inputValue(),'2000');
+ await page.getByLabel('Top spots to recommend').fill('12');
  await page.getByText('Advanced settings',{exact:true}).click();
- await page.getByLabel('Locations to evaluate').fill('5000');
+ await page.getByLabel('Locations to test').fill('5000');
  await page.getByLabel('Nearby cover radius').selectOption('60');
  await page.getByLabel('Preferred tree cover below').fill('15');
  await page.screenshot({path:out+'/04-search-options-desktop.png',fullPage:true});
- assert.equal(await page.getByLabel('Search effort').inputValue(),'custom');
+ assert.equal(await page.getByLabel('Locations to test').inputValue(),'5000');
  const touchPage=await browser.newPage({viewport:{width:900,height:900},hasTouch:true});
  await touchPage.addInitScript(()=>localStorage.setItem('huntmaps-online-imagery','off'));
  await touchPage.route('**/*',r=>r.request().url().startsWith(base)||r.request().url().startsWith('blob:')?r.continue():r.abort());

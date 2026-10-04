@@ -47,6 +47,7 @@ export default function CandidateCard({
           {p.working_revision ? ' · updated' : ''}
         </strong>
         <span>{p.parent ? 'Alternative to ' + p.parent : p.neighborhood || 'Original setup'}</span>
+        {matching !== undefined && <b>{num(matching)} km² matching visible terrain</b>}
         <small>
           {num(p.metrics.raw_km2)} km² original terrain view{' '}
           {p.working_revision ? '· working location ' : ''}
@@ -54,7 +55,6 @@ export default function CandidateCard({
             ? '· ' + annotations[p.id].status
             : ''}
         </small>
-        {matching !== undefined && <small>{num(matching)} km² matching visible terrain</small>}
       </button>
       {typeof p.metrics.foreground_category === 'string' && (
         <small className="hint">

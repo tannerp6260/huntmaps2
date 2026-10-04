@@ -1,5 +1,12 @@
 import DownloadReview from './download-review';
 import JobProgress from './job-progress';
+import { inputSignature } from './approach-inputs';
+import {
+  defaultCriteria,
+  validCriteria,
+  observerAreaKm2,
+  type TargetCriteria,
+} from './target-criteria';
 import NetworkMap from './network-map';
 import AccessSampling, { type Sampling } from './access-sampling';
 import ScoutingTools, { type AppliedFilter } from './scouting-tools';
@@ -75,6 +82,7 @@ async function api(path: string, options: RequestInit = {}) {
 const num = (v: unknown, d = 3) => (typeof v === 'number' ? v.toFixed(d) : 'Not saved');
 function App() {
   const jobs = useJobs();
+  const [workingLoaded, setWorkingLoaded] = useState(false);
   const [appliedFilter, setAppliedFilter] = useState<AppliedFilter | null>(null);
   const [inspectStage, setInspectStage] = useState(false);
   const [workflow, setWorkflow] = useState<Workflow | null>(null);
@@ -82,6 +90,8 @@ function App() {
   const [recommendationCount, setRecommendationCount] = useState(20);
   const [nearbyRadius, setNearbyRadius] = useState(30);
   const [treeThreshold, setTreeThreshold] = useState(10);
+  const [targets, setTargets] = useState<TargetCriteria>(defaultCriteria);
+  const [avoidDense, setAvoidDense] = useState(false);
   const [coverageStatus, setCoverageStatus] = useState('');
   const [coveragePreparation, setCoveragePreparation] = useState('');
   const [coverageRetry, setCoverageRetry] = useState(0);
@@ -260,6 +270,7 @@ function App() {
     Number.isInteger(count) &&
     count >= 12 &&
     count <= 5000 &&
+    validCriteria(targets) &&
     Number.isInteger(recommendationCount) &&
     recommendationCount >= 1 &&
     recommendationCount <= Math.min(200, count) &&
@@ -285,6 +296,9 @@ function App() {
       radius !== plan.settings?.radius_m ||
       minutes !== plan.settings?.observation_minutes ||
       count !== plan.settings?.candidate_count ||
+      inputSignature(targets) !==
+        inputSignature({ ...defaultCriteria(), ...plan.settings?.search?.target_filters }) ||
+      avoidDense !== (plan.settings?.search?.avoid_dense_vegetation ?? false) ||
       recommendationCount !==
         (plan.settings?.search?.recommendation_count ??
           Math.min(20, plan.settings?.candidate_count ?? count)) ||
@@ -294,6 +308,21 @@ function App() {
       budget !== plan.max_download_mb ||
       (!!preparedOptions && preparedOptions !== JSON.stringify({ sampling, includeNetwork })));
   const planJob = jobs.find((j) => j.plan === planId);
+  const restoredGeneration = useRef(false);
+  useEffect(() => {
+    if (restoredGeneration.current || training.active || !jobs.length) return;
+    const saved = sessionStorage.getItem('huntmaps-generation-plan');
+    if (!saved) {
+      restoredGeneration.current = true;
+      return;
+    }
+    const job = jobs.find((j) => j.plan === saved && j.kind === 'baseline');
+    if (!job) return;
+    restoredGeneration.current = true;
+    setPlanId(saved);
+    setNewRun(true);
+    void jobAction(job, 'review');
+  }, [jobs]);
   const planFailed = planJob && ['failed', 'cancelled', 'interrupted'].includes(planJob.status);
   const planComplete = planJob?.kind === 'baseline' && planJob.status === 'complete';
   useEffect(() => {
@@ -384,15 +413,18 @@ function App() {
   }, []);
   useEffect(() => {
     setWorking({});
+    setWorkingLoaded(false);
     if (!runId || training.active) return;
     let alive = true;
     const poll = () =>
       api('/runs/' + runId + '/working-waypoints')
         .then((v) => {
-          if (alive)
+          if (alive) {
+            setWorkingLoaded(true);
             setWorking((old) =>
               JSON.stringify(old) === JSON.stringify(v.overrides) ? old : v.overrides,
             );
+          }
         })
         .catch((e) => {
           if (alive) setError(e instanceof Error ? e.message : String(e));
@@ -660,7 +692,8 @@ function App() {
             (planningApproaches ||
               inspectStage ||
               group === 'all' ||
-              (group === 'recommended' && !!run?.recommendation_ids?.includes(p.id)) ||
+              (group === 'recommended' &&
+                !!(appliedFilter?.recommendation_ids ?? run?.recommendation_ids)?.includes(p.id)) ||
               group === 'dismissed' ||
               (group === 'review'
                 ? run?.review_ids.includes(p.id)
@@ -942,6 +975,8 @@ function App() {
           radius_m: radius,
           observation_minutes: minutes,
           candidate_count: count,
+          target_filters: targets,
+          avoid_dense_vegetation: avoidDense,
           recommendation_count: recommendationCount,
           recommendation_separation_m: separation,
           nearby_radius_m: nearbyRadius,
@@ -971,6 +1006,7 @@ function App() {
         method: 'POST',
         body: JSON.stringify({ download: true, review_signature: plan?.review_signature }),
       });
+      sessionStorage.setItem('huntmaps-generation-plan', planId);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -1014,6 +1050,8 @@ function App() {
         setNearbyRadius(p.settings.search?.nearby_radius_m ?? 30);
         setSeparation(p.settings.search?.recommendation_separation_m ?? 150);
         setTreeThreshold(p.settings.search?.tree_threshold_percent ?? 10);
+        setTargets({ ...defaultCriteria(), ...p.settings.search?.target_filters });
+        setAvoidDense(p.settings.search?.avoid_dense_vegetation ?? false);
         setBudget(p.max_download_mb);
         const recoveredSampling = p.access_sampling
           ? {
@@ -1053,7 +1091,8 @@ function App() {
         (planningApproaches ||
           inspectStage ||
           group === 'all' ||
-          (group === 'recommended' && !!run?.recommendation_ids?.includes(p.id)) ||
+          (group === 'recommended' &&
+            !!(appliedFilter?.recommendation_ids ?? run?.recommendation_ids)?.includes(p.id)) ||
           group === 'dismissed' ||
           (group === 'review'
             ? run?.review_ids.includes(p.id)
@@ -1074,10 +1113,17 @@ function App() {
     const original =
       shownCandidates.findIndex((p) => p.id === a.id) -
       shownCandidates.findIndex((p) => p.id === b.id);
+    if (sortMode === 'engine')
+      return (
+        Number(b.metrics.baseline_score ?? b.metrics.selective_score ?? -1) -
+          Number(a.metrics.baseline_score ?? a.metrics.selective_score ?? -1) || original
+      );
     if (appliedFilter && !planningApproaches && !inspectStage)
       return (
         (appliedFilter.candidates.find((p) => p.id === b.id)?.matching_km2 ?? -1) -
-          (appliedFilter.candidates.find((p) => p.id === a.id)?.matching_km2 ?? -1) || original
+          (appliedFilter.candidates.find((p) => p.id === a.id)?.matching_km2 ?? -1) ||
+        Number(b.metrics.raw_km2 ?? -1) - Number(a.metrics.raw_km2 ?? -1) ||
+        a.id.localeCompare(b.id)
       );
     if (group === 'recommended')
       return (
@@ -1253,8 +1299,9 @@ function App() {
         group === 'recommended' && !planningApproaches && !inspectStage
           ? shownCandidates.filter(
               (q) =>
-                run?.search_summary?.nearby_ids?.[p.id]?.includes(q.id) &&
-                !workflow?.points[q.id]?.dismissed,
+                (appliedFilter?.nearby_ids ?? run?.search_summary?.nearby_ids)?.[p.id]?.includes(
+                  q.id,
+                ) && !workflow?.points[q.id]?.dismissed,
             )
           : [];
       return (
@@ -1329,6 +1376,7 @@ function App() {
           value={runId}
           disabled={training.active}
           onChange={(value) => {
+            sessionStorage.removeItem('huntmaps-generation-plan');
             setRecovery(null);
             setPlanningApproaches(false);
             setRunId(value);
@@ -1357,6 +1405,8 @@ function App() {
             if (!newRun) {
               setMinutes(30);
               setIncludeNetwork(true);
+              setTargets(defaultCriteria());
+              setAvoidDense(false);
               setSampling({
                 network_ids: [],
                 kinds: ['roads', 'trails'],
@@ -1608,9 +1658,10 @@ function App() {
                   onChange={(e) => setGroup(e.target.value)}
                 >
                   <option value="all">All evaluated setups</option>
-                  {!!run.recommendation_ids?.length && (
+                  {(!!run.recommendation_ids?.length || !!appliedFilter) && (
                     <option value="recommended">
-                      Recommended setups ({run.recommendation_ids.length})
+                      Recommended setups (
+                      {(appliedFilter?.recommendation_ids ?? run.recommendation_ids)?.length ?? 0})
                     </option>
                   )}
                   <option value="dismissed">Dismissed</option>
@@ -1625,6 +1676,12 @@ function App() {
               )}
               {!!run?.search_summary?.recommendation_note && (
                 <p className="hint">{run.search_summary.recommendation_note}</p>
+              )}
+              {appliedFilter?.recommendation_ids?.length === 0 && (
+                <p className="notice">
+                  No spots have matching visible terrain under these criteria. Adjust the filters or
+                  choose All evaluated setups to inspect the original views.
+                </p>
               )}
               <p className="hint">
                 Select a setup to see its saved view. Use Compare for up to three; Export chooses
@@ -2005,6 +2062,41 @@ function App() {
             <>
               <div className="eyebrow">Find places to glass</div>
               <h2>Start with your observer area</h2>
+              {planJob && (
+                <div className="generation-status" data-testid="generation-status">
+                  <JobProgress job={planJob} />
+                  {planFailed && (
+                    <p role="alert">
+                      {planJob.error || 'Files retained. Review or refresh this plan to recover.'}
+                    </p>
+                  )}
+                  {['running', 'cancelling'].includes(planJob.status) && (
+                    <button
+                      disabled={planJob.status === 'cancelling'}
+                      onClick={() =>
+                        api(`/jobs/${planJob.id}/cancel`, { method: 'POST' }).catch((e) =>
+                          setError(String(e)),
+                        )
+                      }
+                    >
+                      Cancel current job
+                    </button>
+                  )}
+                  {planComplete && (
+                    <button
+                      className="primary wide"
+                      onClick={() => {
+                        sessionStorage.removeItem('huntmaps-generation-plan');
+                        refreshRuns();
+                        setRunId(plan!.name);
+                        setNewRun(false);
+                      }}
+                    >
+                      Open results
+                    </button>
+                  )}
+                </div>
+              )}
               <p>
                 Draw where you would stand to glass. Terrain and target support extend beyond this
                 boundary.
@@ -2085,6 +2177,26 @@ function App() {
               )}
               {drawing && <p className="notice">Confirm this boundary to continue.</p>}
               <AreaSettings
+                targets={targets}
+                setTargets={setTargets}
+                avoidDense={avoidDense}
+                setAvoidDense={setAvoidDense}
+                areaKm2={observerAreaKm2(
+                  imported?.choices?.find((c: any) => c.number === polygon)?.geometry ??
+                    (imported?.choices?.length === 1
+                      ? imported.choices[0].geometry
+                      : polygon === 'all'
+                        ? {
+                            type: 'MultiPolygon',
+                            coordinates:
+                              imported?.choices.flatMap((c: any) =>
+                                c.geometry.type === 'Polygon'
+                                  ? [c.geometry.coordinates]
+                                  : c.geometry.coordinates,
+                              ) || [],
+                          }
+                        : null),
+                )}
                 name={name}
                 radius={radius}
                 count={count}
@@ -2159,14 +2271,13 @@ function App() {
               {plan && (
                 <div className="plan">
                   <h3>{plan.name} acquisition plan</h3>
-                  <JobProgress job={planJob} />
+
                   <p className="hint">
                     Prepared settings: {(plan.settings?.radius_m || 0) / 1000} km ·{' '}
-                    {plan.settings?.observation_minutes} minutes assumed inspection time ·{' '}
                     {plan.settings?.candidate_count} maximum locations to evaluate;{' '}
-                    {plan.settings?.search?.recommendation_count ?? 20} setups to recommend. Nearby
-                    mapped tree cover is a preference, not verified clearance. Starting this plan
-                    uses these saved settings.
+                    {plan.settings?.search?.recommendation_count ?? 20} setups to recommend. Terrain
+                    criteria rank matching visible area. Nearby vegetation eligibility is separate.
+                    Starting this plan uses these saved settings.
                   </p>
                   {planFailed && (
                     <p className="error" role="alert">
@@ -2282,6 +2393,7 @@ function App() {
                           !!plan.acquisition?.errors?.length ||
                           (plan.acquisition?.estimated_bytes || 0) > plan.max_download_mb * 1e6
                         }
+                        hidden={planComplete}
                         onClick={
                           planComplete
                             ? () => {
@@ -2299,7 +2411,7 @@ function App() {
                     <p className={planFailed ? 'error' : ''}>
                       {planFailed
                         ? `${planJob.status}: ${planJob.error || 'Partial preparation retained; refresh unchanged plan to recover.'}`
-                        : 'Preparing plan… check the job panel below.'}
+                        : 'Preparing source plan… progress is shown above.'}
                     </p>
                   )}
                   {plan?.recovery_notice && <p className="hint">{plan.recovery_notice}</p>}
@@ -2325,6 +2437,11 @@ function App() {
                     runId={runId}
                     map={ready ? map.current : null}
                     api={api}
+                    initialSearch={workingLoaded ? run?.search_summary?.options : undefined}
+                    locationStamp={
+                      workingStamp +
+                      JSON.stringify(manualPoints.map((p) => [p.id, p.longitude, p.latitude]))
+                    }
                     onFilter={setAppliedFilter}
                     stamp={
                       JSON.stringify(annotations) +
@@ -2423,15 +2540,25 @@ function App() {
                           Inspect now
                         </button>
                         <div className="metric">
-                          <strong>{num(detail.metrics.raw_km2)}</strong>
-                          <span>km² original terrain-visible target area</span>
+                          <strong>
+                            {num(
+                              appliedFilter?.candidates.find((p) => p.id === selected)
+                                ?.matching_km2 ?? detail.metrics.raw_km2,
+                            )}
+                          </strong>
+                          <span>
+                            {appliedFilter
+                              ? 'km² matching visible terrain'
+                              : 'km² original terrain-visible target area'}
+                          </span>
                           {appliedFilter && (
                             <p>
+                              {num(detail.metrics.raw_km2)} km² original terrain-visible area ·{' '}
                               {num(
-                                appliedFilter.candidates.find((p) => p.id === selected)
-                                  ?.matching_km2,
+                                appliedFilter?.candidates.find((p) => p.id === selected)
+                                  ?.matching_unknown_km2 ?? detail.metrics.matching_unknown_km2,
                               )}{' '}
-                              km² matching saved visible terrain
+                              km² with unknown required evidence
                             </p>
                           )}
                         </div>

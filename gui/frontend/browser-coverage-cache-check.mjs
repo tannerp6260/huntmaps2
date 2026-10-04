@@ -18,9 +18,9 @@ try {
    requestUrls.set(e.requestId,e.response.url);
    if(e.response.fromDiskCache||e.response.fromPrefetchCache)cachedRequests.add(e.requestId);
  });
- const coverageHits=(point='')=>[...cachedRequests].filter(id=>requestUrls.get(id)?.includes('/runs/search-fixture/tiles/visible/'+(point ? point+'/' : ''))).length;
+ const coverageHits=(point='')=>[...cachedRequests].filter(id=>requestUrls.get(id)?.includes('/runs/search-fixture/')&&requestUrls.get(id)?.includes('/visible/'+(point ? point+'/' : ''))).length;
  page.on('pageerror',e=>errors.push(e.message));
- page.on('request',r=>{if(r.url().includes('/tiles/visible/'))requests.push({url:r.url(),background:r.headers()['x-huntmaps-prefetch']==='true'})});
+ page.on('request',r=>{if(r.url().includes('/visible/'))requests.push({url:r.url(),background:r.headers()['x-huntmaps-prefetch']==='true'})});
  await page.goto(base);
  const began=Date.now();
  await page.getByLabel('Run selector').selectOption('search-fixture');

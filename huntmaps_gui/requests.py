@@ -57,6 +57,8 @@ class Preparation(Payload):
     recommendation_separation_m: float = Field(default=150, ge=0, le=2000)
     nearby_radius_m: Literal[10, 30, 60, 120] = 30
     tree_threshold_percent: float = Field(default=10, ge=0, le=100)
+    target_filters: dict | None = None
+    avoid_dense_vegetation: StrictBool = False
     access_sampling: dict | None = None
     include_network: StrictBool = False
 

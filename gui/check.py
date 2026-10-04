@@ -180,6 +180,13 @@ def main():
             search_config = json.loads(fixture.read_text())
             search_config["search"] = dict(
                 version=1,
+                ranking_version=2,
+                target_filters=dict(
+                    elevation_m=[2100, 2150],
+                    tree_percent=[0, 15],
+                    shrub_percent=[20, 30],
+                ),
+                avoid_dense_vegetation=False,
                 recommendation_count=5,
                 nearby_radius_m=30,
                 tree_threshold_percent=10,
@@ -298,6 +305,7 @@ def main():
                 raise RuntimeError("Dedicated test server did not become ready")
             for script in (
                 "browser-workflow-check.mjs",
+                "browser-target-search-check.mjs",
                 "browser-refinement-check.mjs",
                 "browser-workflow-regressions.mjs",
                 "browser-transfer-check.mjs",

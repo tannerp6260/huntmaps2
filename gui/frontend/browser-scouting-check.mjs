@@ -35,8 +35,8 @@ await page.screenshot({path:out+'/20-scouting-desktop.png',fullPage:true});await
 await page.getByLabel('Approach tree weight',{exact:true}).fill('4');
 assert.equal(await page.getByRole('link',{name:'Provisional approach GeoJSON',exact:true}).count(),0);
 await page.getByText('Observer access and visible-terrain filters',{exact:true}).click();
-await page.getByText('Visible terrain elevation band (feet)',{exact:true}).locator('input').check();
-await page.getByLabel('Minimum target elevation feet',{exact:true}).fill('10000');await page.getByLabel('Maximum target elevation feet',{exact:true}).fill('10500');
+await page.getByLabel('Elevation range (feet)',{exact:true}).check();
+await page.getByLabel('Minimum Elevation range (feet)',{exact:true}).fill('10000');await page.getByLabel('Maximum Elevation range (feet)',{exact:true}).fill('10500');
 await page.getByRole('button',{name:'Apply review filters',exact:true}).click();await page.getByText('Applied matching-area order',{exact:false}).waitFor();
 await page.getByRole('button',{name:/1 · Find setups/}).click();
 await page.getByRole('button',{name:'+ New baseline run',exact:true}).click();

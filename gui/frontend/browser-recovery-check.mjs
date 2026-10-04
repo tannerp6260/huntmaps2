@@ -26,11 +26,12 @@ try{
  await page.getByLabel('Import observer polygon').setInputFiles(process.env.HUNTMAPS_IMPORT_FILE);
  await page.getByLabel('New run name',{exact:true}).fill('browser-recovery');
  await page.getByLabel('View radius',{exact:true}).selectOption('500');
- await page.getByLabel('Search effort',{exact:true}).selectOption('600');
- await page.getByLabel('Setups recommended',{exact:true}).fill('10');
+ await page.getByLabel('Locations to test',{exact:true}).fill('600');
+ await page.getByLabel('Top spots to recommend',{exact:true}).fill('10');
  await page.getByRole('button',{name:'Review downloads',exact:true}).click();
  await page.getByRole('button',{name:'Generate setups',exact:true}).waitFor({timeout:30000});
  await page.getByRole('button',{name:'Generate setups',exact:true}).click();
+ await page.locator('[data-testid="generation-status"]').waitFor();
  const failed=await waitJob('failed');
  assert.match(failed.error,/Injected post-download/);
  assert.equal(failed.failed_stage,'score');
@@ -38,6 +39,7 @@ try{
  assert.equal(plan.acquisition.estimated_bytes,0);
  assert.ok(plan.acquisition.already_cached_bytes>0);
  await page.reload();
+ await page.locator('[data-testid="generation-status"]').waitFor();
  await page.getByText('Job history and recovery',{exact:true}).click();
  await page.locator('summary').filter({hasText:'Analysis jobs'}).click();
  const card=page.locator('.job').filter({hasText:'Injected post-download'});
@@ -56,13 +58,18 @@ try{
  const run=await response.json();
  assert.equal(run.recommendation_ids.length,10);
  assert.ok(run.search_summary.sampling.spacing_m<150);
- await page.getByLabel('Run selector').selectOption('browser-recovery');
+ await page.locator('[data-testid="generation-status"]').getByRole('button',{name:'Open results',exact:true}).click();
  await page.getByText(/Evaluated .* locations/).waitFor();
+ assert.equal(await page.evaluate(()=>sessionStorage.getItem('huntmaps-generation-plan')),null);
+ await page.reload();
+ await page.getByText(/Evaluated .* locations/).waitFor();
+ assert.equal(await page.getByLabel('Run selector').inputValue(),'browser-recovery');
+ assert.equal(await page.locator('[data-testid="generation-status"]').count(),0,'Opening results must end generation recovery on reload');
  await page.setViewportSize({width:900,height:900});
  await page.locator('.coverage-status').filter({hasText:'Coverage ready'}).waitFor({timeout:60000});
  await page.locator('.inspector').getByText('Loading setup...',{exact:true}).waitFor({state:'hidden'});
  await page.screenshot({path:out+'/02-search-complete-900.png',fullPage:true});
  assert.deepEqual(errors,[]);
  fs.writeFileSync(out+'/results.json',JSON.stringify({errors,failedStage:failed.failed_stage,search:run.search_summary},null,2));
- console.log('Actual browser Thorough search, cached recovery and reload verified',out);
+ console.log('Actual browser 600-location search, cached recovery and reload verified',out);
 }finally{await browser.close();}

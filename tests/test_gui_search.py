@@ -118,6 +118,11 @@ class SearchTests(unittest.TestCase):
                         saved["search"],
                         dict(
                             version=1,
+                            ranking_version=2,
+                            target_filters=__import__(
+                                "huntmaps_gui.target_filters", fromlist=["validate"]
+                            ).validate(),
+                            avoid_dense_vegetation=False,
                             recommendation_count=12,
                             recommendation_separation_m=150,
                             nearby_radius_m=60,
@@ -173,6 +178,13 @@ class SearchTests(unittest.TestCase):
             )
             config["search"] = dict(
                 version=1,
+                ranking_version=2,
+                target_filters=dict(
+                    elevation_m=[2100, 2150],
+                    tree_percent=[0, 15],
+                    shrub_percent=[20, 30],
+                ),
+                avoid_dense_vegetation=False,
                 recommendation_count=5,
                 nearby_radius_m=30,
                 tree_threshold_percent=10,
@@ -214,12 +226,52 @@ assert len(transfer.read('results/search-analysis/search-checkpoint.json')['rows
                 len({(p["row"], p["col"]) for p in scores if p["group"] != "manual"}),
                 48,
             )
+            self.assertTrue(all(0 <= p["matching_km2"] <= p["raw_km2"] for p in scores))
+            self.assertTrue(any(p["matching_km2"] < p["raw_km2"] for p in scores))
+            from huntmaps_gui.search import spread_recommendations
+
+            self.assertEqual(
+                recommendations["ids"],
+                [p["id"] for p in spread_recommendations(scores, 5, 0)],
+            )
             self.assertEqual(len(recommendations["ids"]), 5)
             self.assertTrue(any(p["group"] == "refinement" for p in scores))
             manual = json.loads((analysis / "manual_import.json").read_text())
             self.assertEqual(
                 [(p["x"], p["y"]) for p in scores if p["group"] == "manual"],
                 [(p["x"], p["y"]) for p in manual],
+            )
+            # Dense mapped cover excludes automated standing points, but never
+            # changes or drops the user's exact manual coordinates.
+            clearing = dict(
+                config,
+                work="results/clearing-search",
+                search=dict(config["search"], avoid_dense_vegetation=True),
+            )
+            (root / "clearing.json").write_text(json.dumps(clearing))
+            run("-m", "huntmaps_gui.search_worker", "--config", "clearing.json")
+            cleared = json.loads(
+                (root / "results/clearing-search/scores.json").read_text()
+            )
+            self.assertEqual(
+                [(p["x"], p["y"]) for p in cleared], [(p["x"], p["y"]) for p in manual]
+            )
+            self.assertTrue(all(not p["standing_eligible"] for p in cleared))
+            packet = root / "results/clearing-search"
+            checks = json.loads((packet / "export_checks.json").read_text())
+            self.assertTrue(checks["passed"])
+            self.assertEqual(checks["manual_count"], 2)
+            self.assertEqual(checks["automated_count"], 0)
+            recovery = json.loads((packet / "comparison_review.json").read_text())[
+                "recovery"
+            ]
+            self.assertTrue(all(p["nearest_automated"] is None for p in recovery))
+            self.assertGreater((packet / "review_packet.pdf").stat().st_size, 1000)
+            self.assertEqual(
+                json.loads(
+                    (root / "results/clearing-search/recommendations.json").read_text()
+                )["ids"],
+                [],
             )
             before = (analysis / "scores.json").read_bytes()
             run("-m", "huntmaps_gui.search_worker", "--config", "fixture.json")

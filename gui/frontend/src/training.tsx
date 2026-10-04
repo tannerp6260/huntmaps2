@@ -68,7 +68,7 @@ const areaSteps = [
     text: 'Look at the settings in the RIGHT panel. Open How locations are chosen, then More options. Hover over, focus or click each question mark for a plain-language explanation. The current defaults are a starting point, not a guarantee of suitable setups.',
     target: 'run-settings',
     extra:
-      'View radius controls analysis distance. Locations to evaluate controls initial sampling, not shortlist size; small areas use denser sampling, and exhausted eligible cells leave part of the budget unused. Calculation details show the fixed inspection assumption, which affects inherited scores rather than visible terrain or a stop duration. Inspect source metadata before reviewing the download ceiling; online browsing is separate.',
+      'View radius controls analysis distance. Locations to test controls the calculation budget, while Top spots to recommend controls the initial suggestions; small areas use denser sampling, and exhausted eligible cells leave part of the budget unused. Calculation details show the fixed inspection assumption, which affects inherited scores rather than visible terrain or a stop duration. Inspect source metadata before reviewing the download ceiling; online browsing is separate.',
   },
   {
     id: 'handoff',

@@ -257,14 +257,18 @@ export function Drawing({
 }
 
 const descriptions = {
+  targets:
+    'These criteria describe the terrain you want to observe. A spot ranks higher when it can see more area meeting all selected criteria. Tree and shrub percentages describe mapped cover, not verified clear sightlines. Facing direction describes the hillside, not the direction you look or walk.',
+  clearing:
+    'Optionally require low mapped tree cover immediately around where you stand. At least 80% of that neighborhood must have known cover. This can exclude candidates and return fewer suggestions; coarse maps cannot verify individual branches.',
   effort:
-    'How many possible standing locations we test. Thorough and Deep search more places and take longer. They can find better alternatives, but cannot guarantee the best spot.',
+    'How many possible standing locations we test. More locations take longer and search more densely within your observer area. This can find better alternatives, but cannot guarantee the best spot.',
   recommendations:
     'How many suggestions to show first. We spread them across your area so nearby variations do not fill the list. Every tested location is still available in All setups.',
   nearby:
     'How far around a standing location we check mapped vegetation. A larger area looks for a broader opening; a smaller area focuses on the immediate surroundings. This does not measure individual branches.',
   trees:
-    'Prefer spots with less mapped tree cover around them. Lower values favor more open surroundings. Tree-cover percentage is an average, not the chance of having a clear view. Shrubs can still obstruct you.',
+    'When Avoid standing in dense vegetation is enabled, require less mapped tree cover around the standing point. Lower values exclude more locations. Tree-cover percentage is an average, not the chance of having a clear view. Shrubs can still obstruct you.',
   separation:
     'Keep main suggestions this far apart. Larger values spread suggestions across more of your area and may return fewer spots. Nearby alternatives remain available. Choose zero to allow clusters.',
   proximity:

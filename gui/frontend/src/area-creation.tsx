@@ -1,5 +1,11 @@
 import { Help } from './drawing';
+import TerrainCriteria, { type TargetCriteria } from './target-criteria';
 export default function AreaSettings({
+  targets,
+  setTargets,
+  avoidDense,
+  setAvoidDense,
+  areaKm2,
   name,
   radius,
   count,
@@ -16,6 +22,11 @@ export default function AreaSettings({
   treeThreshold,
   setTreeThreshold,
 }: {
+  targets: TargetCriteria;
+  setTargets: (v: TargetCriteria) => void;
+  avoidDense: boolean;
+  setAvoidDense: (v: boolean) => void;
+  areaKm2: number | null;
   name: string;
   radius: number;
   count: number;
@@ -41,9 +52,9 @@ export default function AreaSettings({
           spread of promising spots. You choose which to inspect.
         </p>
         <p>
-          Search thoroughness controls how many places we test. Spots to recommend controls how many
-          suggestions you see first. We favor more open surroundings, but trees and branches still
-          need inspection.
+          Locations to test controls how many standing points we calculate. Top spots to recommend
+          controls how many suggestions you see first, ranked by visible terrain matching your
+          criteria.
         </p>
       </div>
       <label>
@@ -73,25 +84,27 @@ export default function AreaSettings({
         </select>
       </label>
       <label>
-        Search thoroughness <Help topic="effort" />
-        <select
-          aria-label="Search effort"
-          value={[150, 600, 2000].includes(count) ? count : 'custom'}
-          onChange={(e) => {
-            if (e.target.value !== 'custom') setCount(+e.target.value);
-            else setCount(300);
-          }}
-        >
-          <option value="150">Quick · up to 150 locations</option>
-          <option value="600">Thorough · up to 600 locations</option>
-          <option value="2000">Deep · up to 2,000 locations</option>
-          <option value="custom">Custom budget</option>
-        </select>
-      </label>
-      <label>
-        Spots to recommend <Help topic="recommendations" />
+        Locations to test <Help topic="count" />
         <input
-          aria-label="Setups recommended"
+          aria-label="Locations to test"
+          type="number"
+          min="12"
+          max="5000"
+          value={count}
+          onChange={(e) => setCount(+e.target.value)}
+        />
+      </label>
+      {areaKm2 != null && areaKm2 > 0 && (
+        <p className="hint" data-testid="search-density">
+          Approx. {areaKm2.toFixed(2)} km² observer area · {(count / areaKm2).toFixed(0)}{' '}
+          locations/km². Some evaluations refine promising spots; restrictions may leave fewer
+          candidates.
+        </p>
+      )}
+      <label>
+        Top spots to recommend <Help topic="recommendations" />
+        <input
+          aria-label="Top spots to recommend"
           type="number"
           min="1"
           max={Math.min(200, count)}
@@ -100,10 +113,19 @@ export default function AreaSettings({
         />
       </label>
       <p className="hint">
-        Search broadly, then inspect nearby alternatives around leading locations. Prefer low mapped
-        tree cover nearby, then greater terrain-visible area. All evaluated locations remain
-        available.
+        Search broadly, then check nearby alternatives around the best matching viewpoints. All
+        evaluated locations remain available.
       </p>
+      <TerrainCriteria value={targets} onChange={setTargets} />
+      <label className="source-choice">
+        <input
+          aria-label="Avoid standing in dense vegetation"
+          type="checkbox"
+          checked={avoidDense}
+          onChange={(e) => setAvoidDense(e.target.checked)}
+        />
+        Avoid standing in dense vegetation <Help topic="clearing" />
+      </label>
       <details>
         <summary>Advanced settings</summary>
         <label>
@@ -116,19 +138,6 @@ export default function AreaSettings({
             onChange={(e) => setSeparation(+e.target.value)}
           />
         </label>
-        <div className="form-grid">
-          <label>
-            Locations to evaluate <Help topic="count" />
-            <input
-              aria-label="Locations to evaluate"
-              type="number"
-              min="12"
-              max="5000"
-              value={count}
-              onChange={(e) => setCount(+e.target.value)}
-            />
-          </label>
-        </div>
         <label>
           Check surrounding vegetation within <Help topic="nearby" />
           <select
@@ -144,7 +153,7 @@ export default function AreaSettings({
           </select>
         </label>
         <label>
-          Prefer surrounding tree cover below (%) <Help topic="trees" />
+          Require surrounding tree cover below (%) <Help topic="trees" />
           <input
             aria-label="Preferred tree cover below"
             type="number"
@@ -160,8 +169,8 @@ export default function AreaSettings({
           branches still require inspection.
         </p>
         <p className="hint">
-          Locations to evaluate means potential glassing spots to test, not the number of best spots
-          returned.
+          Locations to test means potential glassing spots to calculate, not the number of best
+          spots returned.
         </p>
         <details>
           <summary>How this works</summary>
@@ -179,10 +188,10 @@ export default function AreaSettings({
             budget; broad sampling uses 80%. A limited area may leave some refinement budget unused.
           </p>
           <p>
-            Recommendations prefer nearby low mapped tree cover, then terrain-visible area. All
-            evaluated setups can still be ordered by terrain-visible area. Original engine ranking
-            remains available. Terrain shapes do not certify suitable footing, deer habitat, or
-            legal access.
+            Recommendations rank by matching visible terrain area. The optional nearby vegetation
+            restriction applies to where you stand, not what you view. All evaluated setups can
+            still be ordered by terrain-visible area. Original engine ranking remains available.
+            Terrain shapes do not certify suitable footing, deer habitat, or legal access.
           </p>
         </details>
         <details>

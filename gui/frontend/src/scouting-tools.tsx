@@ -1,4 +1,10 @@
 import { Help } from './drawing';
+import TerrainCriteria, {
+  defaultCriteria,
+  validCriteria,
+  type TargetCriteria,
+} from './target-criteria';
+import { inputSignature } from './approach-inputs';
 import DownloadReview from './download-review';
 import JobProgress from './job-progress';
 import { networkResponse } from './network-response';
@@ -11,10 +17,16 @@ type FilterRow = {
   id: string;
   original_km2: number;
   matching_km2: number;
+  matching_unknown_km2: number;
   qualifies: boolean;
   access: { status: string; distance_m: number | null; height_m: number | null };
 };
-export type AppliedFilter = { profile: { id: string }; candidates: FilterRow[] };
+export type AppliedFilter = {
+  recommendation_ids?: string[];
+  nearby_ids?: Record<string, string[]>;
+  profile: { id: string };
+  candidates: FilterRow[];
+};
 type Network = {
   id: string;
   kind: string;
@@ -72,6 +84,8 @@ type Api = (path: string, options?: RequestInit) => Promise<any>;
 const aspects = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 const number = (v: number | null, d = 1) => (v === null ? 'unknown' : v.toFixed(d));
 export default function ScoutingTools({
+  initialSearch,
+  locationStamp,
   recovery,
   runId,
   observerBoundary,
@@ -87,6 +101,13 @@ export default function ScoutingTools({
   onPlanning,
 }: {
   recovery?: { kind: string; id: string } | null;
+  initialSearch?: {
+    ranking_version?: number;
+    target_filters?: TargetCriteria;
+    avoid_dense_vegetation?: boolean;
+    nearby_radius_m?: number;
+    tree_threshold_percent?: number;
+  };
   runId: string;
   observerBoundary?: GeoJSON.FeatureCollection;
   onApproach?: (cid: string, scenario: string, alternative: number) => void;
@@ -95,6 +116,7 @@ export default function ScoutingTools({
   api: Api;
   onFilter: (v: AppliedFilter | null) => void;
   stamp: string;
+  locationStamp: string;
   analysisPlan: string;
   budget: number;
   planning: boolean;
@@ -110,13 +132,8 @@ export default function ScoutingTools({
     [height, setHeight] = useState(false),
     [feet, setFeet] = useState(1000),
     [kinds, setKinds] = useState(['roads', 'trails']);
-  const [elevation, setElevation] = useState(false),
-    [elevMin, setElevMin] = useState(0),
-    [elevMax, setElevMax] = useState(14000),
-    [slope, setSlope] = useState(false),
-    [slopeMin, setSlopeMin] = useState(0),
-    [slopeMax, setSlopeMax] = useState(90),
-    [selectedAspects, setSelectedAspects] = useState<string[]>([]);
+  const [filterTargets, setFilterTargets] = useState<TargetCriteria>(defaultCriteria);
+  const [avoidDense, setAvoidDense] = useState(false);
   const [dirty, setDirty] = useState(false),
     [applied, setApplied] = useState<AppliedFilter | null>(null),
     [busy, setBusy] = useState(false),
@@ -144,25 +161,25 @@ export default function ScoutingTools({
   const scenarioDirty =
     !!currentScenario &&
     (editing ||
-      JSON.stringify({
+      inputSignature({
         area,
         exclusions,
         weights,
         maximum,
         ids: selectedNetworks,
         kinds,
-        start: includeWalk ? start : '',
-        pinned,
+        start: includeWalk && start.trim() ? start.split(',').map(Number) : null,
+        pinned: pinned.trim() ? pinned.split(',').map(Number) : null,
       }) !==
-        JSON.stringify({
+        inputSignature({
           area: currentScenario.travel_area,
           exclusions: currentScenario.exclusions,
           weights: currentScenario.weights,
           maximum: currentScenario.maximum_slope_deg,
           ids: currentScenario.network_ids,
           kinds: currentScenario.kinds,
-          start: currentScenario.start?.join(',') || '',
-          pinned: currentScenario.pinned?.join(',') || '',
+          start: currentScenario.start,
+          pinned: currentScenario.pinned,
         }));
   useEffect(() => {
     if (!recovery) return;
@@ -217,6 +234,8 @@ export default function ScoutingTools({
     setScenarioId(id);
     const s = scenarios.find((v) => v.scenario.id === id)?.scenario;
     if (!s) return;
+    setEditing(false);
+    setAlternativesOnMap({});
     setArea(s.travel_area);
     setExclusions(s.exclusions);
     setWeights(s.weights);
@@ -284,7 +303,7 @@ export default function ScoutingTools({
       setError('Saved locations changed. Reapply review filters to use their current coverage.');
     setApplied(null);
     onFilter(null);
-  }, [stamp]);
+  }, [locationStamp]);
   useEffect(() => {
     setDirty(true);
     epoch.current++;
@@ -292,15 +311,10 @@ export default function ScoutingTools({
     distance,
     miles,
     height,
+    filterTargets,
+    avoidDense,
     feet,
     kinds.join(','),
-    elevation,
-    elevMin,
-    elevMax,
-    slope,
-    slopeMin,
-    slopeMax,
-    selectedAspects.join(','),
     selectedNetworks.join(','),
   ]);
   useEffect(() => {
@@ -345,10 +359,15 @@ export default function ScoutingTools({
         features.push({ type: 'Feature', geometry: g, properties: { kind: 'exclusion' } }),
       );
     const scenario = scenarios.find((s) => s.scenario.id === scenarioId);
-    if (planning && !scenarioDirty && scenario && !scenario.stale)
+    if (planning && scenario && (scenarioDirty || scenario.stale))
+      features.push({
+        type: 'Feature',
+        geometry: scenario.scenario.travel_area,
+        properties: { kind: 'saved-boundary' },
+      });
+    if (planning && scenario)
       scenario.results?.results.forEach(
         (r) =>
-          !scenario.point_stale?.[r.point.id] &&
           r.alternatives[alternativesOnMap[r.point.id] || 0] &&
           ['mapped', 'offtrail'].forEach((mode) => {
             const alternative = r.alternatives[alternativesOnMap[r.point.id] || 0];
@@ -444,6 +463,48 @@ export default function ScoutingTools({
     scenarioDirty,
     alternativesOnMap,
   ]);
+  const currentFilter = useRef({ criteria: filterTargets, avoidDense, stamp: locationStamp });
+  currentFilter.current = { criteria: filterTargets, avoidDense, stamp: locationStamp };
+  const initialStamp = JSON.stringify(initialSearch);
+  useEffect(() => {
+    if (initialSearch?.ranking_version !== 2) return;
+    const startingStamp = locationStamp,
+      run = runId;
+    const criteria = { ...defaultCriteria(), ...initialSearch.target_filters };
+    setFilterTargets(criteria);
+    setAvoidDense(initialSearch.avoid_dense_vegetation ?? false);
+    let alive = true;
+    void api(`/runs/${run}/filters`, {
+      method: 'POST',
+      body: JSON.stringify({
+        ...criteria,
+        version: undefined,
+        avoid_dense_vegetation: initialSearch.avoid_dense_vegetation ?? false,
+        nearby_radius_m: initialSearch.nearby_radius_m ?? 30,
+        tree_threshold_percent: initialSearch.tree_threshold_percent ?? 10,
+      }),
+    })
+      .then((p) => api(`/runs/${run}/filters/${p.id}`))
+      .then((v) => {
+        if (
+          alive &&
+          startingStamp === currentFilter.current.stamp &&
+          inputSignature(criteria) === inputSignature(currentFilter.current.criteria) &&
+          (initialSearch.avoid_dense_vegetation ?? false) === currentFilter.current.avoidDense &&
+          run === runRef.current
+        ) {
+          setApplied(v);
+          onFilter(v);
+          setDirty(false);
+        }
+      })
+      .catch((e) => {
+        if (alive) setError(String(e));
+      });
+    return () => {
+      alive = false;
+    };
+  }, [runId, initialStamp]);
   async function attempt(action: () => Promise<void>) {
     setBusy(true);
     setError('');
@@ -486,9 +547,11 @@ export default function ScoutingTools({
           kinds,
           distance_m: distance ? miles * 1609.344 : null,
           height_m: height ? feet * 0.3048 : null,
-          elevation_m: elevation ? [elevMin * 0.3048, elevMax * 0.3048] : null,
-          slope_deg: slope ? [slopeMin, slopeMax] : null,
-          aspects: selectedAspects,
+          ...filterTargets,
+          version: undefined,
+          avoid_dense_vegetation: avoidDense,
+          nearby_radius_m: initialSearch?.nearby_radius_m ?? 30,
+          tree_threshold_percent: initialSearch?.tree_threshold_percent ?? 10,
         }),
       });
       const v = await api(`/runs/${run}/filters/${p.id}`);
@@ -525,7 +588,18 @@ export default function ScoutingTools({
         }),
       });
       if (run === runRef.current && token === epoch.current) {
-        setScenarioId(v.scenario.id);
+        const saved = v.scenario;
+        setArea(saved.travel_area);
+        setExclusions(saved.exclusions);
+        setWeights(saved.weights);
+        setMaximum(saved.maximum_slope_deg);
+        setSelectedNetworks(saved.network_ids);
+        setKinds(saved.kinds);
+        setIncludeWalk(!!saved.start);
+        setStart(saved.start?.join(',') || '');
+        setPinned(saved.pinned?.join(',') || '');
+        setEditing(false);
+        setScenarioId(saved.id);
         setScenarios((old) => [
           ...old,
           { scenario: v.scenario, stale: false, stale_reasons: [], results: null },
@@ -620,68 +694,26 @@ export default function ScoutingTools({
             {k}
           </label>
         ))}
-        <label>
+        <TerrainCriteria
+          value={filterTargets}
+          onChange={(v) => {
+            setFilterTargets(v);
+            setDirty(true);
+          }}
+        />
+        <label className="source-choice">
           <input
             type="checkbox"
-            checked={elevation}
-            onChange={(e) => setElevation(e.target.checked)}
+            aria-label="Avoid standing in dense vegetation"
+            checked={avoidDense}
+            onChange={(e) => {
+              setAvoidDense(e.target.checked);
+              setDirty(true);
+            }}
           />
-          Visible terrain elevation band (feet)
+          Avoid standing in dense vegetation <Help topic="clearing" />
         </label>
-        {elevation && (
-          <div className="form-grid">
-            <input
-              aria-label="Minimum target elevation feet"
-              type="number"
-              value={elevMin}
-              onChange={(e) => setElevMin(+e.target.value)}
-            />
-            <input
-              aria-label="Maximum target elevation feet"
-              type="number"
-              value={elevMax}
-              onChange={(e) => setElevMax(+e.target.value)}
-            />
-          </div>
-        )}
-        <label>
-          <input type="checkbox" checked={slope} onChange={(e) => setSlope(e.target.checked)} />
-          Visible terrain slope range (degrees)
-        </label>
-        {slope && (
-          <div className="form-grid">
-            <input
-              aria-label="Minimum target slope degrees"
-              type="number"
-              value={slopeMin}
-              onChange={(e) => setSlopeMin(+e.target.value)}
-            />
-            <input
-              aria-label="Maximum target slope degrees"
-              type="number"
-              value={slopeMax}
-              onChange={(e) => setSlopeMax(+e.target.value)}
-            />
-          </div>
-        )}
-        <p>Visible terrain facing direction (optional; not an approach preference)</p>
-        <div className="form-grid">
-          {aspects.map((a) => (
-            <label key={a}>
-              <input
-                type="checkbox"
-                checked={selectedAspects.includes(a)}
-                onChange={(e) =>
-                  setSelectedAspects((v) =>
-                    e.target.checked ? [...v, a] : v.filter((x) => x !== a),
-                  )
-                }
-              />
-              {a}
-            </label>
-          ))}
-        </div>
-        <button disabled={busy || !runId} onClick={apply}>
+        <button disabled={busy || !runId || !validCriteria(filterTargets)} onClick={apply}>
           Apply review filters
         </button>
         <button
@@ -695,7 +727,13 @@ export default function ScoutingTools({
           Show original terrain
         </button>
         {dirty &&
-          (distance || height || elevation || slope || selectedAspects.length > 0 || applied) && (
+          (distance ||
+            height ||
+            avoidDense ||
+            applied ||
+            Object.values(filterTargets).some((v) =>
+              Array.isArray(v) ? v.length > 0 : v !== null && v !== 1,
+            )) && (
             <p role="status">
               Edited filters are unapplied. Apply to update matching areas and shading.
             </p>
@@ -1077,14 +1115,20 @@ export default function ScoutingTools({
                       >
                         Use this approach
                       </button>
-                      <button
-                        disabled={
-                          scenario.stale || !!scenario.point_stale?.[r.point.id] || scenarioDirty
-                        }
-                        onClick={() => showAlternative(r.point.id, j)}
-                      >
+                      <button disabled={!map} onClick={() => showAlternative(r.point.id, j)}>
                         Show this alternative on map
                       </button>
+                      {(scenario.stale || scenario.point_stale?.[r.point.id] || scenarioDirty) && (
+                        <p className="hint">
+                          Saved approach preview.{' '}
+                          {scenario.stale
+                            ? scenario.stale_reasons.join('; ')
+                            : scenario.point_stale?.[r.point.id] ||
+                              'Settings differ from this saved comparison.'}{' '}
+                          Recompute or reload its saved settings before selecting it.
+                        </p>
+                      )}
+                      {!map && <p className="hint">The map is still opening.</p>}
                       <p>
                         Departure: {a.departure[1].toFixed(7)}, {a.departure[0].toFixed(7)}
                       </p>
