@@ -19,6 +19,7 @@ from .jobs import ACTIVE
 
 LOCK = threading.RLock()
 WORKERS = threading.BoundedSemaphore(2)
+BACKGROUND = threading.BoundedSemaphore(1)
 TILE_LOCKS = [threading.Lock() for _ in range(64)]
 
 
@@ -81,7 +82,7 @@ def rgba_file(path, rgba, ds):
 
 def sources(run, layer, ident, color):
     if layer == "imagery":
-        return [safe_path(i["path"]) for i in run.images], None
+        return [run.path(i["path"]) for i in run.images], None
     ds = run.dem
     inputs = [run.dem_path]
     if layer in ["visible", "classes"]:
@@ -151,6 +152,12 @@ def tile(run, layer, ident, z, x, y, color=0, background=False):
     if not (0 <= z <= 20 and 0 <= x < 2**z and 0 <= y < 2**z and 0 <= color <= 2):
         raise ValueError("Invalid tile coordinate")
     if background:
+        from .speed_probe import memory_available
+
+        if memory_available() < 1024**3:
+            raise ValueError(
+                "Background coverage paused to retain 1 GiB available memory"
+            )
         if any(
             read_json(p).get("status") in ACTIVE
             for p in (STATE / "jobs").glob("*.json")
@@ -158,7 +165,13 @@ def tile(run, layer, ident, z, x, y, color=0, background=False):
             raise ValueError("Background coverage paused while analysis is active")
         if shutil.disk_usage(STATE.resolve()).free < 20 * 1024**3:
             raise ValueError("Background coverage paused to retain 20 GiB free")
-    with WORKERS, cache_cleanup(), ExitStack() as held:
+    with ExitStack() as held:
+        if background:
+            if not BACKGROUND.acquire(blocking=False):
+                raise ValueError("Background coverage already preparing another view")
+            held.callback(BACKGROUND.release)
+        held.enter_context(WORKERS)
+        held.enter_context(cache_cleanup())
         with locked(STATE / "maintenance"), LOCK:
             paths, key = sources(run, layer, ident, color)
             for path in paths:

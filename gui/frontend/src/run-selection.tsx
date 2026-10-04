@@ -19,6 +19,7 @@ export default function RunSelection({
         value={value}
         onChange={(event) => onChange(event.target.value)}
       >
+        {!value && <option value="">Choose saved results…</option>}
         {runs.map((r) => (
           <option key={r.id} value={r.id}>
             {r.label}

@@ -166,7 +166,7 @@ export default function Viewer({
     setError('');
     setLoading(true);
     const asset = async (name: string, kind: 'f' | 'u' | 'b') => {
-      const r = await fetch(url + '/assets/' + name);
+      const r = await fetch(url + '/assets/' + name + '?scene_key=' + encodeURIComponent(meta.key));
       if (!r.ok) throw Error('Scene asset unavailable: ' + name);
       const b = await r.arrayBuffer();
       return kind === 'f'
@@ -196,7 +196,13 @@ export default function Viewer({
           : ((await asset(meta.vegetation.colors_file, 'b')) as Uint8Array);
       const shape = meta.vegetation.meshes
         ? { identifier: meta.vegetation.geometry_identifier, vertices: [], faces: [] }
-        : await request(url + '/assets/' + meta.vegetation.primitive_file);
+        : await request(
+            url +
+              '/assets/' +
+              meta.vegetation.primitive_file +
+              '?scene_key=' +
+              encodeURIComponent(meta.key),
+          );
       if (!alive) return;
       renderer = new THREE.WebGLRenderer({ antialias: true });
       renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -398,7 +404,7 @@ export default function Viewer({
       for (const { mesh, image } of images) {
         if (!image) continue;
         new THREE.TextureLoader().load(
-          url + '/assets/' + image.file,
+          url + '/assets/' + image.file + '?scene_key=' + encodeURIComponent(meta.key),
           (t) => {
             if (!alive) {
               t.dispose();

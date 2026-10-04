@@ -63,6 +63,7 @@ def main():
         HUNTMAPS_WORKSPACE=str(work / "workspace"),
         HUNTMAPS_SOURCE_DIR=str(ROOT),
         PYTHONDONTWRITEBYTECODE="1",
+        HUNTMAPS_DISABLE_SPEED_PROBE="1",
         HUNTMAPS_SCREENSHOTS=str(work / "screenshots"),
         HUNTMAPS_IMPORT_FILE=str(ROOT / "inputs/test.kml"),
         HUNTMAPS_SCENE_SOURCE=str(ROOT / ".gui/first-person"),
@@ -297,6 +298,8 @@ def main():
                 raise RuntimeError("Dedicated test server did not become ready")
             for script in (
                 "browser-workflow-check.mjs",
+                "browser-refinement-check.mjs",
+                "browser-workflow-regressions.mjs",
                 "browser-transfer-check.mjs",
                 "browser-coverage-search-check.mjs",
                 "browser-coverage-cache-check.mjs",

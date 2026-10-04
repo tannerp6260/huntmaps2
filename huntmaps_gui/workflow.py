@@ -47,13 +47,31 @@ def point(run, cid, jobs=None, run_data=None):
     )
 
 
-def selection(run, cid, value, jobs=None):
+def selection(run, cid, value, jobs=None, cache=None):
     from .approach_service import status
 
     if not value:
         return None
-    s = status(value["scenario"], jobs)
-    if s["scenario"]["run_id"] != run or s["stale"] or not s["results"]:
+    if (
+        not isinstance(value, dict)
+        or not isinstance(value.get("scenario"), str)
+        or type(value.get("alternative")) is not int
+    ):
+        raise ValueError(
+            "Damaged saved approach selection; restore its workflow backup"
+        )
+    if cache is not None and value["scenario"] in cache:
+        s = cache[value["scenario"]]
+    else:
+        s = status(value["scenario"], jobs)
+        if cache is not None:
+            cache[value["scenario"]] = s
+    if (
+        s["scenario"]["run_id"] != run
+        or s["stale"]
+        or cid in s.get("point_stale", {})
+        or not s["results"]
+    ):
         return None
     matches = [r for r in s["results"]["results"] if r["point"]["id"] == cid]
     if (
@@ -74,6 +92,7 @@ def get(run, jobs=None):
     value = records(run)
     run_data, legacy = point_snapshot(run, jobs)
     result = {}
+    statuses = {}
     for cid in dict.fromkeys([*legacy, *value["points"]]):
         saved = value["points"].get(cid, {})
         try:
@@ -84,7 +103,7 @@ def get(run, jobs=None):
         dismissed = saved.get("dismissed", False)
         shortlisted = saved.get("shortlisted", cid in legacy) and not dismissed
         selected = (
-            selection(run, cid, saved.get("approach"), jobs)
+            selection(run, cid, saved.get("approach"), jobs, statuses)
             if same and shortlisted
             else None
         )
@@ -227,3 +246,13 @@ def decide(run, cid, body, jobs=None):
         value["revision"] += 1
         write(path(run), value)
     return get(run, jobs)
+
+
+def invalidate_confirmation(run, cid):
+    with locked(path(run)):
+        value = records(run)
+        entry = value["points"].get(cid)
+        if entry and entry.get("confirmed"):
+            entry["confirmed"] = False
+            value["revision"] += 1
+            write(path(run), value)

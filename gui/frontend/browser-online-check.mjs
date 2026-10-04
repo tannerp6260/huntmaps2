@@ -21,7 +21,7 @@ try{
  await page.getByRole('button',{name:'Draw boundary',exact:true}).click();for(const [x,y] of [[.5,.35],[.75,.35],[.75,.6],[.5,.6]])await page.mouse.click(box.x+box.width*x,box.y+box.height*y);
  await page.getByRole('button',{name:'Finish shape',exact:true}).click();await page.getByRole('button',{name:'Confirm boundary',exact:true}).click();await page.getByRole('button',{name:'Edit vertices',exact:true}).waitFor();
  assert.equal(await page.getByLabel('Assumed inspection time',{exact:true}).count(),0);
- await page.getByText('More options · trial locations',{exact:true}).click();await page.getByText('Calculation details',{exact:true}).click();await page.getByText('Saved inspection assumption: 30 minutes per setup.',{exact:false}).waitFor();
+ await page.getByText('Advanced settings',{exact:true}).click();await page.getByText('Calculation details',{exact:true}).click();await page.getByText('Historical calculation input: 30 minutes allocated to inspecting a view.',{exact:false}).waitFor();
  await page.getByRole('button',{name:'Help: count',exact:true}).focus();await page.getByRole('tooltip').filter({hasText:'not a top-X shortlist'}).waitFor({state:'visible'});
  await page.getByLabel('New run name').fill('online-settings-test');let prepared;
  await page.route('**/api/plans',async r=>{prepared=r.request().postDataJSON();await r.fulfill({status:400,json:{detail:'Verification intercepted preparation; no job started.'}})});

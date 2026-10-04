@@ -10,12 +10,12 @@ try{
  const oldPlan=await page.evaluate(()=>localStorage.getItem('huntmaps-first-person-plan'));
  await page.locator('summary').filter({hasText:'Prepare local fine terrain and lidar'}).click();await page.getByRole('button',{name:'Check source plan',exact:true}).click();
  await page.waitForFunction(old=>localStorage.getItem('huntmaps-first-person-plan')!==old,oldPlan);
- await page.getByRole('button',{name:'Prepare using cached sources only',exact:true}).waitFor();await page.waitForFunction(()=>!document.querySelector('.fp-preparation button:last-of-type')?.disabled);
+ await page.getByRole('button',{name:'Prepare views',exact:true}).waitFor();await page.waitForFunction(()=>!document.querySelector('.fp-preparation button:last-of-type')?.disabled);
  const pid=await page.evaluate(()=>localStorage.getItem('huntmaps-first-person-plan'));
  const plan=await (await page.request.get(base+'/api/first-person/plans/'+pid)).json();assert.equal(plan.estimated_new_bytes,0);assert.ok(plan.sources.every(s=>s.cached));
- assert.equal(await page.getByLabel(/Allow this plan’s source downloads within/).isChecked(),false);
+ assert.equal(await page.getByRole('checkbox',{name:/Allow this plan/}).count(),0);
  await page.screenshot({path:out+'/06-acquisition-plan.png',fullPage:true});
- await page.getByRole('button',{name:'Prepare using cached sources only',exact:true}).click();
+ await page.getByRole('button',{name:'Prepare views',exact:true}).click();
  let job;
  for(let attempt=0;attempt<60;attempt++){
   const jobs=await (await page.request.get(base+'/api/jobs')).json();job=jobs.find(j=>j.plan===pid&&j.kind==='first-person-prepare');

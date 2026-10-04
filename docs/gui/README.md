@@ -57,8 +57,8 @@ Choose **New baseline run**, import GeoJSON/KML/KMZ, explicitly select a polygon
 candidate layers are hidden in this preview. Cached context belongs to the open
 run; it is not proof that new-area data are available.
 
-Review the suggested run name, view radius, search effort and recommendation count.
-Custom evaluation budgets, nearby-cover preferences and sampling controls are under More options. Inspection minutes are a calculation detail: new GUI runs
+Review the suggested run name, view distance, search thoroughness and spots to recommend.
+The explanation above settings introduces these controls. Custom evaluation budgets, suggestion spacing and surrounding vegetation preferences are under Advanced settings. Roads and trails are included by default; proximity sampling starts at 0.5 miles. Inspection minutes are a calculation detail: new GUI runs
 use 30; recovered runs retain saved values. Check metadata before choosing the
 reviewed download allowance.
 The existing hunt context is inherited from the transfer template: GMU54 second
@@ -68,8 +68,7 @@ does not introduce new coefficients or permit arbitrary shell commands.
 Click **Review downloads**. The unchanged owner CLI checks cached data and
 can request catalog metadata (up to its existing 5 MB response limit). It does not
 perform bulk downloads. Review source items, estimate, cap, errors and required-data
-text in the interface. Only explicitly checking **Allow this plan's bulk downloads**
-permits bulk transfer. The existing streaming cap and validation remain authoritative.
+text in the interface. **Generate setups** approves the displayed plan and allowance; there is no separate checkbox and preparing a plan never starts bulk transfer. The existing streaming cap and validation remain authoritative.
 If the estimate exceeds the cap or source planning fails, analysis remains blocked.
 
 Click **Generate setups**. One background process group runs at a time.

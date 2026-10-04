@@ -47,6 +47,29 @@ def create_app(config=None):
                     {"detail": "Local app request required"}, status_code=403
                 )
         with configured(config):
+            path = request.url.path
+            if (
+                request.headers.get("x-huntmaps-prefetch") != "true"
+                and path != "/api/speed-probe"
+                and (
+                    request.method == "POST"
+                    or any(
+                        part in path
+                        for part in (
+                            "/tiles/",
+                            "/working-tiles/",
+                            "/filtered-tiles/",
+                            "/terrain/",
+                            "/assets/",
+                            "/profile",
+                            "/observer",
+                        )
+                    )
+                )
+            ):
+                from .speed_probe import interrupt
+
+                interrupt()
             return await call_next(request)
 
     @app.exception_handler(RequestValidationError)

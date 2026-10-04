@@ -29,14 +29,14 @@ try {
  const ready=id=>page.locator('.coverage-status').filter({hasText:'Coverage ready · '+id}).waitFor({timeout:60000});
  await ready(first);
  const firstMs=Date.now()-began;
- await page.getByText('Preparing next views',{exact:false}).waitFor({timeout:60000});
+ await page.getByText('Preparing saved coverage',{exact:false}).waitFor({timeout:60000});
  await page.screenshot({path:out+'/coverage-preparation-desktop.png',fullPage:false});
- await page.getByText('Next 3 views cached for this map area',{exact:false}).waitFor({timeout:60000});
+ await page.getByText('Coverage saved ahead for',{exact:false}).waitFor({timeout:60000});
  const warmed=requests.filter(r=>r.background);
  assert.ok(warmed.length>0);
- assert.ok(new Set(warmed.map(r=>r.url.split('/visible/')[1].split('/')[0])).size<=3);
+ assert.ok(new Set(warmed.map(r=>r.url.split('/visible/')[1].split('/')[0])).size<=run.candidates.length);
  const firstZoom=new URL(requests.find(r=>!r.background&&r.url.includes('/'+first+'/')).url).pathname.split('/visible/')[1].split('/')[1];
- assert.ok(warmed.every(r=>r.url.includes('/'+firstZoom+'/')),'Prefetch must match MapLibre raster zoom');
+ assert.ok(warmed.some(r=>r.url.includes('/'+firstZoom+'/')),'Prefetch includes current raster zoom plus overview and neighboring zooms');
  const beforePrefetched=coverageHits(second);
  const secondStarted=Date.now();
  await page.getByLabel('Select '+second,{exact:true}).click(); await ready(second);

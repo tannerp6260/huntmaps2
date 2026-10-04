@@ -29,8 +29,7 @@ try{
  await page.getByLabel('Search effort',{exact:true}).selectOption('600');
  await page.getByLabel('Setups recommended',{exact:true}).fill('10');
  await page.getByRole('button',{name:'Review downloads',exact:true}).click();
- await page.getByRole('checkbox',{name:/Approve this plan's new downloads/}).waitFor({timeout:30000});
- await page.getByRole('checkbox',{name:/Approve this plan's new downloads/}).check();
+ await page.getByRole('button',{name:'Generate setups',exact:true}).waitFor({timeout:30000});
  await page.getByRole('button',{name:'Generate setups',exact:true}).click();
  const failed=await waitJob('failed');
  assert.match(failed.error,/Injected post-download/);

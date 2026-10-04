@@ -65,8 +65,19 @@ def router(jobs):
     @r.get("/network-plans/{ident}")
     def network_result(ident):
         network.checked_id(ident)
+        from .downloads import review_info
+
+        p = read_json(STATE / "network-plans" / f"{ident}.json")
+        if not p:
+            raise ValueError("Unknown network plan; review a new road/trail plan")
+        pending, reused = network.remaining_estimate(ident)
         return dict(
-            plan=read_json(STATE / "network-plans" / f"{ident}.json"),
+            plan=dict(
+                p,
+                estimated_bytes=pending,
+                already_cached_bytes=reused,
+                **review_info([STATE], pending, ["apps.fs.usda.gov"]),
+            ),
             result=read_json(STATE / "network-plans" / f"{ident}-result.json"),
         )
 
@@ -80,20 +91,26 @@ def router(jobs):
         from .downloads import check_space
 
         check_space(STATE, 3 * p["estimated_bytes"])
-        # The caller may link an analysis plan; its reviewed estimate consumes budget.
+        # Linked work shares the durable reviewed transfer ledger.
         remaining = p["max_download_mb"] * 1000000
+        ledger_arg = []
         if body.get("analysis_plan"):
             base = read_json(
                 STATE / "plans" / f"{network.checked_id(body['analysis_plan'])}.json"
             )
             if not base or not base.get("prepared"):
                 raise ValueError("Prepare analysis plan first")
-            remaining = min(
-                remaining,
-                base["max_download_mb"] * 1000000
-                - base["acquisition"]["estimated_bytes"],
+            ledger_path = STATE / "plans" / f"{body['analysis_plan']}-transfer.json"
+            accounting = read_json(
+                ledger_path, dict(received_bytes=base.get("transferred_bytes", 0))
             )
-        if remaining < p["estimated_bytes"]:
+            accounting["ceiling_bytes"] = base["max_download_mb"] * 1000000
+            write(ledger_path, accounting)
+            remaining = min(
+                remaining, accounting["ceiling_bytes"] - accounting["received_bytes"]
+            )
+            ledger_arg = ["--ledger", str(ledger_path)]
+        if remaining < network.remaining_estimate(ident)[0]:
             raise ValueError(
                 "Combined plan exceeds shared cap; narrow area or change cap"
             )
@@ -107,7 +124,8 @@ def router(jobs):
                 ident,
                 "--remaining-bytes",
                 str(remaining),
-            ],
+            ]
+            + ledger_arg,
             "network-acquisition",
             plan=ident,
         )

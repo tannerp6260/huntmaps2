@@ -181,11 +181,14 @@ def status(ident, jobs=None):
             "Unsupported saved approach version; prior definition retained"
         )
     stale = []
+    point_stale = {}
     try:
         r, points = point_snapshot(scenario["run_id"], jobs)
         for p in scenario["points"]:
             if p != points.get(p["id"]):
-                stale.append("Waypoint changed/restored or no longer kept: " + p["id"])
+                point_stale[p["id"]] = (
+                    "Waypoint changed/restored or no longer kept: " + p["id"]
+                )
         _, sources = load_networks(
             scenario["network_ids"], r.config["epsg"], scenario["kinds"]
         )
@@ -214,6 +217,7 @@ def status(ident, jobs=None):
         scenario=scenario,
         stale=bool(stale),
         stale_reasons=stale,
+        point_stale=point_stale,
         results=results,
     )
 
@@ -223,7 +227,7 @@ def compute(ident):
 
     s = read_json(STATE / "approaches" / checked_id(ident) / "scenario.json")
     current_status = status(ident)
-    if current_status["stale"]:
+    if current_status["stale"] or current_status["point_stale"]:
         raise ValueError(
             "Scenario changed before computation; explicitly submit current inputs"
         )
@@ -342,6 +346,8 @@ def export(ident, index, alternative, fmt, jobs):
     if not v["results"]:
         raise ValueError("Approach job has not completed")
     result = v["results"]["results"][index]
+    if result["point"]["id"] in v["point_stale"]:
+        raise ValueError("This waypoint changed; recompute its approach before export")
     a = result["alternatives"][alternative]
     p = result["point"]
     if fmt == "geojson":

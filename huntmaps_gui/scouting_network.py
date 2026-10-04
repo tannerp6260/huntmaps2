@@ -192,13 +192,60 @@ def network_plan(bounds, budget_mb):
     return value
 
 
+def remaining_estimate(ident):
+    p = read_json(STATE / "network-plans" / f"{checked_id(ident)}.json")
+    if not p:
+        raise ValueError("Unknown network plan")
+    if p.get("cached_network_ids"):
+        return 0, 0
+    cached_bytes = 0
+    missing = 0
+    partials = STATE / "network-plans" / f"{ident}-responses"
+    for item in p["items"]:
+        path = partials / (item["kind"] + ".json")
+        seal = read_json(path.with_suffix(".seal"), {})
+        if (
+            path.exists()
+            and seal.get("url", "").startswith(item["url"] + "/query?")
+            and seal.get("sha256") == hashlib.sha256(path.read_bytes()).hexdigest()
+        ):
+            cached_bytes += path.stat().st_size
+        else:
+            missing += LIMIT
+    return missing, cached_bytes
+
+
 def acquire(ident, remaining_bytes):
+    import os
+    from .storage import locked
+
+    ledger = os.environ.get("HUNTMAPS_TRANSFER_LEDGER")
+    owned = not ledger
+    if owned:
+        ledger = str(STATE / "network-plans" / f"{checked_id(ident)}-transfer.json")
+        with locked(ledger):
+            record = read_json(ledger, dict(received_bytes=0))
+            reviewed = read_json(STATE / "network-plans" / f"{checked_id(ident)}.json")
+            if not reviewed:
+                raise ValueError("Review a network download plan first")
+            record["ceiling_bytes"] = min(
+                remaining_bytes, reviewed["max_download_mb"] * 1000000
+            )
+            write(ledger, record)
+        os.environ["HUNTMAPS_TRANSFER_LEDGER"] = ledger
+    try:
+        return _acquire(ident, remaining_bytes)
+    finally:
+        if owned:
+            os.environ.pop("HUNTMAPS_TRANSFER_LEDGER", None)
+
+
+def _acquire(ident, remaining_bytes):
     p = read_json(STATE / "network-plans" / f"{checked_id(ident)}.json")
     if not p:
         raise ValueError("Review a network download plan first")
     cap = min(p["max_download_mb"] * 1000000, remaining_bytes)
-    if p["estimated_bytes"] > cap:
-        raise ValueError("Network plan exceeds remaining shared download budget")
+
     if p.get("cached_network_ids"):
         records = [
             read_json(STATE / "networks" / checked_id(i) / "network.json")
@@ -217,6 +264,20 @@ def acquire(ident, remaining_bytes):
     if not progress_file or not progress_file.exists():
         start_download(p["estimated_bytes"])
     check_space(STATE, 3 * p["estimated_bytes"])
+    import os
+
+    ledger = os.environ["HUNTMAPS_TRANSFER_LEDGER"]
+    partials = STATE / "network-plans" / f"{ident}-responses"
+    partials.mkdir(parents=True, exist_ok=True)
+
+    pending_estimate, _ = remaining_estimate(ident)
+    accounting = read_json(ledger)
+    if pending_estimate > min(
+        cap, accounting["ceiling_bytes"] - accounting["received_bytes"]
+    ):
+        raise ValueError(
+            "Network plan exceeds remaining cumulative download budget; review a larger allowance"
+        )
     responses = []
     used = 0
     for item in p["items"]:
@@ -231,24 +292,59 @@ def acquire(ident, remaining_bytes):
             outFields="*",
         )
         url = item["url"] + "/query?" + urllib.parse.urlencode(params)
-        with urllib.request.urlopen(url, timeout=30) as response:
-            chunks = []
-            size = 0
-            while size <= min(LIMIT, cap - used):
-                check_space(STATE, 1024 * 1024)
-                block = response.read(
-                    min(1024 * 1024, min(LIMIT, cap - used) + 1 - size)
+        cache = partials / (item["kind"] + ".json")
+        seal = read_json(cache.with_suffix(".seal"), {})
+        if (
+            cache.is_file()
+            and seal.get("url") == url
+            and hashlib.sha256(cache.read_bytes()).hexdigest() == seal.get("sha256")
+        ):
+            data = cache.read_bytes()
+        else:
+            with urllib.request.urlopen(url, timeout=30) as response:
+                chunks = []
+                size = 0
+                declared = (
+                    response.headers.get("Content-Length")
+                    if hasattr(response, "headers")
+                    else None
                 )
-                if not block:
-                    break
-                chunks.append(block)
-                size += len(block)
-                received(len(block), url)
-            data = b"".join(chunks)
-            flush_download()
-        used += len(data)
-        if len(data) > LIMIT or used > cap:
-            raise ValueError("Network response exceeds approved budget; no fallback")
+                declared = int(declared) if declared is not None else None
+                if declared is not None and (
+                    declared > LIMIT
+                    or declared
+                    > min(
+                        cap - used,
+                        read_json(ledger)["ceiling_bytes"]
+                        - read_json(ledger)["received_bytes"],
+                    )
+                ):
+                    raise ValueError(
+                        "Network response exceeds remaining cumulative download budget"
+                    )
+                while True:
+                    check_space(STATE, 1024 * 1024)
+                    accounting = read_json(ledger)
+                    remaining = min(
+                        cap - used - size,
+                        accounting["ceiling_bytes"] - accounting["received_bytes"],
+                        LIMIT - size,
+                    )
+                    if remaining <= 0:
+                        raise ValueError(
+                            "Cumulative network allowance exhausted; review a larger allowance or narrow the query"
+                        )
+                    block = response.read(min(1024 * 1024, remaining))
+                    if not block:
+                        break
+                    received(len(block), url)
+                    chunks.append(block)
+                    size += len(block)
+                    if declared is not None and size == declared:
+                        break
+                data = b"".join(chunks)
+                flush_download()
+            used += len(data)
         value = json.loads(data)
         if (
             value.get("error")
@@ -257,6 +353,14 @@ def acquire(ident, remaining_bytes):
         ):
             raise ValueError(
                 "USFS query failed or truncated; narrow query or import checked lines"
+            )
+        if not cache.exists() or seal.get("url") != url or cache.read_bytes() != data:
+            temp = cache.with_suffix(".part")
+            temp.write_bytes(data)
+            temp.replace(cache)
+            write(
+                cache.with_suffix(".seal"),
+                dict(url=url, sha256=hashlib.sha256(data).hexdigest()),
             )
         responses.append((item, data, url))
     emit("processing", "Validating mapped roads/trails", force=True)

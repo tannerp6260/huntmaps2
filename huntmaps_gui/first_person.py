@@ -141,10 +141,14 @@ def scene(ident, cid, run_data=None, orientation=True):
         r.validate(r.dem_path)
         from glassing.acquire import digest
 
+        if signature.get("imagery") is not None and signature["imagery"] != sorted(
+            r.hashes[str(r.path(i["path"]))] for i in r.images
+        ):
+            raise ValueError("Scene imagery changed; review a new scene plan")
         if (
             signature.get("run_id") != ident
             or signature.get("waypoint_revision") != p.get("working_revision")
-            or signature.get("baseline") != digest(r.dem_path)
+            or signature.get("baseline") != r.hashes[str(r.dem_path)]
         ):
             raise ValueError("Scene inputs changed; review a new scene plan")
     for name, h in meta["hashes"].items():

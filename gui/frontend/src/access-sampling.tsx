@@ -1,3 +1,4 @@
+import { Help } from './drawing';
 import { networkResponse } from './network-response';
 import { useEffect, useState } from 'react';
 export type Sampling = {
@@ -63,17 +64,12 @@ export default function AccessSampling({
     <details>
       <summary>Observer access sampling and network acquisition</summary>
       {networkError && <p className="error">{networkError}</p>}
-      <label>
-        <input
-          type="checkbox"
-          checked={includeNetwork}
-          onChange={(e) => onNetwork(e.target.checked)}
-        />
-        Include bounded USFS roads/trails in this reviewed download plan (up to 20 MB, shared cap)
-      </label>
+      <p className="hint">
+        Roads and trails are included in the source plan; verified cached data is reused.
+      </p>{' '}
       <label>
         <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
-        Constrain new observer sampling by loaded network proximity
+        Only look near mapped roads or trails
       </label>
       {enabled && !ids.length && (
         <p className={includeNetwork ? 'hint' : 'error'}>
@@ -84,44 +80,52 @@ export default function AccessSampling({
       )}
       {enabled && (
         <>
-          <p>
-            Only observer eligibility changes. Original polygon, targets and obstruction terrain
-            stay intact. Unknown network/elevation does not qualify. Select source datasets below;
-            roads/trails are separate type choices. With no source selected, this run uses its
-            reviewed acquired networks.
+          <p className="hint">
+            Only test places within the distance below. This is straight-line proximity, not walking
+            distance or permission.
           </p>
-          {networks.map((n) => (
-            <label key={n.id}>
-              <input
-                type="checkbox"
-                checked={ids.includes(n.id)}
-                onChange={(e) =>
-                  setIds((v) => (e.target.checked ? [...v, n.id] : v.filter((id) => id !== n.id)))
-                }
-              />
-              {n.kind}:{' '}
-              {n.source.startsWith('https://apps.fs.usda.gov/')
-                ? 'USFS mapped inventory'
-                : n.source}
-            </label>
-          ))}
-          {['roads', 'trails'].map((k) => (
-            <label key={k}>
-              <input
-                type="checkbox"
-                checked={kinds.includes(k)}
-                onChange={(e) =>
-                  setKinds((v) => (e.target.checked ? [...v, k] : v.filter((i) => i !== k)))
-                }
-              />
-              {k}
-            </label>
-          ))}
+          <details>
+            <summary>Advanced network sources</summary>{' '}
+            <p>
+              Only observer eligibility changes. Original polygon, targets and obstruction terrain
+              stay intact. Unknown network/elevation does not qualify. Select source datasets below;
+              roads/trails are separate type choices. With no source selected, this run uses its
+              reviewed acquired networks.
+            </p>
+            {networks.map((n) => (
+              <label key={n.id}>
+                <input
+                  type="checkbox"
+                  checked={ids.includes(n.id)}
+                  onChange={(e) =>
+                    setIds((v) => (e.target.checked ? [...v, n.id] : v.filter((id) => id !== n.id)))
+                  }
+                />
+                {n.kind}:{' '}
+                {n.source.startsWith('https://apps.fs.usda.gov/')
+                  ? 'USFS mapped inventory'
+                  : n.source}
+              </label>
+            ))}
+            {['roads', 'trails'].map((k) => (
+              <label key={k}>
+                <input
+                  type="checkbox"
+                  checked={kinds.includes(k)}
+                  onChange={(e) =>
+                    setKinds((v) => (e.target.checked ? [...v, k] : v.filter((i) => i !== k)))
+                  }
+                />
+                {k}
+              </label>
+            ))}
+          </details>{' '}
           <label>
-            Maximum proximity (miles)
+            Maximum distance from a road or trail (miles) <Help topic="proximity" />
             <input
-              type="number"
-              min="0"
+              aria-label="Maximum distance from a road or trail (miles)"
+              type="text"
+              inputMode="decimal"
               value={distance}
               onChange={(e) => setDistance(+e.target.value)}
             />

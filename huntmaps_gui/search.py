@@ -82,6 +82,21 @@ def rank(rows):
     )
 
 
+def spread_recommendations(rows, count, separation):
+    """Presentation diversity only: keep scores and all evaluated locations intact."""
+    if not math.isfinite(separation) or not 0 <= separation <= 2000:
+        raise ValueError("Recommendation separation must be 0–2000 metres")
+    selected = []
+    for p in rank([p for p in rows if p["group"] != "manual"]):
+        if all(
+            math.hypot(p["x"] - q["x"], p["y"] - q["y"]) >= separation for q in selected
+        ):
+            selected.append(p)
+            if len(selected) == count:
+                break
+    return selected
+
+
 def refine(points, grid, budget, seen, radius=150, spacing=50):
     ds, a, gt, masks = grid
     result = []
@@ -344,9 +359,11 @@ def score(c):
     total = len(pool) + len(extras)
     emit("processing", "Searching observation setups", len(rows), total, force=True)
     evaluate(extras)
-    recommended = rank([p for p in rows if p["group"] != "manual"])[
-        : options["recommendation_count"]
-    ]
+    recommended = spread_recommendations(
+        rows,
+        options["recommendation_count"],
+        options.get("recommendation_separation_m", 0),
+    )
     selected = {p["id"] for p in recommended}
     for p in rows:
         p["recommended"] = p["id"] in selected
@@ -375,6 +392,22 @@ def score(c):
             evaluated_count=len(rows),
             budget=requested_total,
             ids=[p["id"] for p in recommended],
+            nearby_ids={
+                p["id"]: [
+                    q["id"]
+                    for q in rank(rows)
+                    if q["id"] not in selected
+                    and q["group"] != "manual"
+                    and math.hypot(q["x"] - p["x"], q["y"] - p["y"])
+                    < options.get("recommendation_separation_m", 0)
+                ]
+                for p in recommended
+            },
+            recommendation_note=(
+                "Fewer distinct spots fit the requested spacing; lower spacing or review All setups."
+                if len(recommended) < options["recommendation_count"]
+                else None
+            ),
             complete=True,
             unused_budget=requested_total - len(rows),
             sampling=transfer.read(root / "sampling_summary.json"),

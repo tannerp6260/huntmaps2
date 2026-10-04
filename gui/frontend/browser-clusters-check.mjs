@@ -13,7 +13,7 @@ try{
  const annotations=await (await page.request.get(api+'/annotations')).text(),jobs=await (await page.request.get(base+'/api/jobs')).json();
  const currentMeta=await (await page.request.get(api+'/first-person/A0075')).json();
  const legacy=JSON.parse(fs.readFileSync((process.env.HUNTMAPS_SCENE_SOURCE||'../../.gui/first-person')+'/bundles/'+currentMeta.reused_base_bundle+'/scene.json','utf8'));
- const legacyRoute=route=>route.fulfill({json:{...legacy,initial_bearing_deg:currentMeta.initial_bearing_deg,initial_facing_note:currentMeta.initial_facing_note}});
+ const legacyRoute=route=>route.fulfill({json:{...legacy,key:currentMeta.key,initial_bearing_deg:currentMeta.initial_bearing_deg,initial_facing_note:currentMeta.initial_facing_note}});
  await page.route(api+'/first-person/A0075',legacyRoute);
  await page.goto(base);await page.getByLabel('Select A0075',{exact:true}).click();await page.getByRole('button',{name:'Inspect now',exact:true}).click();
  const loaded=cid=>page.waitForFunction(cid=>{const s=JSON.parse(document.querySelector('.fp-scene')?.getAttribute('data-camera')||'{}');return s.candidate===cid&&s.loaded&&s.imageryPending===0},cid);

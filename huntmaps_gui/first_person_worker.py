@@ -616,7 +616,7 @@ def texture(run, cid, folder, radius=300, pixels=1200, name="imagery.png"):
     images = []
     for i in run.images:
         path = Path(i["path"])
-        path = path if path.is_absolute() else ROOT / path
+        path = run.path(str(path))
         run.validate(str(path))
         images.append(dict(i, path=str(path)))
     if not images:
@@ -872,7 +872,8 @@ def publish(run, cid, sources):
     signature = dict(
         run_id=run.id,
         waypoint_id=cid,
-        algorithm="workflow-scene-v2",
+        algorithm="workflow-scene-v3",
+        imagery=sorted(run.hashes[str(run.path(i["path"]))] for i in run.images),
         waypoint_revision=p.get("working_revision"),
         version=fp.VERSION,
         observer=[p["longitude"], p["latitude"]],
@@ -1134,7 +1135,12 @@ def prepare(ident, allow, review_signature=None):
     if allow and p.get("errors"):
         raise ValueError("; ".join(p["errors"]))
     spent = read(fp.HOME / "sources" / "ledger.json", {}).get("received_bytes", 0)
-    fp.LIMIT = spent + p.get("download_cap_bytes", fp.LIMIT)
+    ceiling = p.get("transfer_ceiling_bytes")
+    if ceiling is None:
+        ceiling = spent + p.get("download_cap_bytes", fp.LIMIT)
+        p["transfer_ceiling_bytes"] = ceiling
+        write(fp.HOME / "plans" / (ident + ".json"), p)
+    fp.LIMIT = ceiling
     from .downloads import check_space
     from .progress import start_download, emit, flush_download
 

@@ -41,9 +41,10 @@ await page.getByRole('button',{name:'Apply review filters',exact:true}).click();
 await page.getByRole('button',{name:/1 · Find setups/}).click();
 await page.getByRole('button',{name:'+ New baseline run',exact:true}).click();
 await page.getByText('More options · sampling restrictions',{exact:true}).click();await page.getByText('Observer access sampling and network acquisition',{exact:true}).click();
-await page.getByLabel('Constrain new observer sampling by loaded network proximity',{exact:true}).check();
+await page.getByLabel('Only look near mapped roads or trails',{exact:true}).check();
+await page.getByText('Advanced network sources',{exact:true}).click();
 await page.getByLabel('trails: synthetic-network.geojson',{exact:true}).waitFor();
-assert.equal(await page.getByLabel('trails: synthetic-network.geojson',{exact:true}).isChecked(),true);
+assert.equal(await page.getByLabel('trails: synthetic-network.geojson',{exact:true}).isChecked(),false);
 await page.getByLabel('New run name',{exact:true}).fill('unsubmitted-scouting-check');
 await page.getByRole('button',{name:'Import file',exact:true}).click();
 await page.getByLabel('Import observer polygon',{exact:true}).setInputFiles({name:'synthetic-observer.geojson',mimeType:'application/geo+json',buffer:Buffer.from(JSON.stringify(area))});
@@ -55,8 +56,8 @@ await page.route('**/api/network-plans', async route => {
   await route.fulfill({json:{id:planId,provider:'Synthetic USFS download review',estimated_bytes:20000000,note:'Shared cap; synthetic test',bounds:body.bounds}});
 });
 await controls.getByRole('button',{name:'Review road/trail download',exact:true}).click();
-assert.equal(await controls.getByRole('button',{name:'Download mapped roads/trails',exact:true}).isDisabled(),true);
-await controls.getByLabel('Approve this reviewed network download',{exact:true}).check();
+assert.equal(await controls.getByRole('button',{name:'Download mapped roads/trails',exact:true}).isDisabled(),false);
+assert.equal(await controls.getByRole('checkbox',{name:'Approve this reviewed network download',exact:true}).count(),0);
 await page.route(`**/api/network-plans/${planId}/start`, async route => {
   assert.equal(route.request().postDataJSON().download,true);
   await route.fulfill({status:400,json:{detail:'Synthetic network acquisition failure'}});

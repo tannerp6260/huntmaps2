@@ -66,8 +66,8 @@ try {
       .locator('.coverage-status')
       .filter({ hasText: 'Coverage ready · ' + id })
       .waitFor({ timeout: 60000 });
-  const pixels = async (label, expectBlue = true) => {
-    await page.waitForFunction(
+  const pixels = async (label, expectBlue = true, waitForIdle = true) => {
+    if (waitForIdle) await page.waitForFunction(
       () => JSON.parse(document.querySelector('.map').dataset.mapState || '{}').loaded,
     );
     // Wait through a paint after the Ready label; inspect canvas pixels, not the label.
@@ -98,6 +98,13 @@ try {
   };
   await ready(a);
   await pixels('01-online-and-saved');
+  // A movement event used to zero opacity even for already loaded tiles.
+  const canvas = page.locator('.maplibregl-canvas'), rect = await canvas.boundingBox();
+  await page.mouse.move(rect.x + rect.width / 2, rect.y + rect.height / 2);
+  await page.mouse.down(); await page.mouse.move(rect.x + rect.width / 2 + 30, rect.y + rect.height / 2, { steps: 5 });
+  await pixels('01b-during-pan', true, false); await page.mouse.up();
+  await ready(a);
+
   await page.getByText('Map layers', { exact: true }).click();
   const cached = page.getByLabel('Cached aerial imagery', { exact: true }),
     network = page.getByLabel('Online imagery — fill gaps', { exact: true });

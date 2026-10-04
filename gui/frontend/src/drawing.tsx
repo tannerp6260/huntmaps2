@@ -257,13 +257,36 @@ export function Drawing({
 }
 
 const descriptions = {
+  effort:
+    'How many possible standing locations we test. Thorough and Deep search more places and take longer. They can find better alternatives, but cannot guarantee the best spot.',
+  recommendations:
+    'How many suggestions to show first. We spread them across your area so nearby variations do not fill the list. Every tested location is still available in All setups.',
+  nearby:
+    'How far around a standing location we check mapped vegetation. A larger area looks for a broader opening; a smaller area focuses on the immediate surroundings. This does not measure individual branches.',
+  trees:
+    'Prefer spots with less mapped tree cover around them. Lower values favor more open surroundings. Tree-cover percentage is an average, not the chance of having a clear view. Shrubs can still obstruct you.',
+  separation:
+    'Keep main suggestions this far apart. Larger values spread suggestions across more of your area and may return fewer spots. Nearby alternatives remain available. Choose zero to allow clusters.',
+  proximity:
+    'Only test standing locations within this straight-line distance of a mapped road or trail. This is not the walking distance and does not verify access permission.',
+  approach:
+    'Compare ways from mapped roads or trails to each shortlisted spot. Distance always matters; preferences add penalties for climbing, steepness and vegetation. These are provisional desktop comparisons, not certified routes or walking times.',
+  searchArea:
+    'The area where we are allowed to search for approaches. Include your shortlisted spots and the roads or trails you might leave from. It is separate from where you want to stand, and does not establish permission.',
+  avoidance:
+    'Places the calculation must avoid, such as an area you do not want to cross. Draw or import them yourself; HuntMaps does not infer ownership restrictions.',
+  weights:
+    'Higher values make the calculation work harder to avoid that feature, even if the alternative is longer. Zero removes that preference. Steepness limits still apply.',
+  slope:
+    'The steepest terrain allowed in the modeled approach. Lower values can eliminate possible paths. A coarse elevation grid can miss cliffs and other hazards.',
+
   name: 'A name used to identify this scouting analysis later. Use letters, numbers, hyphens or underscores; existing run names cannot be overwritten.',
   radius:
     'How far from each observer the tool checks terrain visibility within the target area. A larger radius can include more distant terrain and require more data and processing; it does not mean you can identify deer at that distance. Default: 2 km.',
   minutes:
     'An existing scoring assumption used to choose portions of a view that could be inspected within a limited time. It can change inspection scores and rankings, but does not change terrain-visible coverage. It is not a recommended stop duration. Default: 30 minutes.',
   count:
-    'Maximum locations to evaluate before recommending setups: 80% broad terrain sampling and up to 20% nearby refinement. Setups recommended is a separate control. More evaluations take longer and do not guarantee an optimum. If broad samples cannot fit at the required spacing, reduce the budget. Default: Quick, up to 150.',
+    'How many possible standing locations to check before recommending spots. More locations take longer and may find better options. The number of recommendations is separate; all checked locations remain available.',
   budget:
     'Maximum authorized bulk source downloads for this analysis, in megabytes. Review the acquisition estimate before allowing downloads. This is separate from processing/output limits and online basemap browsing. Default: 600 MB.',
 };

@@ -534,38 +534,29 @@ export default function FirstPerson({
                   Review scene allowance
                 </button>
               </details>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={allow}
-                  disabled={
-                    active ||
-                    !plan.prepared ||
-                    !!plan.errors?.length ||
-                    plan.storage?.blocked ||
-                    plan.review_required
-                  }
-                  onChange={(e) => setAllow(e.target.checked)}
-                />
-                Allow this plan’s source downloads within{' '}
-                {Math.round(plan.download_cap_bytes / 1e6)} MB
-              </label>
+              <p className="hint">
+                Prepare views approves this displayed source plan within{' '}
+                {Math.round(plan.download_cap_bytes / 1e6)} MB.
+              </p>
               <button
                 disabled={
                   busy ||
                   active ||
                   !plan.prepared ||
+                  plan.storage?.blocked ||
+                  !!plan.errors?.length ||
+                  plan.review_required ||
                   !!(plan as FirstPersonPlan & { needs_acquisition_selection?: boolean })
                     .needs_acquisition_selection
                 }
                 onClick={() =>
                   action('/api/first-person/plans/' + planId + '/start', {
-                    download: allow,
+                    download: true,
                     review_signature: plan.review_signature,
                   })
                 }
               >
-                {allow ? 'Download and prepare views' : 'Prepare using cached sources only'}
+                Prepare views
               </button>
             </>
           )}

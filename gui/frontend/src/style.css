@@ -1306,3 +1306,39 @@ summary:focus-visible {
 .coverage-status span {
   overflow-wrap: anywhere;
 }
+
+/* Keep checkbox activation bounded to its visible label, not empty panel space. */
+label:has(> input[type='checkbox']) {
+  width: fit-content;
+  max-width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+}
+label:has(> input[type='checkbox']) input {
+  flex: 0 0 auto;
+}
+.inspector summary {
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 3px 0;
+}
+.management-dialog {
+  background: #fbfcf7;
+  padding: 24px;
+  border-radius: 10px;
+  width: min(620px, 90vw);
+  max-height: 85vh;
+  overflow: auto;
+}
+
+.run-opening {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  background: #edf1e6;
+  display: grid;
+  place-content: center;
+  pointer-events: auto;
+}

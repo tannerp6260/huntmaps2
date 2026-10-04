@@ -64,6 +64,29 @@ def main():
     c["data"]["shrub"] = None
     (work / "configs/transfer.template.json").write_text(json.dumps(c))
 
+    subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            """
+import json
+from glassing.transfer import project
+from huntmaps_gui.scouting_network import save_network
+from shapely.geometry import shape
+value=json.load(open('fixture/observer.geojson'))
+from shapely.ops import unary_union
+area=unary_union([shape(f['geometry']) for f in value['features']]) if value.get('type')=='FeatureCollection' else shape(value.get('geometry',value))
+ll=project(32613,4326)
+line=dict(type='LineString',coordinates=[ll(450140,4200000),ll(450140,4200400)])
+for kind in ['roads','trails']:
+ save_network(json.dumps(line).encode(),'.geojson',kind,'Controlled cached inventory',coverage=list(area.bounds))
+""",
+        ],
+        cwd=work,
+        env=env,
+        check=True,
+    )
+
     class Quiet(SimpleHTTPRequestHandler):
         def log_message(self, *args):
             pass

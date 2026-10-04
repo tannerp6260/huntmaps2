@@ -66,18 +66,21 @@ def time_estimate(new_bytes, providers=None):
         names = providers or [None]
         portions = {p: new_bytes / len(names) for p in names}
     minimum = maximum = 0
+    from .speed_probe import estimate_rate
+
+    fallback, fallback_basis = estimate_rate()
     measured = assumed = False
     for provider, size in portions.items():
         rate = recent_rate(provider) if provider else None
         measured |= bool(rate)
         assumed |= not bool(rate)
-        minimum += size / (rate * 1.5 if rate else 10_000_000)
-        maximum += size / (rate * 0.5 if rate else 1_000_000)
+        minimum += size / (rate * 1.5 if rate else fallback * 1.5)
+        maximum += size / (rate * 0.5 if rate else fallback * 0.5)
     return dict(
         basis=(
             "mixed"
             if measured and assumed
-            else "measured" if measured else "illustrative"
+            else "measured" if measured else fallback_basis
         ),
         minimum_s=minimum,
         maximum_s=maximum,

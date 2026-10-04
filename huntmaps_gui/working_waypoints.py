@@ -58,13 +58,15 @@ def original(ident, key):
 def signature(r, pose):
     target = r.analysis / "target.tif"
     r.validate(target)
-    p = r.points[pose["anchor"]]
+    from glassing.transfer import project
+
+    x, y = project(4326, r.config["epsg"])(pose["longitude"], pose["latitude"])
     spec = dict(
         version=VERSION,
         run_id=r.id,
         anchor=pose["anchor"],
-        x=p["x"] + pose["east_m"],
-        y=p["y"] + pose["north_m"],
+        x=x,
+        y=y,
         dem_sha256=r.hashes[str(r.dem_path)],
         target_sha256=r.hashes[str(target)],
         radius_m=r.config["radius_m"],
@@ -128,6 +130,9 @@ def reconcile(folder, ident, jobs):
                 terrain=result["spec"],
             )
             del data["pending"][key]
+            from .workflow import invalidate_confirmation
+
+            invalidate_confirmation(ident, key)
             changed = True
         elif j and j["status"] not in ACTIVE:
             # Retain an actionable failure record, never its uncommitted coordinates.
@@ -157,6 +162,18 @@ def start(ident, key, body, jobs):
         if meta.get("scene_signature"):
             anchor = key
     pose = fp.observer(ident, anchor, body)
+    original_anchor, _ = original(ident, key)
+    from glassing.transfer import project
+
+    ox, oy = (
+        Run(ident).points[original_anchor]["x"],
+        Run(ident).points[original_anchor]["y"],
+    )
+    px, py = project(4326, Run(ident).config["epsg"])(
+        pose["longitude"], pose["latitude"]
+    )
+    if math.hypot(px - ox, py - oy) > fp.NEARBY_RADIUS + 1e-6:
+        raise ValueError("Keep this waypoint within 30 ft of its original anchor")
     f = manual.fields(
         dict(
             name=body.get("name") or p.get("name", key),
@@ -195,6 +212,9 @@ def start(ident, key, body, jobs):
                 data["overrides"][key] = record
                 data["pending"].pop(key, None)
                 write(folder / "state.json", data)
+                from .workflow import invalidate_confirmation
+
+                invalidate_confirmation(ident, key)
                 return dict(status="complete", cached=True, waypoint=record)
             token = uuid.uuid4().hex
             write(
@@ -247,6 +267,9 @@ def restore(ident, key, jobs):
                 jobs.cancel(j["id"])
         data["overrides"].pop(key, None)
         write(folder / "state.json", data)
+    from .workflow import invalidate_confirmation
+
+    invalidate_confirmation(ident, key)
     return dict(restored=key)
 
 
@@ -343,14 +366,9 @@ def calculate(ident, token):
         raise ValueError("Unknown waypoint update task.")
     print("STAGE Validating cached terrain and target sources", flush=True)
     r = Run(ident)
-    pose = fp.observer(
-        ident,
-        task["proposal"]["anchor"],
-        dict(
-            observer_east_m=task["proposal"]["east_m"],
-            observer_north_m=task["proposal"]["north_m"],
-        ),
-    )
+    pose = task["proposal"]
+    if fp.scene(ident, pose["anchor"]).get("key") != pose.get("scene_key"):
+        raise ValueError("Scene changed during waypoint calculation; reopen and retry")
     key, spec = signature(r, pose)
     if key != task["revision"] or spec != task["spec"]:
         raise ValueError(

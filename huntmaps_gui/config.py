@@ -14,7 +14,7 @@ class AppConfig:
     source_dir: Path = PROJECT
     state_dir: Path = PROJECT / ".gui"
     workspace: Path = PROJECT
-    display_budget_bytes: int = 256 * 1024 * 1024
+    display_budget_bytes: int = 2048 * 1024 * 1024
 
     def __post_init__(self):
         for field in ("source_dir", "state_dir", "workspace"):
@@ -28,7 +28,7 @@ class AppConfig:
             Path(os.environ.get("HUNTMAPS_SOURCE_DIR", PROJECT)),
             Path(os.environ.get("HUNTMAPS_STATE_DIR", PROJECT / ".gui")),
             Path(os.environ.get("HUNTMAPS_WORKSPACE", PROJECT)),
-            int(os.environ.get("HUNTMAPS_DISPLAY_BUDGET_MB", "256")) * 1024 * 1024,
+            int(os.environ.get("HUNTMAPS_DISPLAY_BUDGET_MB", "2048")) * 1024 * 1024,
         )
 
     def environment(self):

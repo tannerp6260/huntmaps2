@@ -9,7 +9,7 @@ try {
   const page=await browser.newPage({viewport:{width:1450,height:1050}});
   const assets=[],mutations=[],errors=[];
   page.on('pageerror',error=>errors.push(error.message));
-  page.on('request',request=>{if(request.url().endsWith('.bin'))assets.push(request.url());if(request.method()!=='GET')mutations.push(request.url())});
+  page.on('request',request=>{if(new URL(request.url()).pathname.endsWith('.bin'))assets.push(request.url());if(request.method()!=='GET')mutations.push(request.url())});
   await page.addInitScript(()=>localStorage.setItem('huntmaps-online-imagery','off'));
   await page.route('**/*',route=>route.request().url().startsWith(base)||route.request().url().startsWith('blob:')?route.continue():route.abort());
   await page.goto(base);
@@ -20,7 +20,7 @@ try {
   const readyMs=performance.now()-started;
   const camera=async()=>JSON.parse(await page.locator('.fp-scene').getAttribute('data-camera'));
   await page.waitForTimeout(1000);
-  const before=await camera(),binaryRequests=assets.length;
+  const before=await camera(),binaryRequests=assets.length;assert.ok(binaryRequests>0,'Measure actual keyed scene geometry requests');
   await page.waitForTimeout(1500);
   const idle=await camera();assert.equal(idle.draws,before.draws,'Idle view must not draw repeatedly');
   await page.getByRole('button',{name:'Explore nearby positions',exact:true}).click();
@@ -34,7 +34,7 @@ try {
   await page.screenshot({path:out+'/performance-desktop.png',fullPage:true});
   await page.setViewportSize({width:900,height:800});await page.screenshot({path:out+'/performance-900.png',fullPage:true});
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
-  assert.deepEqual(errors,[]);assert.ok(mutations.every(url=>url.endsWith('/observer') || url.includes('/workflow/')));
+  assert.deepEqual(errors,[]);assert.ok(mutations.every(url=>url===base+'/api/speed-probe' || url.endsWith('/observer') || url.includes('/workflow/')));
   fs.writeFileSync(out+'/performance.json',JSON.stringify({readyMs,moveMs,heap,binaryRequests,additionalGeometryRequests:assets.length-binaryRequests,idleDraws:idle.draws-before.draws,triangles:moved.triangles,errors,mutations},null,2));
   console.log('Idle rendering, cached geometry and 900px layout passed:',out);
 } finally {await browser.close()}

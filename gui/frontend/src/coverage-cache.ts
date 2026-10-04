@@ -1,9 +1,8 @@
 import type { Map } from 'maplibre-gl';
+export const COVERAGE_DISPLAY_VERSION = 2;
 
-// Bump when coverage display semantics change, independently of frozen analysis outputs.
-export const COVERAGE_DISPLAY_VERSION = 1;
-
-// Warm only this viewport, sequentially. Browser HTTP caching survives source removal/reload.
+// Disk/HTTP preparation, not hundreds of resident GPU sources. Sequential work
+// yields to movement and owner jobs; completed immutable tiles survive cancellation.
 export function prepareCoverage(
   map: Map,
   run: string,
@@ -11,6 +10,7 @@ export function prepareCoverage(
   working: Record<string, { revision: string }>,
   filter: string | undefined,
   report: (message: string) => void,
+  wholeArea?: number[][],
 ) {
   const controller = new AbortController();
   let stopped = false;
@@ -20,62 +20,88 @@ export function prepareCoverage(
     report('');
   };
   map.on('movestart', stop);
+  function tiles(bounds: number[][], z: number): [number, number, number][] {
+    const n = 2 ** z;
+    const x = (lon: number) => Math.floor(((lon + 180) / 360) * n);
+    const y = (lat: number) =>
+      Math.max(
+        0,
+        Math.min(
+          n - 1,
+          Math.floor(
+            ((1 -
+              Math.asinh(Math.tan((Math.max(-85.0511, Math.min(85.0511, lat)) * Math.PI) / 180)) /
+                Math.PI) /
+              2) *
+              n,
+          ),
+        ),
+      );
+    const result: [number, number, number][] = [];
+    const left = x(bounds[0][0]),
+      right = x(bounds[1][0]),
+      top = y(bounds[1][1]),
+      bottom = y(bounds[0][1]);
+    if ((right - left + 1) * (bottom - top + 1) > 64) return [];
+    for (let tx = left; tx <= right; tx++)
+      for (let ty = top; ty <= bottom; ty++) result.push([z, ((tx % n) + n) % n, ty]);
+    return result;
+  }
   const start = async () => {
     if (stopped || map.isMoving() || !ids.length) return;
-    // MapLibre uses a 512-pixel camera scale; our raster sources have 256-pixel tiles.
-    const z = Math.min(20, Math.max(0, Math.round(map.getZoom() + 1))),
-      n = 2 ** z;
-    const bounds = map.getBounds();
-    const x = (lon: number) => Math.floor(((lon + 180) / 360) * n);
-    const y = (lat: number) => {
-      const r = (Math.max(-85.0511, Math.min(85.0511, lat)) * Math.PI) / 180;
-      return Math.max(
-        0,
-        Math.min(n - 1, Math.floor(((1 - Math.asinh(Math.tan(r)) / Math.PI) / 2) * n)),
-      );
-    };
-    const tiles: [number, number][] = [];
-    for (let tx = x(bounds.getWest()); tx <= x(bounds.getEast()); tx++)
-      for (let ty = y(bounds.getNorth()); ty <= y(bounds.getSouth()); ty++) {
-        if (tiles.length === 64) return; // Wide views should not create an unbounded queue.
-        tiles.push([((tx % n) + n) % n, ty]);
+    const b = map.getBounds(),
+      viewport = [
+        [b.getWest(), b.getSouth()],
+        [b.getEast(), b.getNorth()],
+      ];
+    const z = Math.min(20, Math.max(0, Math.round(map.getZoom() + 1)));
+    let overview: [number, number, number][] = [];
+    if (wholeArea) {
+      for (let level = Math.min(z, 15); level >= 0; level--) {
+        overview = tiles(wholeArea, level);
+        if (overview.length && overview.length <= 16) break;
       }
-    const total = tiles.length * ids.length;
+    }
+    const viewTiles = [z, Math.max(0, z - 1), Math.min(20, z + 1)].flatMap((level) =>
+      tiles(viewport, level),
+    );
+    const unique = (v: [number, number, number][]) => [
+      ...new globalThis.Map(v.map((t) => [t.join('/'), t])).values(),
+    ];
+    // Finish nearby views first, then broad coverage for every queued suggestion.
+    const tasks = [
+      ...ids.slice(0, 3).flatMap((id) => unique(viewTiles).map((t) => ({ id, t }))),
+      ...ids.flatMap((id) => unique(overview).map((t) => ({ id, t }))),
+    ];
     let done = 0;
     try {
-      for (const id of ids)
-        for (const [tx, ty] of tiles) {
-          if (stopped) return;
-          report(`Preparing next views · ${done}/${total} tiles`);
-          const route = filter
-            ? `filtered-tiles/${filter}`
-            : working[id]
-              ? 'working-tiles'
-              : 'tiles';
-          const revision = working[id]?.revision || 'original';
-          const response = await fetch(
-            `/api/runs/${run}/${route}/visible/${id}/${z}/${tx}/${ty}.png?color=0&revision=${revision}&display=${COVERAGE_DISPLAY_VERSION}`,
-            {
-              signal: controller.signal,
-              headers: { 'X-Huntmaps-Prefetch': 'true' },
-            },
-          );
-          if (!response.ok) {
-            report('Background preparation paused');
-            return;
-          }
-          await response.arrayBuffer();
-          done++;
+      for (const {
+        id,
+        t: [level, x, y],
+      } of tasks) {
+        if (stopped) return;
+        report(`Preparing saved coverage · ${done}/${tasks.length} tiles`);
+        const route = filter ? `filtered-tiles/${filter}` : working[id] ? 'working-tiles' : 'tiles';
+        const response = await fetch(
+          `/api/runs/${run}/${route}/visible/${id}/${level}/${x}/${y}.png?color=0&revision=${working[id]?.revision || 'original'}&display=${COVERAGE_DISPLAY_VERSION}`,
+          { signal: controller.signal, headers: { 'X-Huntmaps-Prefetch': 'true' } },
+        );
+        if (!response.ok) {
+          report('Background preparation paused; current view remains available');
+          return;
         }
-      if (!stopped) report(`Next ${ids.length} views cached for this map area`);
+        await response.arrayBuffer();
+        done++;
+        await new Promise((resolve) => window.setTimeout(resolve, 20));
+      }
+      if (!stopped) report(`Coverage saved ahead for ${ids.length} spots`);
     } catch {
       if (!stopped) report('Background preparation paused');
     }
   };
   const timer = window.setTimeout(start, 500);
   return () => {
-    stopped = true;
-    controller.abort();
+    stop();
     clearTimeout(timer);
     map.off('movestart', stop);
   };

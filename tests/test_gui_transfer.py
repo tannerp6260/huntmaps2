@@ -99,14 +99,14 @@ class TransferSafety(unittest.TestCase):
         ):
             self.assertEqual(downloads.time_estimate(0)["basis"], "cached")
             assumed = downloads.time_estimate(100_000_000)
-            self.assertEqual((assumed["minimum_s"], assumed["maximum_s"]), (10, 100))
+            self.assertEqual((assumed["minimum_s"], assumed["maximum_s"]), (100_000_000 / 3_750_000, 80))
             self.assertEqual(downloads.time_estimate(None)["basis"], "unknown")
             (self.config.state_dir / "transfer-rates.json").parent.mkdir(exist_ok=True)
             (self.config.state_dir / "transfer-rates.json").write_text(
                 "damaged optional speeds"
             )
             self.assertEqual(
-                downloads.time_estimate(1000, ["example.test"])["basis"], "illustrative"
+                downloads.time_estimate(1000, ["example.test"])["basis"], "20 Mbps default"
             )
             write(
                 self.config.state_dir / "transfer-rates.json",

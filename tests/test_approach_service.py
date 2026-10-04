@@ -159,7 +159,7 @@ class ApproachServiceTests(unittest.TestCase):
             json=dict(status="reject", notes="Changed"),
             headers=self.headers,
         )
-        self.assertTrue(self.client.get("/api/approaches/" + ident).json()["stale"])
+        self.assertIn("A0075", self.client.get("/api/approaches/" + ident).json()["point_stale"])
         self.assertEqual(
             self.client.get(f"/api/approaches/{ident}/export/gpx").status_code, 400
         )

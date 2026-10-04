@@ -11,6 +11,8 @@ export default function AreaSettings({
   setRecommendationCount,
   nearbyRadius,
   setNearbyRadius,
+  separation,
+  setSeparation,
   treeThreshold,
   setTreeThreshold,
 }: {
@@ -25,11 +27,25 @@ export default function AreaSettings({
   setRecommendationCount: (value: number) => void;
   nearbyRadius: number;
   setNearbyRadius: (value: number) => void;
+  separation: number;
+  setSeparation: (value: number) => void;
   treeThreshold: number;
   setTreeThreshold: (value: number) => void;
 }) {
   return (
     <div data-tour="run-settings">
+      <div className="notice">
+        <strong>How we find places to glass</strong>
+        <p>
+          We test possible places to stand, check how much terrain each can see, and recommend a
+          spread of promising spots. You choose which to inspect.
+        </p>
+        <p>
+          Search thoroughness controls how many places we test. Spots to recommend controls how many
+          suggestions you see first. We favor more open surroundings, but trees and branches still
+          need inspection.
+        </p>
+      </div>
       <label>
         New run name <Help topic="name" />
         <input
@@ -57,7 +73,7 @@ export default function AreaSettings({
         </select>
       </label>
       <label>
-        Search effort
+        Search thoroughness <Help topic="effort" />
         <select
           aria-label="Search effort"
           value={[150, 600, 2000].includes(count) ? count : 'custom'}
@@ -73,7 +89,7 @@ export default function AreaSettings({
         </select>
       </label>
       <label>
-        Setups recommended
+        Spots to recommend <Help topic="recommendations" />
         <input
           aria-label="Setups recommended"
           type="number"
@@ -89,7 +105,17 @@ export default function AreaSettings({
         available.
       </p>
       <details>
-        <summary>More options · search and nearby cover</summary>
+        <summary>Advanced settings</summary>
+        <label>
+          Spacing between suggestions (metres) <Help topic="separation" />
+          <input
+            aria-label="Recommendation separation"
+            type="text"
+            inputMode="decimal"
+            value={separation}
+            onChange={(e) => setSeparation(+e.target.value)}
+          />
+        </label>
         <div className="form-grid">
           <label>
             Locations to evaluate <Help topic="count" />
@@ -104,7 +130,7 @@ export default function AreaSettings({
           </label>
         </div>
         <label>
-          Nearby cover radius
+          Check surrounding vegetation within <Help topic="nearby" />
           <select
             aria-label="Nearby cover radius"
             value={nearbyRadius}
@@ -118,7 +144,7 @@ export default function AreaSettings({
           </select>
         </label>
         <label>
-          Preferred tree cover below (%)
+          Prefer surrounding tree cover below (%) <Help topic="trees" />
           <input
             aria-label="Preferred tree cover below"
             type="number"
@@ -138,7 +164,7 @@ export default function AreaSettings({
           returned.
         </p>
         <details>
-          <summary>How locations are chosen</summary>
+          <summary>How this works</summary>
           <p>
             The engine samples eligible locations across sections of your observer area, then adds
             samples from terrain resembling benches, shoulders and ridge breaks, plus general
@@ -162,13 +188,13 @@ export default function AreaSettings({
         <details>
           <summary>Calculation details</summary>
           <p>
-            Saved inspection assumption: {minutes} minutes per setup. This affects inherited
-            indices, not terrain-visible area.
+            Historical calculation input: {minutes} minutes allocated to inspecting a view. This is
+            not a suggested visit duration. It affects inherited indices, not terrain-visible area.
           </p>
         </details>
       </details>
       <details className="resource-limits">
-        <summary>Processing limits and source details</summary>
+        <summary>Technical details</summary>
         <p className="hint">
           Existing limits: 3 million grid cells, 1536 MiB analysis memory, 900 seconds per engine
           batch, 800 MB outputs. Analysis acquisition does not include imagery or legal-access data.

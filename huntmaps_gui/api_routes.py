@@ -99,6 +99,10 @@ def api_router(jobs: Jobs):
                     "Choose an integer scene transfer allowance of at least 10 MB"
                 )
             p["download_cap_bytes"] = cap * 1_000_000
+            spent = read(fp.HOME / "sources" / "ledger.json", {}).get(
+                "received_bytes", 0
+            )
+            p["transfer_ceiling_bytes"] = spent + p["download_cap_bytes"]
             from .approach_service import digest
 
             p["review_signature"] = digest(
@@ -167,14 +171,20 @@ def api_router(jobs: Jobs):
         return fp.scene(ident, cid)
 
     @router.get("/api/runs/{ident}/first-person/{cid}/assets/{name}")
-    def fp_asset(ident, cid, name):
+    def fp_asset(ident, cid, name, scene_key: str | None = None):
         fp.candidate(ident, cid)
         folder, meta = fp.bundle(cid, ident)
+        if scene_key is not None and scene_key != meta["key"]:
+            raise ValueError("Scene changed; reopen its current view")
         if name not in meta["hashes"] or name.endswith(".npz"):
             raise ValueError("Unknown scene asset")
         return FileResponse(
             fp.asset_path(folder, meta, name),
-            headers={"Cache-Control": "private, max-age=3600"},
+            headers={
+                "Cache-Control": (
+                    "private, max-age=31536000, immutable" if scene_key else "no-store"
+                )
+            },
         )
 
     @router.post("/api/runs/{ident}/first-person/{cid}/profile")
@@ -258,7 +268,7 @@ def api_router(jobs: Jobs):
                 background=x_huntmaps_prefetch,
             ),
             media_type="image/png",
-            headers={"Cache-Control": "private, max-age=3600"},
+            headers={"Cache-Control": ("private, max-age=3600")},
         )
 
     @router.get("/api/runs/{ident}/working-overlap")
@@ -275,9 +285,48 @@ def api_router(jobs: Jobs):
             for b in selected[n + 1 :]
         ]
 
+    @router.post("/api/speed-probe")
+    def speed_probe():
+        from .speed_probe import start
+
+        return start(jobs)
+
+    @router.get("/api/speed-probe")
+    def speed_probe_status():
+        from .speed_probe import estimate_rate
+
+        rate, basis = estimate_rate()
+        return dict(bytes_per_s=rate, basis=basis)
+
     @router.get("/api/runs")
     def get_runs():
-        return runs()
+        from .run_management import entries
+
+        return [r for r in entries() if not r["archived"]]
+
+    @router.get("/api/run-management")
+    def managed_runs():
+        from .run_management import entries
+
+        return entries()
+
+    @router.post("/api/run-management/{ident}/archive")
+    def archive_run(ident, body: dict = Body(...)):
+        from .run_management import archive
+
+        return archive(ident, body.get("archived"))
+
+    @router.post("/api/run-management/{ident}/deletion-preview")
+    def preview_run_delete(ident):
+        from .run_management import preview
+
+        return preview(ident)
+
+    @router.post("/api/run-management/{ident}/delete")
+    def delete_run(ident, body: dict = Body(...)):
+        from .run_management import delete
+
+        return delete(ident, body.get("token"))
 
     @router.get("/api/runs/{ident}")
     def get_run(ident):
@@ -314,7 +363,7 @@ def api_router(jobs: Jobs):
                 background=x_huntmaps_prefetch,
             ),
             media_type="image/png",
-            headers={"Cache-Control": "private, max-age=3600"},
+            headers={"Cache-Control": ("private, max-age=3600")},
         )
 
     @router.get("/api/runs/{ident}/terrain")
@@ -326,7 +375,7 @@ def api_router(jobs: Jobs):
         return Response(
             elevation_tile(Run(ident), z, x, y),
             media_type="image/png",
-            headers={"Cache-Control": "private, max-age=3600"},
+            headers={"Cache-Control": ("private, max-age=3600")},
         )
 
     @router.get("/api/runs/{ident}/overlap")
@@ -518,6 +567,9 @@ def api_router(jobs: Jobs):
             search=dict(
                 version=1,
                 recommendation_count=min(count, body.get("recommendation_count", 20)),
+                recommendation_separation_m=body.get(
+                    "recommendation_separation_m", 150
+                ),
                 nearby_radius_m=body.get("nearby_radius_m", 30),
                 tree_threshold_percent=body.get("tree_threshold_percent", 10),
             ),

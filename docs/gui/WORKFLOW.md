@@ -17,7 +17,7 @@ Coordinate/revision changes invalidate affected approach/viewing confirmations. 
 
 Verification: `./gui/check` runs isolated Python, build/format and browser checks, including a new-run three-stage synthetic journey. Its fixtures are engineering checks, not hunting opportunities. See [workflow verification](WORKFLOW_VERIFICATION.md).
 
-Download review shows an approximate transfer-time range. Recent measured provider speed is used when available (up to seven days old); otherwise the illustrative range assumes 1–10 MB/s. You can enter your own assumed speed without starting a speed test. Cached-only plans need no download. Provider behavior, connection changes and retries can extend the estimate; processing time is additional.
+Download review shows an approximate transfer-time range. Recent measured provider speed is preferred, followed by a small idle startup probe; the fallback is 20 Mbps (2.5 MB/s). Cached-only plans need no download. Provider behavior, connection changes and retries can extend the estimate; processing time is additional.
 
 Download bars show bytes received against estimated new bytes, measured speed, elapsed job time and approximate remaining transfer time. Progress records are scoped to each job and survive reload. Stalls say Waiting for data; unknown totals use an indeterminate bar. Processing uses item counts where available and an indeterminate bar otherwise. A finished stage does not imply the entire job is finished. Cancel and recover beside the current job.
 
@@ -28,7 +28,7 @@ Coverage review shows **Loading coverage**, **Coverage ready** or **Coverage inc
 
 The next three scored, non-dismissed setups in the current list order prepare in the background after the selected coverage is ready. Preparation is sequential, covers only the current map area/zoom (at most 64 tiles per setup), and stops on map movement, selection/input changes, active analysis or less than 20 GiB free. Its tile counter is separate from selected-view readiness. Tile APIs accept the optional `X-Huntmaps-Prefetch: true` header for this bounded preparation; the backend also enforces the job and storage pause guards. Moving to a different area or zoom can still require additional tiles.
 
-Up to eight recent coverage sources remain in the browser, with at most 64 inactive tiles per source. HTTP-cached tiles can survive reloads. The disk cache remains bounded by `HUNTMAPS_DISPLAY_BUDGET_MB` (default 256 MiB), prioritizing viewed, non-dismissed coverage over generic/background assets. Dismissal makes display assets eligible for eviction; it does not delete analytical viewsheds, outputs or history. When the cache fills, even non-dismissed display assets may be regenerated on demand. Restoring a setup reuses any surviving assets.
+Up to eight recent coverage sources remain in the browser, with at most 64 inactive tiles per source. Background preparation works sequentially on likely next views, neighboring zoom levels and whole-area previews, pausing for interaction, active jobs, less than 1 GiB available memory or the 20 GiB free-space reserve. HTTP-cached tiles can survive reloads. The disk cache remains bounded by `HUNTMAPS_DISPLAY_BUDGET_MB` (default 2 GiB), prioritizing viewed, non-dismissed coverage over generic/background assets. Dismissal makes display assets eligible for eviction; it does not delete analytical viewsheds, outputs or history. When the cache fills, even non-dismissed display assets may be regenerated on demand. Restoring a setup reuses any surviving assets.
 
 Help boxes close with Escape, outside click, focus leaving, scrolling or navigation. Hover-only boxes close when the pointer leaves; clicked boxes stay open until dismissed.
 
@@ -41,3 +41,17 @@ Search calculations run sequentially in batches of at most 20 locations with the
 ### Failed-run recovery
 
 Review the failed stage and its originating error beside the task. Identical approved source requests can resume with verified cached files; changing requests, boundary/settings or allowance requires renewed review. Estimates and cached reuse refresh after an acquisition succeeds even if analysis fails. Transfer bytes are cumulative across attempts, including interrupted reads. Legacy approvals require one explicit refresh/review; old unrecorded partial bytes are disclosed as unknown. Completed results appear in the selector after job completion, including after a browser reload.
+
+## Refinements for new users
+
+Settings begin with a short description of finding standing locations. Search thoroughness controls how many locations are checked; Spots to recommend controls the initial suggestions. New runs keep main suggestions 150 m apart by default, with adjustable spacing and grouped nearby alternatives. All evaluated points and original scores remain available. Historical recommendation collections are unchanged.
+
+Roads and trails are included and reused automatically in new reviewed plans. Proximity sampling starts at half a mile in straight-line distance, which is neither walking distance nor permission. Source overrides are advanced controls. Visible terrain facing direction filters coverage only; approaches use steepness, not slope facing direction.
+
+Generate setups, Acquire roads and trails, and Prepare views approve their displayed source plan and transfer allowance. Updated plans must be reviewed again. Time estimates prefer recent actual provider transfer rates, then a small interruptible startup probe (at most 2 MB or 5 seconds), then a 20 Mbps default. Failed probes keep the default; no manual speed measurement is required. All transfer allowances remain cumulative across retries.
+
+Loaded coverage stays visible when the map moves; additional tiles load around it. A loading or incomplete label distinguishes missing tiles from a complete view. Changing setup, revision or filters cannot reuse another setup's shading. Imagery requests still depend on provider/network performance; missing terrain remains a gap.
+
+Manage saved results supports archive/unarchive and permanent deletion preview. Archived results are hidden from the normal selector but remain accessible. Deletion is offered only for generated, unprotected runs with no retained run depending on their outputs. It requires idle jobs and a matching preview token. Shared sources, supplied inputs, prepared bundles and frozen historical controls remain retained; no old result is deleted automatically.
+
+Approach search area bounds where the calculation searches; include both destinations and a mapped departure. Areas to avoid are optional user-supplied exclusions. No-path messages explain missing geometry, source coverage or model constraints before exposing technical evidence. One changed destination invalidates its independent approach only. Moving/restoring coordinates never silently restores final confirmation.

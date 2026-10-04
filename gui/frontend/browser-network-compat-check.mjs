@@ -44,7 +44,7 @@ try {
   const controls = page.locator('.network-map-controls');
   await controls.getByText('No road/trail data loaded.', { exact: false }).waitFor();
   await controls.getByRole('button', { name: 'Review road/trail download', exact: true }).click();
-  await controls.getByLabel('Approve this reviewed network download', { exact: true }).check();
+  assert.equal(await controls.getByRole('checkbox', { name: 'Approve this reviewed network download', exact: true }).count(),0);
   await controls.getByRole('button', { name: 'Download mapped roads/trails', exact: true }).click();
   await controls.getByText('Unknown road surface', { exact: true }).waitFor();
   await controls.getByText('Unknown trail use', { exact: true }).waitFor();

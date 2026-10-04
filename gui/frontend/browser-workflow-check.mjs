@@ -44,10 +44,11 @@ try {
  await page.waitForFunction(()=>!Array.from(document.querySelectorAll('.workflow-stages button')).find(b=>b.textContent.includes('2 ·')).disabled);
  await page.screenshot({path:out+'/01-find-desktop.png',fullPage:true});
  await nav.getByRole('button',{name:/2 · Compare approaches/}).click();
- await page.getByText('Confirm an explicit travel boundary.',{exact:true}).waitFor();
+ await page.getByText('Confirm an approach search boundary that includes your spots and a road or trail.',{exact:true}).waitFor();
  const lon=p.longitude,lat=p.latitude;
  const network={type:'LineString',coordinates:[[lon-.0008,lat-.001],[lon-.0008,lat+.001]]};
  const area={type:'Polygon',coordinates:[[[lon-.002,lat-.002],[lon+.002,lat-.002],[lon+.002,lat+.002],[lon-.002,lat+.002],[lon-.002,lat-.002]]]};
+ await page.getByText('Advanced road/trail sources',{exact:true}).click();
  await page.locator('.scouting-tools').getByLabel('Import road trail network',{exact:true}).setInputFiles({name:'workflow-fixture-network.geojson',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(network))});
  await page.getByLabel('Import travel area').setInputFiles({name:'workflow-travel.geojson',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(area))});
  await page.getByText('More options · pinned departure and preferences',{exact:true}).click();
@@ -62,7 +63,7 @@ try {
  assert.equal(await task.getByRole('button',{name:'Confirm setup',exact:true}).isDisabled(),true);
  await task.getByRole('button',{name:/Prepare views/}).click();
  await page.getByRole('dialog').waitFor();
- await page.getByRole('button',{name:'Prepare using cached sources only',exact:true}).click({timeout:60000});
+ await page.getByRole('dialog').getByRole('button',{name:'Prepare views',exact:true}).click({timeout:60000});
  await page.getByRole('dialog').getByRole('button',{name:'Confirm setup',exact:true}).waitFor({timeout:60000});
  await page.waitForFunction(()=>!document.querySelector('.fp-workspace .workflow-task button').disabled);
  await page.screenshot({path:out+'/03-inspect-desktop.png',fullPage:true});

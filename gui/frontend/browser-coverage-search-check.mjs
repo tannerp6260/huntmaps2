@@ -19,7 +19,7 @@ try {
  await page.goto(base);
  const coverageStarted=Date.now();
  await page.getByLabel('Run selector').selectOption('search-fixture');
- await page.locator('.coverage-status').filter({hasText:'Loading coverage'}).waitFor();
+ await page.locator('.coverage-status').filter({hasText:'Loading additional coverage'}).waitFor();
  await page.screenshot({path:out+'/01-loading-desktop.png',fullPage:true});
  await page.locator('.coverage-status').filter({hasText:'Coverage ready'}).waitFor({timeout:60000});
  const initialCoverageMs=Date.now()-coverageStarted;
@@ -79,7 +79,7 @@ try {
  await page.getByLabel('Search effort').selectOption('2000');
  assert.equal(await page.getByLabel('Search effort').inputValue(),'2000');
  await page.getByLabel('Setups recommended').fill('12');
- await page.getByText('More options · search and nearby cover',{exact:true}).click();
+ await page.getByText('Advanced settings',{exact:true}).click();
  await page.getByLabel('Locations to evaluate').fill('5000');
  await page.getByLabel('Nearby cover radius').selectOption('60');
  await page.getByLabel('Preferred tree cover below').fill('15');

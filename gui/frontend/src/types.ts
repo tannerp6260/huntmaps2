@@ -26,6 +26,8 @@ export type Run = {
     budget: number;
     unused_budget: number;
     sampling?: { spacing_m: number | null };
+    nearby_ids?: Record<string, string[]>;
+    recommendation_note?: string;
     exhaustion_reason?: string | null;
   };
   review_ids: string[];
@@ -125,6 +127,7 @@ export type BaselinePlan = DownloadReviewInfo & {
     candidate_count: number;
     search?: {
       recommendation_count: number;
+      recommendation_separation_m?: number;
       nearby_radius_m: number;
       tree_threshold_percent: number;
     };

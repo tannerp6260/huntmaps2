@@ -8,7 +8,7 @@ await page.goto(base);await page.getByRole('button',{name:'+ New baseline run'})
 const name='gui-plan-check-'+Date.now();await page.getByLabel('New run name').fill(name);await page.getByRole('button',{name:'Review downloads',exact:true}).click();await page.getByText(name+' acquisition plan',{exact:true}).waitFor({timeout:90000});
 await page.getByText('MB estimated',{exact:false}).first().waitFor({timeout:90000});await page.waitForTimeout(1000);await page.screenshot({path:out+'/07-acquisition-plan.png',fullPage:true});
 const plans=await (await page.request.get(base+'/api/jobs')).json();const job=plans.find(j=>j.name===name);const plan=await (await page.request.get(base+'/api/plans/'+job.plan)).json();
-if(!plan.prepared)throw Error('Plan never completed');if(await page.getByText("Approve this plan's new downloads within",{exact:false}).locator('input').isChecked())throw Error('Downloads preauthorized unexpectedly');
+if(!plan.prepared)throw Error('Plan never completed');if(await page.getByRole('checkbox',{name:/Approve this plan/}).count())throw Error('Approval checkbox must be replaced by the main action');
 fs.writeFileSync(out+'/plan-check.json',JSON.stringify({name,job,plan,errors},null,2));
 // Inspect the durable synthetic job outcomes in the actual application.
 await page.getByRole('button',{name:'Back to review',exact:true}).click();const summary=page.locator('summary').filter({hasText:'Analysis jobs'});await summary.click();await page.waitForTimeout(500);await page.screenshot({path:out+'/08-job-history.png',fullPage:true});

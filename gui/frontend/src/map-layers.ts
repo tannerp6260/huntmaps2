@@ -60,7 +60,7 @@ export function updateMapLayers(
     if (layer === 'visible') coverage.push({ key, alpha });
     if (m.getSource(key)) {
       m.setLayoutProperty(key, 'visibility', 'visible');
-      m.setPaintProperty(key, 'raster-opacity', layer === 'visible' ? 0 : alpha);
+      m.setPaintProperty(key, 'raster-opacity', alpha);
       return;
     }
     const useWorking = !!working[id];
@@ -175,10 +175,7 @@ export function updateMapLayers(
       setCoverage('');
       return;
     }
-    coverage.forEach(({ key }) => {
-      if (m.getLayer(key)) m.setPaintProperty(key, 'raster-opacity', 0);
-    });
-    setCoverage(`${failed ? 'Coverage incomplete' : 'Loading coverage'} · ${label}`);
+    setCoverage(`${failed ? 'Coverage incomplete' : 'Loading additional coverage'} · ${label}`);
   };
   const check = () => {
     if (disposed || revealed || !coverage.length || failed || m.isMoving()) return;

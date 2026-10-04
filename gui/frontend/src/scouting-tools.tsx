@@ -1,3 +1,4 @@
+import { Help } from './drawing';
 import DownloadReview from './download-review';
 import JobProgress from './job-progress';
 import { networkResponse } from './network-response';
@@ -54,6 +55,7 @@ type Scenario = {
     start: number[] | null;
     pinned: number[] | null;
   };
+  point_stale?: Record<string, string>;
   stale: boolean;
   stale_reasons: string[];
   results: {
@@ -70,6 +72,7 @@ type Api = (path: string, options?: RequestInit) => Promise<any>;
 const aspects = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 const number = (v: number | null, d = 1) => (v === null ? 'unknown' : v.toFixed(d));
 export default function ScoutingTools({
+  recovery,
   runId,
   observerBoundary,
   onApproach,
@@ -83,6 +86,7 @@ export default function ScoutingTools({
   planning,
   onPlanning,
 }: {
+  recovery?: { kind: string; id: string } | null;
   runId: string;
   observerBoundary?: GeoJSON.FeatureCollection;
   onApproach?: (cid: string, scenario: string, alternative: number) => void;
@@ -161,6 +165,35 @@ export default function ScoutingTools({
           pinned: currentScenario.pinned?.join(',') || '',
         }));
   useEffect(() => {
+    if (!recovery) return;
+    if (recovery.kind === 'approach')
+      void api('/approaches/' + recovery.id)
+        .then((v) => {
+          const s = v.scenario;
+          setScenarios((old) => [...old.filter((q) => q.scenario.id !== s.id), v]);
+          if (s.run_id !== runId) return;
+          setScenarioId(s.id);
+          onPlanning(true);
+          setArea(s.travel_area);
+          setExclusions(s.exclusions);
+          setWeights(s.weights);
+          setMaximum(s.maximum_slope_deg);
+          setSelectedNetworks(s.network_ids);
+          setKinds(s.kinds);
+          setIncludeWalk(!!s.start);
+          setStart(s.start?.join(',') || '');
+          setPinned(s.pinned?.join(',') || '');
+        })
+        .catch((e) => setError(String(e)));
+    else
+      void api('/network-plans/' + recovery.id)
+        .then((v) => {
+          setNetworkPlanId(recovery.id);
+          setNetworkPlan(v.plan);
+        })
+        .catch((e) => setError(String(e)));
+  }, [recovery?.id]);
+  useEffect(() => {
     if (scenarioDirty && scenarioId) onInputsChanged?.(scenarioId);
   }, [scenarioDirty, scenarioId]);
   function showAlternative(point: string, index: number) {
@@ -207,7 +240,7 @@ export default function ScoutingTools({
     setArea(null);
     setExclusions([]);
     setError('');
-    onPlanning(false);
+    if (!recovery) onPlanning(false);
   }, [runId]);
   useEffect(() => {
     let alive = true;
@@ -245,6 +278,13 @@ export default function ScoutingTools({
       alive = false;
     };
   }, [runId, stamp, jobStamp, networkPlanId]);
+  useEffect(() => {
+    epoch.current++;
+    if (applied)
+      setError('Saved locations changed. Reapply review filters to use their current coverage.');
+    setApplied(null);
+    onFilter(null);
+  }, [stamp]);
   useEffect(() => {
     setDirty(true);
     epoch.current++;
@@ -308,6 +348,7 @@ export default function ScoutingTools({
     if (planning && !scenarioDirty && scenario && !scenario.stale)
       scenario.results?.results.forEach(
         (r) =>
+          !scenario.point_stale?.[r.point.id] &&
           r.alternatives[alternativesOnMap[r.point.id] || 0] &&
           ['mapped', 'offtrail'].forEach((mode) => {
             const alternative = r.alternatives[alternativesOnMap[r.point.id] || 0];
@@ -544,8 +585,8 @@ export default function ScoutingTools({
             Miles
             <input
               aria-label="Maximum network distance miles"
-              type="number"
-              min="0"
+              type="text"
+              inputMode="decimal"
               value={miles}
               onChange={(e) => setMiles(+e.target.value)}
             />
@@ -623,7 +664,7 @@ export default function ScoutingTools({
             />
           </div>
         )}
-        <p>Target aspects (none selected = unrestricted, including flats)</p>
+        <p>Visible terrain facing direction (optional; not an approach preference)</p>
         <div className="form-grid">
           {aspects.map((a) => (
             <label key={a}>
@@ -666,8 +707,12 @@ export default function ScoutingTools({
           </p>
         )}
       </details>
-      <details open={planning}>
-        <summary>Mapped road/trail sources</summary>
+      <details>
+        <summary>Advanced road/trail sources</summary>
+        <p className="hint">
+          We consider both roads and trails from loaded, verified inventories. Import or select
+          sources here only when you need an override.
+        </p>
         <label>
           Imported network type
           <select value={kind} onChange={(e) => setKind(e.target.value)}>
@@ -720,21 +765,16 @@ export default function ScoutingTools({
               {networkPlan.provider}: up to {(networkPlan.estimated_bytes / 1e6).toFixed(0)} MB ·
               shared {budget} MB cap. {networkPlan.note}
             </p>
-            <label>
-              <input
-                type="checkbox"
-                checked={download}
-                onChange={(e) => setDownload(e.target.checked)}
-              />
-              Allow this reviewed network download
-            </label>
+            <p className="hint">
+              Acquire roads and trails approves this displayed plan and allowance.
+            </p>
             <button
-              disabled={!download || active || busy}
+              disabled={active || busy || networkPlan.storage?.blocked}
               onClick={() =>
                 attempt(async () => {
                   await api(`/network-plans/${networkPlan.id}/start`, {
                     method: 'POST',
-                    body: JSON.stringify({ download, analysis_plan: analysisPlan || null }),
+                    body: JSON.stringify({ download: true, analysis_plan: analysisPlan || null }),
                   });
                 })
               }
@@ -746,7 +786,17 @@ export default function ScoutingTools({
       </details>
       {planning && (
         <div className="approach-controls">
-          <h3>Compare independent provisional approaches</h3>
+          <h3>
+            Compare ways to reach your spots <Help topic="approach" />
+          </h3>
+          <p className="notice">
+            Compare possible ways from mapped roads or trails to each shortlisted spot, accounting
+            for distance, climbing, steepness and vegetation. Each spot is compared independently.
+          </p>
+          <p>
+            Approach search area <Help topic="searchArea" /> · Areas to avoid{' '}
+            <Help topic="avoidance" />
+          </p>
           <ol className="approach-checklist">
             <li>Travel boundary: {editing ? 'confirm edits' : area ? 'saved' : 'required'}</li>
             <li>
@@ -784,14 +834,14 @@ export default function ScoutingTools({
                 );
             }}
           >
-            Copy observer boundary as editable travel area
+            Start from observer boundary
           </button>
           <p>
             Observer area selects standing positions. Travel area bounds the approach search; expand
             it to include departures.
           </p>
           <label>
-            Import travel polygon
+            Import approach search area
             <input
               aria-label="Import travel area"
               type="file"
@@ -800,7 +850,7 @@ export default function ScoutingTools({
             />
           </label>
           <label>
-            Import optional exclusion
+            Import area to avoid
             <input
               aria-label="Import approach exclusion"
               type="file"
@@ -814,7 +864,7 @@ export default function ScoutingTools({
               checked={drawingExclusion}
               onChange={(e) => setDrawingExclusion(e.target.checked)}
             />
-            Draw an exclusion instead of travel area
+            Draw an area to avoid instead of the search area
           </label>
           {map && (
             <Drawing
@@ -884,8 +934,8 @@ export default function ScoutingTools({
               />
             </label>
             <p>
-              Balanced preferences are one each. Weights are relative costs, not walking times or
-              safety predictions. Distance always contributes.
+              Preferences <Help topic="weights" />. Balanced preferences are one each. Weights are
+              relative costs, not walking times or safety predictions. Distance always contributes.
             </p>
             {Object.entries(weights).map(([k, v]) => (
               <label key={k}>
@@ -908,7 +958,7 @@ export default function ScoutingTools({
               </label>
             ))}
             <label>
-              Maximum modeled slope (degrees)
+              Maximum modeled slope (degrees) <Help topic="slope" />
               <input
                 aria-label="Maximum approach slope"
                 type="number"
@@ -928,7 +978,7 @@ export default function ScoutingTools({
               {editing
                 ? 'Confirm this boundary to continue.'
                 : !area
-                  ? 'Confirm an explicit travel boundary.'
+                  ? 'Confirm an approach search boundary that includes your spots and a road or trail.'
                   : !selectedNetworks.length
                     ? 'Select mapped road/trail sources.'
                     : active || busy
@@ -964,9 +1014,10 @@ export default function ScoutingTools({
                 loadScenario(e.target.value);
               }}
             >
-              <option value="">Choose a saved scenario…</option>
+              <option value="">Choose a saved comparison…</option>
               {scenarios.map((s) => (
                 <option key={s.scenario.id} value={s.scenario.id}>
+                  {s.scenario.points.length} spots · slope limit {s.scenario.maximum_slope_deg}° ·{' '}
                   {s.scenario.id.slice(0, 8)}
                   {s.stale ? ' · stale' : ''}
                 </option>
@@ -994,7 +1045,23 @@ export default function ScoutingTools({
                     </p>
                   )}
                   {r.pinned_status && <p>{r.pinned_status}</p>}
-                  {r.message && <pre>{JSON.stringify(r.limiting_evidence, null, 2)}</pre>}
+                  {r.message && (
+                    <>
+                      <p className="error">{explainNoPath(r.limiting_evidence)}</p>
+                      <details>
+                        <summary>Technical evidence</summary>
+                        <pre>{JSON.stringify(r.limiting_evidence, null, 2)}</pre>
+                      </details>
+                      <button
+                        onClick={() => {
+                          if (map)
+                            map.flyTo({ center: [r.point.longitude, r.point.latitude], zoom: 14 });
+                        }}
+                      >
+                        Show this spot and search boundary
+                      </button>
+                    </>
+                  )}
                   {r.alternatives.map((a, j) => (
                     <div className="plan" key={j}>
                       <b>
@@ -1003,13 +1070,17 @@ export default function ScoutingTools({
                       </b>
                       <button
                         className="primary"
-                        disabled={scenario.stale || scenarioDirty}
+                        disabled={
+                          scenario.stale || !!scenario.point_stale?.[r.point.id] || scenarioDirty
+                        }
                         onClick={() => onApproach?.(r.point.id, scenario.scenario.id, j)}
                       >
                         Use this approach
                       </button>
                       <button
-                        disabled={scenario.stale || scenarioDirty}
+                        disabled={
+                          scenario.stale || !!scenario.point_stale?.[r.point.id] || scenarioDirty
+                        }
                         onClick={() => showAlternative(r.point.id, j)}
                       >
                         Show this alternative on map
@@ -1043,7 +1114,7 @@ export default function ScoutingTools({
                         Solid yellow = mapped trail; dashed pink = off-trail. Grid resolution: 20 m.{' '}
                         {scenario.scenario.notice}
                       </p>
-                      {!scenario.stale && !scenarioDirty && (
+                      {!scenario.stale && !scenario.point_stale?.[r.point.id] && !scenarioDirty && (
                         <p>
                           <a
                             href={`/api/approaches/${scenario.scenario.id}/export/geojson?point=${i}&alternative=${j}`}
@@ -1106,4 +1177,26 @@ function Profile({ points, mappedMeters }: { points: number[][]; mappedMeters: n
       </svg>
     </figure>
   );
+}
+
+export function explainNoPath(raw: unknown) {
+  const e = (raw || {}) as Record<string, unknown>;
+  const reasons: string[] = [];
+  if (e.endpoint_inside_travel_area === false)
+    reasons.push(
+      'This spot is outside the approach search area. Expand the boundary to include it.',
+    );
+  if (e.network_lines === 0 || e.departures === 0)
+    reasons.push(
+      'There are no mapped road or trail departures in the search area. Expand it to include a road or trail, or review source coverage.',
+    );
+  if (e.endpoint_inside_travel_area !== false && e.endpoint_valid_terrain === false)
+    reasons.push(
+      'This spot has missing terrain, is in an area to avoid, or exceeds the slope limit. Review those constraints.',
+    );
+  if (!reasons.length)
+    reasons.push(
+      'No connected path satisfies this boundary, areas to avoid and slope limit. Expand the search area or adjust preferences; this does not prove the spot is inaccessible.',
+    );
+  return reasons.join(' ');
 }

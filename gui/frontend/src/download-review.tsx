@@ -1,4 +1,3 @@
-import { useState } from 'react';
 export type DownloadReviewInfo = {
   storage?: {
     reserve_bytes: number;
@@ -22,7 +21,6 @@ export default function DownloadReview({
   plan: DownloadReviewInfo;
   bytes: number | null;
 }) {
-  const [speed, setSpeed] = useState<number | null>(null);
   const estimate = plan.download_time;
   return (
     <div className="download-review">
@@ -30,36 +28,14 @@ export default function DownloadReview({
         <strong>Estimated download time: </strong>
         {bytes === 0
           ? 'No download needed'
-          : speed && bytes !== null
-            ? `${duration(bytes / (speed * 1e6))} at your assumed speed`
-            : estimate?.minimum_s != null && estimate.maximum_s != null
-              ? `${duration(estimate.minimum_s)}–${duration(estimate.maximum_s)} · ${estimate.basis === 'measured' ? 'recent measured provider speed' : estimate.basis === 'mixed' ? 'measured and illustrative provider speeds' : 'illustrative 1–10 MB/s'}`
-              : 'Unavailable until source sizes are known'}
+          : estimate?.minimum_s != null && estimate.maximum_s != null
+            ? `${duration(estimate.minimum_s)}–${duration(estimate.maximum_s)} · ${estimate.basis === 'measured' ? 'recent measured provider speed' : estimate.basis === 'mixed' ? 'measured and estimated provider speeds' : estimate.basis}`
+            : 'Unavailable until source sizes are known'}
       </p>
-      {bytes !== 0 && (
-        <details>
-          <summary>Download speed assumption</summary>
-          <label>
-            Assumed speed (MB/s)
-            <input
-              type="number"
-              min="0.1"
-              step="0.1"
-              value={speed ?? ''}
-              placeholder="Use estimated range"
-              onChange={(e) =>
-                setSpeed(
-                  Number.isFinite(+e.target.value) && +e.target.value > 0 ? +e.target.value : null,
-                )
-              }
-            />
-          </label>
-          <small>
-            Approximate transfer time only. Provider speed, connection changes and retries can
-            extend it. Processing takes additional time.
-          </small>
-        </details>
-      )}
+      <small>
+        Approximate transfer time. We use recent provider measurements when available, otherwise a
+        small background speed check or a 20 Mbps default. Processing takes additional time.
+      </small>
       {plan.storage && (
         <>
           <p>

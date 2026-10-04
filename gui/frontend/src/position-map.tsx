@@ -84,7 +84,7 @@ export default function PositionMap({
           repaint.current();
         }
       };
-      im.src = url + '/assets/' + meta.texture.file;
+      im.src = url + '/assets/' + meta.texture.file + '?scene_key=' + encodeURIComponent(meta.key);
     }
     return () => {
       alive = false;

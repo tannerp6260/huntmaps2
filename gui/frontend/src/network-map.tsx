@@ -210,7 +210,7 @@ export default function NetworkMap({
     try {
       await api(`/network-plans/${plan.id}/start`, {
         method: 'POST',
-        body: JSON.stringify({ download: approved, analysis_plan: analysisPlan || undefined }),
+        body: JSON.stringify({ download: true, analysis_plan: analysisPlan || undefined }),
       });
     } catch (e) {
       setError(String(e));
@@ -291,18 +291,10 @@ export default function NetworkMap({
           </p>
           <DownloadReview plan={plan} bytes={plan.estimated_bytes ?? null} />
           <p>Bounds: {plan.bounds.join(', ')}. Source date unknown until inspected.</p>
-          <label>
-            <input
-              type="checkbox"
-              checked={approved}
-              onChange={(e) => setApproved(e.target.checked)}
-            />
-            Approve this reviewed network download
-          </label>
-          <button
-            disabled={!approved || active || busy || plan.storage?.blocked}
-            onClick={download}
-          >
+          <p className="hint">
+            Download mapped roads/trails approves this displayed plan and allowance.
+          </p>
+          <button disabled={active || busy || plan.storage?.blocked} onClick={download}>
             Download mapped roads/trails
           </button>
         </div>

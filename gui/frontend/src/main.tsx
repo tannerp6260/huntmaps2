@@ -7,6 +7,7 @@ import { updateMapLayers } from './map-layers';
 import { prepareCoverage } from './coverage-cache';
 import AreaSettings from './area-creation';
 import StoragePanel from './storage-panel';
+import RunManagement from './run-management';
 import RunSelection from './run-selection';
 import JobMonitor from './job-monitor';
 import CandidateCard from './candidate-review';
@@ -87,8 +88,15 @@ function App() {
   const [sortMode, setSortMode] = useState('coverage');
   const [planningApproaches, setPlanningApproaches] = useState(false);
   const filterId = appliedFilter?.profile.id || '';
-  const [sampling, setSampling] = useState<Sampling | null>(null);
-  const [includeNetwork, setIncludeNetwork] = useState(false);
+  const [sampling, setSampling] = useState<Sampling | null>({
+    network_ids: [],
+    kinds: ['roads', 'trails'],
+    distance_m: 804.672,
+    height_m: null,
+  });
+  const [recovery, setRecovery] = useState<{ kind: string; id: string } | null>(null);
+  const [separation, setSeparation] = useState(150);
+  const [includeNetwork, setIncludeNetwork] = useState(true);
   const [preparedOptions, setPreparedOptions] = useState('');
   const [runList, setRunList] = useState<RunSummary[]>([]),
     [runId, setRunId] = useState(''),
@@ -262,6 +270,9 @@ function App() {
     Number.isInteger(budget) &&
     budget >= 1 &&
     Number.isSafeInteger(budget) &&
+    Number.isFinite(separation) &&
+    separation >= 0 &&
+    separation <= 2000 &&
     Number.isInteger(minutes) &&
     minutes >= 5 &&
     minutes <= 120;
@@ -279,6 +290,7 @@ function App() {
           Math.min(20, plan.settings?.candidate_count ?? count)) ||
       nearbyRadius !== (plan.settings?.search?.nearby_radius_m ?? 30) ||
       treeThreshold !== (plan.settings?.search?.tree_threshold_percent ?? 10) ||
+      separation !== (plan.settings?.search?.recommendation_separation_m ?? 150) ||
       budget !== plan.max_download_mb ||
       (!!preparedOptions && preparedOptions !== JSON.stringify({ sampling, includeNetwork })));
   const planJob = jobs.find((j) => j.plan === planId);
@@ -301,9 +313,12 @@ function App() {
     [ready, setReady] = useState(false),
     runRef = useRef(run),
     currentRunRef = useRef(runId),
+    currentSelectedRef = useRef(selected),
+    annotationSaveTicket = useRef(0),
     chooseRef = useRef<(id: string) => void>(() => {});
   runRef.current = run;
   currentRunRef.current = runId;
+  currentSelectedRef.current = selected;
   chooseRef.current = (id) => {
     chooseOriginal(id);
     setSaved('');
@@ -327,6 +342,12 @@ function App() {
     api('/runs')
       .then(setRunList)
       .catch((e) => setError(e instanceof Error ? e.message : String(e)));
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void api('/speed-probe', { method: 'POST' }).catch(() => {});
+    }, 2000);
+    return () => window.clearTimeout(timer);
+  }, []);
   const completedRunJobs = jobs
     .filter((j) => j.kind === 'baseline' && j.status === 'complete')
     .map((j) => j.id)
@@ -350,6 +371,7 @@ function App() {
       .then((r) => {
         setRunList(r);
         setRunsLoaded(true);
+        if (currentRunRef.current) return;
         setRunId(
           training.active &&
             training.active &&
@@ -386,6 +408,8 @@ function App() {
     if (!runId) return;
     let alive = true;
     setLoading(true);
+    setRun(null);
+    setAnnotations({});
     setManualPoints([]);
     setActiveManual(null);
     setInitialObserver(null);
@@ -628,10 +652,14 @@ function App() {
       features: (newRun ? [] : shownCandidates)
         .filter(
           (p) =>
-            (group === 'dismissed'
-              ? !!workflow?.points[p.id]?.dismissed
-              : !workflow?.points[p.id]?.dismissed) &&
-            (group === 'all' ||
+            (planningApproaches || inspectStage
+              ? !workflow?.points[p.id]?.dismissed
+              : group === 'dismissed'
+                ? !!workflow?.points[p.id]?.dismissed
+                : !workflow?.points[p.id]?.dismissed) &&
+            (planningApproaches ||
+              inspectStage ||
+              group === 'all' ||
               (group === 'recommended' && !!run?.recommendation_ids?.includes(p.id)) ||
               group === 'dismissed' ||
               (group === 'review'
@@ -686,7 +714,7 @@ function App() {
   useEffect(() => {
     if (!ready || !run || !selected || newRun) return;
     const p = shownCandidates.find((p) => p.id === selected);
-    if (p) map.current!.flyTo({ center: [p.longitude, p.latitude], zoom: 13.8, duration: 500 });
+    if (p) map.current!.flyTo({ center: [p.longitude, p.latitude], zoom: 13.8, duration: 0 });
   }, [ready, selected, run, newRun, workingGeometryStamp]);
   useEffect(() => {
     if (!ready) return;
@@ -822,6 +850,9 @@ function App() {
   const toggleExport = (id: string) =>
     setExportIds((a) => (a.includes(id) ? a.filter((v) => v !== id) : [...a, id]));
   async function save() {
+    const ident = runId,
+      cid = selected,
+      ticket = ++annotationSaveTicket.current;
     if (training.active) {
       training.saveNote(runId, selected, { status, notes: note });
       setAnnotations((a) => ({ ...a, [selected]: { status, notes: note } }));
@@ -833,10 +864,16 @@ function App() {
         method: 'PUT',
         body: JSON.stringify({ status, notes: note }),
       });
-      setAnnotations((a) => ({ ...a, [selected]: { status, notes: note } }));
-      setSaved('Saved on this computer');
+      if (currentRunRef.current !== ident || ticket !== annotationSaveTicket.current) return;
+      setAnnotations((a) => ({ ...a, [cid]: { status, notes: note } }));
+      if (currentSelectedRef.current === cid) setSaved('Saved on this computer');
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
+      if (
+        currentRunRef.current === ident &&
+        currentSelectedRef.current === cid &&
+        ticket === annotationSaveTicket.current
+      )
+        setError(e instanceof Error ? e.message : String(e));
     }
   }
   async function importFile(file: File) {
@@ -906,6 +943,7 @@ function App() {
           observation_minutes: minutes,
           candidate_count: count,
           recommendation_count: recommendationCount,
+          recommendation_separation_m: separation,
           nearby_radius_m: nearbyRadius,
           tree_threshold_percent: treeThreshold,
           max_download_mb: budget,
@@ -931,7 +969,7 @@ function App() {
       setError('');
       await api(`/plans/${planId}/start`, {
         method: 'POST',
-        body: JSON.stringify({ download, review_signature: plan?.review_signature }),
+        body: JSON.stringify({ download: true, review_signature: plan?.review_signature }),
       });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
@@ -945,6 +983,24 @@ function App() {
       setError('');
       if (action === 'cancel') await api(`/jobs/${j.id}/cancel`, { method: 'POST' });
       else {
+        if (j.kind === 'approach') {
+          const v = await api('/approaches/' + j.plan);
+          setRunId(v.scenario.run_id);
+          setNewRun(false);
+          setPlanningApproaches(true);
+          setInspectStage(false);
+          setRecovery({ kind: 'approach', id: j.plan });
+          return;
+        }
+        if (j.kind === 'network-acquisition') {
+          const v = await api('/network-plans/' + j.plan);
+          if (!v.plan) throw Error('Network plan unavailable; review a new road/trail plan');
+          setRecovery({ kind: 'network', id: j.plan });
+          setNewRun(false);
+          setPlanningApproaches(true);
+          setInspectStage(false);
+          return;
+        }
         const p = await api('/plans/' + j.plan);
         setImported(null);
         setPolygon('');
@@ -956,6 +1012,7 @@ function App() {
           p.settings.search?.recommendation_count ?? Math.min(20, p.settings.candidate_count),
         );
         setNearbyRadius(p.settings.search?.nearby_radius_m ?? 30);
+        setSeparation(p.settings.search?.recommendation_separation_m ?? 150);
         setTreeThreshold(p.settings.search?.tree_threshold_percent ?? 10);
         setBudget(p.max_download_mb);
         const recoveredSampling = p.access_sampling
@@ -988,10 +1045,14 @@ function App() {
           (inspectStage
             ? !!workflow?.points[p.id]?.approach
             : !!workflow?.points[p.id]?.shortlisted)) &&
-        (group === 'dismissed'
-          ? !!workflow?.points[p.id]?.dismissed
-          : !workflow?.points[p.id]?.dismissed) &&
-        (group === 'all' ||
+        (planningApproaches || inspectStage
+          ? !workflow?.points[p.id]?.dismissed
+          : group === 'dismissed'
+            ? !!workflow?.points[p.id]?.dismissed
+            : !workflow?.points[p.id]?.dismissed) &&
+        (planningApproaches ||
+          inspectStage ||
+          group === 'all' ||
           (group === 'recommended' && !!run?.recommendation_ids?.includes(p.id)) ||
           group === 'dismissed' ||
           (group === 'review'
@@ -999,17 +1060,21 @@ function App() {
             : group === 'ungrouped'
               ? !p.neighborhood
               : p.neighborhood === group)) &&
-        `${p.id} ${p.parent} ${p.neighborhood || ''}`
-          .toLowerCase()
-          .includes(search.toLowerCase()) &&
-        (!appliedFilter ||
+        (planningApproaches ||
+          inspectStage ||
+          `${p.id} ${p.parent} ${p.neighborhood || ''}`
+            .toLowerCase()
+            .includes(search.toLowerCase())) &&
+        (planningApproaches ||
+          inspectStage ||
+          !appliedFilter ||
           appliedFilter.candidates.find((row) => row.id === p.id)?.qualifies === true),
     ) || [];
   const sorted = [...visibleCandidates].sort((a, b) => {
     const original =
       shownCandidates.findIndex((p) => p.id === a.id) -
       shownCandidates.findIndex((p) => p.id === b.id);
-    if (appliedFilter)
+    if (appliedFilter && !planningApproaches && !inspectStage)
       return (
         (appliedFilter.candidates.find((p) => p.id === b.id)?.matching_km2 ?? -1) -
           (appliedFilter.candidates.find((p) => p.id === a.id)?.matching_km2 ?? -1) || original
@@ -1033,7 +1098,7 @@ function App() {
         !workflow?.points[p.id]?.dismissed &&
         typeof p.metrics.raw_km2 === 'number',
     )
-    .slice(0, 3)
+    .slice(0, 200)
     .map((p) => p.id);
   useEffect(() => {
     setCoveragePreparation('');
@@ -1055,6 +1120,7 @@ function App() {
       working,
       filterId,
       setCoveragePreparation,
+      run.bounds,
     );
   }, [
     ready,
@@ -1072,6 +1138,7 @@ function App() {
   useEffect(() => {
     setInspectStage(false);
     setFirstPerson(false);
+    setWorkflow(null);
   }, [runId]);
   const refreshWorkflow = async () => {
     const ident = runId;
@@ -1153,7 +1220,9 @@ function App() {
     JSON.stringify(manualPoints),
     training.active,
   ]);
-  const shortlisted = Object.values(workflow?.points || {}).filter((p) => p.shortlisted);
+  const shortlisted = newRun
+    ? []
+    : Object.values(workflow?.points || {}).filter((p) => p.shortlisted);
   const approached = shortlisted.filter((p) => p.approach);
   const confirmed = approached.filter((p) => p.confirmed);
   const running = jobs.some((j) => ['running', 'cancelling'].includes(j.status));
@@ -1177,7 +1246,29 @@ function App() {
     />
   );
   const groupedIds = new Set(Object.values(run?.groups || {}).flat());
-  const candidateCards = sorted.filter((p) => !groupedIds.has(p.id)).map(renderCandidate);
+  const candidateCards = sorted
+    .filter((p) => !groupedIds.has(p.id))
+    .map((p) => {
+      const alternatives =
+        group === 'recommended' && !planningApproaches && !inspectStage
+          ? shownCandidates.filter(
+              (q) =>
+                run?.search_summary?.nearby_ids?.[p.id]?.includes(q.id) &&
+                !workflow?.points[q.id]?.dismissed,
+            )
+          : [];
+      return (
+        <div key={p.id}>
+          {renderCandidate(p)}
+          {!!alternatives.length && (
+            <details>
+              <summary>Nearby alternatives ({alternatives.length})</summary>
+              {alternatives.map(renderCandidate)}
+            </details>
+          )}
+        </div>
+      );
+    });
   const groupCards = Object.entries(run?.groups || {}).map(([label, ids]) => {
     const members = sorted.filter((p) => ids.includes(p.id));
     if (!members.length) return null;
@@ -1238,11 +1329,23 @@ function App() {
           value={runId}
           disabled={training.active}
           onChange={(value) => {
+            setRecovery(null);
+            setPlanningApproaches(false);
             setRunId(value);
             setNewRun(false);
             setImported(null);
           }}
         />
+        {!training.active && (
+          <RunManagement
+            api={api}
+            onChanged={() => {
+              setRun(null);
+              setRunId('');
+              void refreshRuns();
+            }}
+          />
+        )}
         <button onClick={refreshRuns} title="Refresh completed local runs">
           ↻
         </button>
@@ -1253,6 +1356,13 @@ function App() {
           onClick={() => {
             if (!newRun) {
               setMinutes(30);
+              setIncludeNetwork(true);
+              setSampling({
+                network_ids: [],
+                kinds: ['roads', 'trails'],
+                distance_m: 804.672,
+                height_m: null,
+              });
               setName('scouting-' + new Date().toISOString().slice(0, 10));
               setPlan(null);
               setPlanId('');
@@ -1513,6 +1623,9 @@ function App() {
                   <option value="ungrouped">Outside saved shortlist</option>
                 </select>
               )}
+              {!!run?.search_summary?.recommendation_note && (
+                <p className="hint">{run.search_summary.recommendation_note}</p>
+              )}
               <p className="hint">
                 Select a setup to see its saved view. Use Compare for up to three; Export chooses
                 observer waypoints.
@@ -1539,9 +1652,13 @@ function App() {
                   <small>Orange pins · updated positions can have terrain shading</small>
                   {shownManual
                     .filter((p) =>
-                      group === 'dismissed'
-                        ? workflow?.points[p.id]?.dismissed
-                        : !workflow?.points[p.id]?.dismissed,
+                      planningApproaches || inspectStage
+                        ? inspectStage
+                          ? !!workflow?.points[p.id]?.approach
+                          : !!workflow?.points[p.id]?.shortlisted
+                        : group === 'dismissed'
+                          ? workflow?.points[p.id]?.dismissed
+                          : !workflow?.points[p.id]?.dismissed,
                     )
                     .map((p) => (
                       <div
@@ -1653,6 +1770,11 @@ function App() {
           )}
         </aside>
         <main className="map-pane">
+          {!newRun && (loading || (runId && run?.id !== runId)) && (
+            <div className="run-opening" role="status">
+              Opening {runId}…
+            </div>
+          )}
           <div ref={mapEl} className="map" />
           {coverageStatus && (
             <div className="coverage-status" role="status" aria-live="polite">
@@ -1881,16 +2003,16 @@ function App() {
         <aside className="inspector">
           {newRun ? (
             <>
-              <div className="eyebrow">Create baseline only</div>
+              <div className="eyebrow">Find places to glass</div>
               <h2>Start with your observer area</h2>
               <p>
                 Draw where you would stand to glass. Terrain and target support extend beyond this
                 boundary.
               </p>
               <div className="row area-modes">
-                <button aria-pressed={areaMode === 'draw'} onClick={() => setAreaMode('draw')}>
-                  Draw on map
-                </button>
+                {areaMode !== 'draw' && (
+                  <button onClick={() => setAreaMode('draw')}>Use map drawing</button>
+                )}
                 <button
                   disabled={training.active || drawing}
                   aria-pressed={areaMode === 'import'}
@@ -1976,6 +2098,8 @@ function App() {
                 setNearbyRadius={setNearbyRadius}
                 treeThreshold={treeThreshold}
                 setTreeThreshold={setTreeThreshold}
+                separation={separation}
+                setSeparation={setSeparation}
               />
               {plan?.settings && !plan.settings.search && (
                 <p className="hint">
@@ -2143,14 +2267,10 @@ function App() {
                         <pre>{plan.required_data || 'Sources ready.'}</pre>
                         <pre>{JSON.stringify(plan.acquisition, null, 2)}</pre>
                       </details>
-                      <label>
-                        <input
-                          type="checkbox"
-                          checked={download}
-                          onChange={(e) => setDownload(e.target.checked)}
-                        />
-                        Approve this plan's new downloads within {plan.max_download_mb} MB
-                      </label>
+                      <p className="hint">
+                        Generate setups approves this displayed source plan within{' '}
+                        {plan.max_download_mb} MB.
+                      </p>
                       <button
                         className="primary wide"
                         disabled={
@@ -2158,7 +2278,6 @@ function App() {
                           running ||
                           planDirty ||
                           !settingsValid ||
-                          (!planComplete && !plan.sources_ready && !download) ||
                           (!planComplete && !!plan.storage?.blocked) ||
                           !!plan.acquisition?.errors?.length ||
                           (plan.acquisition?.estimated_bytes || 0) > plan.max_download_mb * 1e6
@@ -2216,6 +2335,7 @@ function App() {
                     analysisPlan={planId}
                     budget={budget}
                     observerBoundary={run?.boundary}
+                    recovery={recovery}
                     onInputsChanged={(scenario) => {
                       for (const p of Object.values(workflow?.points || {}))
                         if (p.approach?.scenario === scenario) void decide(p.point.id, 'unselect');
@@ -2509,7 +2629,7 @@ function App() {
                         </details>
                       </>
                     ) : (
-                      <p>{loading ? 'Loading saved results…' : 'Loading setup…'}</p>
+                      <p>{loading ? 'Opening ' + runId + '…' : 'Loading setup…'}</p>
                     )}
                   </>
                 )}

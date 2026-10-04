@@ -36,10 +36,10 @@ try{
  }
  // Failed photographs retain usable terrain and the profile; no checkbox is needed.
  await page.getByRole('button',{name:'Return to map',exact:true}).click();
- await page.route('**/assets/*imagery.png',r=>r.abort());
+ await page.route('**/assets/*imagery.png*',r=>r.abort());
  await page.getByRole('button',{name:'Inspect now',exact:true}).click();await loaded();
  await page.getByText('Some imagery unavailable; shaded terrain retained.',{exact:true}).waitFor();
  assert.ok(JSON.parse(await scene.getAttribute('data-camera')).triangles>0);
- assert.equal(await (await page.request.get(api+'/annotations')).text(),annotations);assert.equal((await (await page.request.get(base+'/api/jobs')).json()).length,jobs.length);assert.ok(mutations.every(u=>u.endsWith('/profile') || u.includes('/workflow/')));assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
+ assert.equal(await (await page.request.get(api+'/annotations')).text(),annotations);assert.equal((await (await page.request.get(base+'/api/jobs')).json()).length,jobs.length);assert.ok(mutations.every(u=>u===base+'/api/speed-probe' || u.endsWith('/profile') || u.includes('/workflow/')));assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
  fs.writeFileSync(out+'/results.json',JSON.stringify({errors,external,mutations,interactionMs,metadata:meta,annotationsUnchanged:true,jobsUnchanged:true},null,2));console.log('First-person camera, points, texture, profiles, offline, keyboard, resizing, switching and context failure verified:',out);
 }finally{await browser.close()}

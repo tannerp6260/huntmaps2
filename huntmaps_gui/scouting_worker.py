@@ -14,7 +14,12 @@ def main():
     parser.add_argument("action", choices=["approach", "network"])
     parser.add_argument("ident")
     parser.add_argument("--remaining-bytes", type=int, default=0)
+    parser.add_argument("--ledger")
     a = parser.parse_args()
+    if a.ledger:
+        import os
+
+        os.environ["HUNTMAPS_TRANSFER_LEDGER"] = a.ledger
     started = time.monotonic()
     resource.setrlimit(resource.RLIMIT_AS, (1536 * 1024**2, 1536 * 1024**2))
 

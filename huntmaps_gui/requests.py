@@ -54,6 +54,7 @@ class Preparation(Payload):
     max_download_mb: int = Field(default=600, ge=1)
     candidate_count: int = Field(default=150, ge=12, le=5000)
     recommendation_count: int = Field(default=20, ge=1, le=200)
+    recommendation_separation_m: float = Field(default=150, ge=0, le=2000)
     nearby_radius_m: Literal[10, 30, 60, 120] = 30
     tree_threshold_percent: float = Field(default=10, ge=0, le=100)
     access_sampling: dict | None = None

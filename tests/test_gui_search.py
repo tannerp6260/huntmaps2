@@ -119,6 +119,7 @@ class SearchTests(unittest.TestCase):
                         dict(
                             version=1,
                             recommendation_count=12,
+                            recommendation_separation_m=150,
                             nearby_radius_m=60,
                             tree_threshold_percent=15,
                         ),
