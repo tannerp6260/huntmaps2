@@ -19,6 +19,7 @@ def records():
     return sorted(
         [
             *(STATE / "workflows").glob("*.json"),
+            *(STATE / "approach-reviews").glob("*.json"),
             *(STATE / "first-person/ready").rglob("*.json"),
             *(STATE / "annotations").glob("*.json"),
             *(STATE / "manual-observers").glob("*.json"),
@@ -92,6 +93,7 @@ def reset(body: Reset):
         for path in records():
             if (
                 path.is_relative_to(STATE / "workflows")
+                or path.is_relative_to(STATE / "approach-reviews")
                 or path.is_relative_to(STATE / "first-person")
                 or path.is_relative_to(STATE / "approaches")
                 or path.is_relative_to(STATE / "networks")
@@ -142,6 +144,7 @@ def restore(body: Restore):
                     "networks",
                     "filter-profiles",
                     "workflows",
+                    "approach-reviews",
                     "first-person",
                 )
                 for part in target.relative_to(STATE.resolve()).parts
@@ -269,6 +272,8 @@ def inventory():
         add(path, "saved approach scenario and referenced results", True)
     for path in (STATE / "networks").glob("*"):
         add(path, "referenced network source", True)
+    for path in (STATE / "approach-reviews").glob("*.json"):
+        add(path, "Guided approach review", True)
     for path in (STATE / "workflows").glob("*.json"):
         add(path, "saved workflow decisions and referenced results", True)
     for path in (STATE / "filter-profiles").glob("*.json"):

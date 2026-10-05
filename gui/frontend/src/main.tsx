@@ -1,3 +1,5 @@
+import { YardScale } from './yard-scale';
+import { area as areaText, yards } from './units';
 import DownloadReview from './download-review';
 import JobProgress from './job-progress';
 import { inputSignature } from './approach-inputs';
@@ -98,6 +100,8 @@ function App() {
   const [sortMode, setSortMode] = useState('coverage');
   const [planningApproaches, setPlanningApproaches] = useState(false);
   const filterId = appliedFilter?.profile.id || '';
+  const [samplingValid, setSamplingValid] = useState(true);
+  const [spacingValid, setSpacingValid] = useState(true);
   const [sampling, setSampling] = useState<Sampling | null>({
     network_ids: [],
     kinds: ['roads', 'trails'],
@@ -266,6 +270,8 @@ function App() {
     [busy, setBusy] = useState(false);
   const selectedFilter = appliedFilter?.candidates.find((row) => row.id === selected);
   const settingsValid =
+    samplingValid &&
+    spacingValid &&
     /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(name) &&
     Number.isInteger(count) &&
     count >= 12 &&
@@ -566,7 +572,7 @@ function App() {
     map.current = m;
     m.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
     m.addControl(new maplibregl.NavigationControl(), 'top-right');
-    m.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
+    m.addControl(new YardScale(), 'bottom-left');
     m.on('load', () => {
       for (const id of ['boundary', 'import', 'candidates', 'manual-observers'])
         m.addSource(id, { type: 'geojson', data: empty });
@@ -616,7 +622,7 @@ function App() {
         type: 'circle',
         source: 'manual-observers',
         paint: {
-          'circle-color': '#df7b35',
+          'circle-color': ['coalesce', ['get', 'color'], '#df7b35'],
           'circle-radius': 7,
           'circle-stroke-color': '#fff',
           'circle-stroke-width': 2,
@@ -659,6 +665,21 @@ function App() {
           terrain: !!m.getTerrain(),
           elevation: m.getTerrain() ? m.queryTerrainElevation(m.getCenter()) : null,
           loaded: m.loaded(),
+          candidateIds: (
+            (m.getSource('candidates') as GeoJSONSource)?.serialize()
+              .data as GeoJSON.FeatureCollection
+          )?.features?.map((f) => f.properties?.id),
+          candidatePixels: (
+            (m.getSource('candidates') as GeoJSONSource)?.serialize()
+              .data as GeoJSON.FeatureCollection
+          )?.features?.map((f) => {
+            const pixel = m.project((f.geometry as GeoJSON.Point).coordinates as [number, number]);
+            return { id: f.properties?.id, x: pixel.x, y: pixel.y };
+          }),
+          manualIds: (
+            (m.getSource('manual-observers') as GeoJSONSource)?.serialize()
+              .data as GeoJSON.FeatureCollection
+          )?.features?.map((f) => f.properties?.id),
         }),
       );
     });
@@ -685,7 +706,8 @@ function App() {
         .filter(
           (p) =>
             (planningApproaches || inspectStage
-              ? !workflow?.points[p.id]?.dismissed
+              ? !!workflow?.points[p.id]?.shortlisted &&
+                (!inspectStage || !!workflow?.points[p.id]?.approach)
               : group === 'dismissed'
                 ? !!workflow?.points[p.id]?.dismissed
                 : !workflow?.points[p.id]?.dismissed) &&
@@ -726,6 +748,9 @@ function App() {
     activeManual?.id,
     workingGeometryStamp,
     workflow?.revision,
+    planningApproaches,
+    inspectStage,
+    appliedFilter,
   ]);
   useEffect(() => {
     if (ready)
@@ -733,17 +758,34 @@ function App() {
         type: 'FeatureCollection',
         features: (newRun ? [] : shownManual)
           .filter((p) =>
-            group === 'dismissed'
-              ? workflow?.points[p.id]?.dismissed
-              : !workflow?.points[p.id]?.dismissed,
+            planningApproaches || inspectStage
+              ? !!workflow?.points[p.id]?.shortlisted &&
+                (!inspectStage || !!workflow?.points[p.id]?.approach)
+              : group === 'dismissed'
+                ? workflow?.points[p.id]?.dismissed
+                : !workflow?.points[p.id]?.dismissed,
           )
           .map((p) => ({
             type: 'Feature' as const,
-            properties: { id: p.id, record: JSON.stringify(p) },
+            properties: {
+              id: p.id,
+              record: JSON.stringify(p),
+              color: activeManual?.id === p.id ? '#ffdf80' : '#df7b35',
+            },
             geometry: { type: 'Point' as const, coordinates: [p.longitude, p.latitude] },
           })),
       });
-  }, [ready, manualGeometryStamp, newRun, workingGeometryStamp, workflow?.revision, group]);
+  }, [
+    ready,
+    manualGeometryStamp,
+    activeManual?.id,
+    newRun,
+    workingGeometryStamp,
+    workflow?.revision,
+    group,
+    planningApproaches,
+    inspectStage,
+  ]);
   useEffect(() => {
     if (!ready || !run || !selected || newRun) return;
     const p = shownCandidates.find((p) => p.id === selected);
@@ -1199,7 +1241,7 @@ function App() {
     setDecisionFeedback('');
     setUndoDecision(null);
   }, [runId]);
-  const decisionQueue = useRef<Promise<void>>(Promise.resolve());
+  const decisionQueue = useRef<Promise<boolean>>(Promise.resolve(true));
   const decide = (cid: string, action: string, extra: Record<string, unknown> = {}) => {
     const ident = runId;
     const displayed =
@@ -1208,11 +1250,11 @@ function App() {
     const submit = async () => {
       setDecisionBusy(true);
       try {
-        if (currentRunRef.current !== ident) return;
+        if (currentRunRef.current !== ident) return false;
         const state = await api(`/runs/${ident}/workflow`);
         const current =
           state.points[cid]?.point || (await api(`/runs/${ident}/workflow-point/${cid}`));
-        if (currentRunRef.current !== ident) return;
+        if (currentRunRef.current !== ident) return false;
         if (
           displayed &&
           (displayed.longitude !== current.longitude || displayed.latitude !== current.latitude)
@@ -1232,13 +1274,15 @@ function App() {
             setUndoDecision(action === 'dismiss' ? { cid, revision: value.revision } : null);
           }
         }
+        return currentRunRef.current === ident;
       } catch (e) {
         if (currentRunRef.current === ident) setError(String(e));
+        return false;
       } finally {
         setDecisionBusy(false);
       }
     };
-    decisionQueue.current = decisionQueue.current.catch(() => {}).then(submit);
+    decisionQueue.current = decisionQueue.current.catch(() => false).then(submit);
     return decisionQueue.current;
   };
   useEffect(() => {
@@ -1501,7 +1545,11 @@ function App() {
         <button
           aria-current={inspectStage ? 'step' : undefined}
           className={inspectStage ? 'primary' : ''}
-          disabled={!approached.length || training.active}
+          disabled={
+            !approached.length ||
+            training.active ||
+            (workflow?.approach_review?.active && !workflow.approach_review.ready)
+          }
           onClick={() => {
             setNewRun(false);
             setPlanningApproaches(false);
@@ -1516,7 +1564,7 @@ function App() {
         </button>
         {!shortlisted.length && <small>Shortlist a setup to compare approaches.</small>}
         {!!shortlisted.length && !approached.length && (
-          <small>Select a current approach to inspect and confirm.</small>
+          <small>Select an approach or dismiss each remaining spot to continue.</small>
         )}
         <button className="setup-drawer-toggle" onClick={() => setListOpen(!listOpen)}>
           Setups
@@ -1624,7 +1672,7 @@ function App() {
                 <p className="hint">
                   Evaluated {run.search_summary.evaluated_count} of up to{' '}
                   {run.search_summary.budget} locations. Broad spacing:{' '}
-                  {run.search_summary.sampling?.spacing_m ?? 'unavailable'} m.
+                  {yards(run.search_summary.sampling?.spacing_m)}.
                   {run.search_summary.unused_budget > 0 && (
                     <>
                       {' '}
@@ -2177,6 +2225,7 @@ function App() {
               )}
               {drawing && <p className="notice">Confirm this boundary to continue.</p>}
               <AreaSettings
+                onValidity={setSpacingValid}
                 targets={targets}
                 setTargets={setTargets}
                 avoidDense={avoidDense}
@@ -2225,6 +2274,7 @@ function App() {
                   key={planId || 'new'}
                   initialSampling={sampling}
                   onChange={setSampling}
+                  onValidity={setSamplingValid}
                   includeNetwork={includeNetwork}
                   onNetwork={setIncludeNetwork}
                 />
@@ -2273,7 +2323,7 @@ function App() {
                   <h3>{plan.name} acquisition plan</h3>
 
                   <p className="hint">
-                    Prepared settings: {(plan.settings?.radius_m || 0) / 1000} km ·{' '}
+                    Prepared settings: {yards(plan.settings?.radius_m)} ·{' '}
                     {plan.settings?.candidate_count} maximum locations to evaluate;{' '}
                     {plan.settings?.search?.recommendation_count ?? 20} setups to recommend. Terrain
                     criteria rank matching visible area. Nearby vegetation eligibility is separate.
@@ -2453,9 +2503,20 @@ function App() {
                     budget={budget}
                     observerBoundary={run?.boundary}
                     recovery={recovery}
-                    onInputsChanged={(scenario) => {
-                      for (const p of Object.values(workflow?.points || {}))
-                        if (p.approach?.scenario === scenario) void decide(p.point.id, 'unselect');
+                    workflow={workflow}
+                    focusedId={activeManual?.id || selected}
+                    onFocus={(cid) => {
+                      const manual = shownManual.find((p) => p.id === cid);
+                      if (manual) chooseManual(manual);
+                      else chooseOriginal(cid);
+                    }}
+                    onDecision={(cid, action) => decide(cid, action)}
+                    onInspectStage={() => {
+                      setPlanningApproaches(false);
+                      setInspectStage(true);
+                    }}
+                    onInputsChanged={(cid, scenario) => {
+                      if (workflow?.points[cid]?.approach) void decide(cid, 'unselect');
                     }}
                     onApproach={(cid, scenario, alternative) =>
                       decide(cid, 'approach', { scenario, alternative })
@@ -2541,24 +2602,24 @@ function App() {
                         </button>
                         <div className="metric">
                           <strong>
-                            {num(
+                            {areaText(
                               appliedFilter?.candidates.find((p) => p.id === selected)
                                 ?.matching_km2 ?? detail.metrics.raw_km2,
                             )}
                           </strong>
                           <span>
                             {appliedFilter
-                              ? 'km² matching visible terrain'
-                              : 'km² original terrain-visible target area'}
+                              ? 'matching visible terrain'
+                              : 'original terrain-visible target area'}
                           </span>
                           {appliedFilter && (
                             <p>
-                              {num(detail.metrics.raw_km2)} km² original terrain-visible area ·{' '}
-                              {num(
+                              {areaText(detail.metrics.raw_km2)} original terrain-visible area ·{' '}
+                              {areaText(
                                 appliedFilter?.candidates.find((p) => p.id === selected)
                                   ?.matching_unknown_km2 ?? detail.metrics.matching_unknown_km2,
                               )}{' '}
-                              km² with unknown required evidence
+                              with unknown required evidence
                             </p>
                           )}
                         </div>
@@ -2602,8 +2663,8 @@ function App() {
                               )}
                               % mapped shrub cover ·{' '}
                               {num(Number(detail.metrics.foreground_known_fraction) * 100, 0)}%
-                              known tree coverage within{' '}
-                              {String(detail.metrics.foreground_radius_m)} m.
+                              known tree coverage within {yards(detail.metrics.foreground_radius_m)}
+                              .
                             </p>
                             <small>
                               Potential clearing evidence only. Coarse mapping cannot verify a small
@@ -2623,7 +2684,7 @@ function App() {
                           ].map(([label, key]) => (
                             <div key={key}>
                               <span>{label}</span>
-                              <b>{num(detail.metrics[key])} km²</b>
+                              <b>{areaText(detail.metrics[key])}</b>
                             </div>
                           ))}
                         </div>
@@ -2779,13 +2840,13 @@ function App() {
                   {p.parent ? ' · alternative to ' + p.parent : ''}
                 </button>
                 <span>
-                  {num(
+                  {areaText(
                     appliedFilter?.candidates.find((row) => row.id === p.id)?.matching_km2 ??
                       p.metrics.raw_km2,
                   )}{' '}
-                  km² {appliedFilter ? 'matching terrain' : 'terrain'} ·{' '}
-                  {num(p.metrics.tree_lt10_km2)} km² {appliedFilter ? 'original terrain ' : ''}under
-                  10% trees
+                  {appliedFilter ? 'matching terrain' : 'terrain'} ·{' '}
+                  {areaText(p.metrics.tree_lt10_km2)} {appliedFilter ? 'original terrain ' : ''}
+                  under 10% trees
                 </span>
                 <small>
                   {p.latitude.toFixed(7)}, {p.longitude.toFixed(7)}
@@ -2795,7 +2856,7 @@ function App() {
           </div>
           <p>
             {overlap
-              .map((o) => `${o.a} / ${o.b}: ${num(o.shared_km2)} km² shared terrain`)
+              .map((o) => `${o.a} / ${o.b}: ${areaText(o.shared_km2)} shared terrain`)
               .join(' · ') || 'Add another setup to compare shared terrain.'}
           </p>
           <small>
@@ -2837,6 +2898,7 @@ function App() {
             runId={runId}
             cid={activeManual?.id || selected}
             viewedSceneKey={workflow?.points[activeManual?.id || selected]?.viewed}
+            reviewReady={!workflow?.approach_review?.active || workflow.approach_review.ready}
             approachCurrent={!!workflow?.points[activeManual?.id || selected]?.approach}
             onConfirm={() => decide(activeManual?.id || selected, 'confirm')}
             onViewed={(key) => decide(activeManual?.id || selected, 'viewed', { scene: key })}

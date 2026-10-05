@@ -212,6 +212,75 @@ class WorkflowJourney(unittest.TestCase):
             )
         )
 
+    def test_guided_review_order_drafts_stale_writes_and_completion_gate(self):
+        from huntmaps_gui import approach_review
+        ids = list(self.r.points)[:3]
+        original = self.cid
+        for cid in ids:
+            self.cid = cid
+            self.decision("shortlist")
+        self.cid = original
+        endpoint = f"/api/runs/{self.run}/approach-review"
+        def save(body, expected=200):
+            response = self.client.put(endpoint, headers=self.headers, json=body)
+            self.assertEqual(response.status_code, expected, response.text)
+            return response.json()
+        state = workflow.get(self.run)
+        body = dict(revision=0, workflow_revision=state["revision"], ids=ids[::-1], active_point=ids[2])
+        review = save(body)
+        self.assertEqual(review["queue"], ids[::-1])
+        self.assertFalse(review["ready"])
+        save(body, 400)
+        stale_request = self.client.post(f"/api/runs/{self.run}/approaches", headers=self.headers,
+            json=dict(ids=[self.cid], points=[dict(workflow.point(self.run, self.cid), revision="old")]))
+        self.assertEqual(stale_request.status_code, 400)
+        self.assertIn("Waypoint changed", stale_request.text)
+        scenario = self.scenario()
+        draft = {k: scenario[k] for k in ("travel_area", "exclusions", "network_ids", "kinds", "weights", "maximum_slope_deg", "start", "pinned")}
+        draft.update(boundary_confirmed=True, scenario=scenario["id"], alternative=0, attempted=True)
+        body.update(revision=review["revision"], workflow_revision=workflow.get(self.run)["revision"], active_point=self.cid, point=workflow.point(self.run, self.cid), draft=draft)
+        review = save(body)
+        self.assertEqual(review["drafts"][self.cid]["scenario"], scenario["id"])
+        self.assertEqual(approach_review.get(self.run)["queue"], ids[::-1])
+        bad = dict(body, revision=review["revision"], point=dict(body["point"], revision="old"))
+        save(bad, 400)
+        self.decision("approach", scenario=scenario["id"], alternative=0)
+        self.cid = ids[1]
+        second = self.scenario()
+        self.decision("approach", scenario=second["id"], alternative=0)
+        self.cid = original
+        changed = dict(draft, weights=dict(draft["weights"], tree=4))
+        body.update(revision=review["revision"], workflow_revision=workflow.get(self.run)["revision"], draft=changed)
+        review = save(body)
+        current = workflow.get(self.run)
+        self.assertIsNone(current["points"][original]["approach"])
+        self.assertEqual(current["points"][ids[1]]["approach"]["scenario"], second["id"])
+        self.decision("approach", scenario=scenario["id"], alternative=0, expected=400)
+        body.update(revision=review["revision"], workflow_revision=current["revision"], draft=draft)
+        review = save(body)
+        self.decision("approach", scenario=scenario["id"], alternative=0)
+        ident = fp.new_plan(self.run, [self.cid], fidelity="terrain")
+        worker.discover(ident)
+        worker.prepare(ident, False)
+        self.decision("viewed", scene=fp.scene(self.run, self.cid)["key"])
+        self.decision("confirm", expected=400)
+        for cid in ids:
+            if cid != original:
+                self.cid = cid
+                self.decision("dismiss")
+        self.cid = original
+        self.assertTrue(workflow.get(self.run)["approach_review"]["ready"])
+        self.decision("confirm")
+        # Restoration reopens the gate without rewriting historical scenarios or scenes.
+        self.cid = ids[-1]
+        self.decision("restore")
+        self.decision("shortlist")
+        self.assertFalse(workflow.get(self.run)["approach_review"]["ready"])
+        self.cid = original
+        self.decision("confirm", expected=400)
+        self.assertTrue((self.state / "approaches" / scenario["id"] / "results.json").exists())
+        self.assertTrue(any(i["protected"] for i in inventory()["items"] if i["kind"] == "Guided approach review"))
+
     def test_run_scoped_scenes_revisions_manual_points_and_no_coverage(self):
         keys = []
         for run in (self.run, "another-run"):

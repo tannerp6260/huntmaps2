@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 export type Workflow = {
   revision: number;
+  approach_review?: { active: boolean; ready: boolean; unresolved: string[] };
   points: Record<
     string,
     {
@@ -33,7 +34,7 @@ export default function WorkflowPanel({
   cid: string;
   inspect: boolean;
   pending?: boolean;
-  onDecision: (cid: string, action: string, extra?: Record<string, unknown>) => Promise<void>;
+  onDecision: (cid: string, action: string, extra?: Record<string, unknown>) => Promise<boolean>;
   onInspect: () => void;
   onApproaches: () => void;
   api: (path: string, options?: RequestInit) => Promise<any>;
@@ -118,16 +119,25 @@ export default function WorkflowPanel({
           <button onClick={onApproaches}>Return to approaches</button>
           <button
             className="primary wide"
-            disabled={pending || !p?.approach || !p?.viewed}
+            disabled={
+              pending ||
+              !p?.approach ||
+              !p?.viewed ||
+              (workflow?.approach_review?.active && !workflow.approach_review.ready)
+            }
             onClick={() => onDecision(cid, 'confirm')}
           >
             {p?.confirmed ? 'Setup confirmed' : 'Confirm setup'}
           </button>
-          {(!p?.approach || !p?.viewed) && (
+          {(!p?.approach ||
+            !p?.viewed ||
+            (workflow?.approach_review?.active && !workflow.approach_review.ready)) && (
             <p>
-              {!p?.approach
-                ? 'Select a current approach for this setup.'
-                : 'Successfully open this setup’s current scene to confirm.'}
+              {workflow?.approach_review?.active && !workflow.approach_review.ready
+                ? 'Finish approach review for every retained spot before confirming.'
+                : !p?.approach
+                  ? 'Select a current approach for this setup.'
+                  : 'Successfully open this setup’s current scene to confirm.'}
             </p>
           )}
         </>

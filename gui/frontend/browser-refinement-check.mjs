@@ -57,7 +57,7 @@ print(json.dumps(dict(key=key,sha256=meta['hashes']['context-vertices.bin'])))
   await page.getByText('Observer access sampling and network acquisition',{exact:true}).click();
   const proximity=page.getByLabel('Only look near mapped roads or trails',{exact:true});
   assert.equal(await proximity.isChecked(),true);
-  const distance=page.getByLabel('Maximum distance from a road or trail (miles)');
+  const distance=page.getByLabel('Maximum distance from a road or trail (yards)');
   await distance.fill('0.25');assert.equal(await distance.getAttribute('type'),'text');
   const label=proximity.locator('..'), rect=await label.boundingBox(), panel=await page.locator('.inspector').boundingBox();
   if (panel.x+panel.width-8>rect.x+rect.width+8) await page.mouse.click(panel.x+panel.width-8,rect.y+rect.height/2);

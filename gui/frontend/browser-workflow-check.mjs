@@ -18,7 +18,7 @@ try {
  const api=`${base}/api/runs/${runId}`;
  const p=await (await page.request.get(api+'/candidates/A0001')).json();
  const initial=await (await page.request.get(api+'/workflow')).json();
- if(initial.points.A0001?.shortlisted) {await page.request.put(api+'/workflow/A0001',{headers:{'X-HuntMaps':'local'},data:{action:'remove',revision:initial.revision,point:initial.points.A0001.point}});await page.reload();await page.getByLabel('Run selector').selectOption(runId);await page.getByLabel('Select A0001',{exact:true}).click();}
+ if(initial.points.A0001?.shortlisted) {await page.request.put(api+'/workflow/A0001',{headers:{'X-HuntMaps':'local'},data:{action:'remove',revision:initial.revision,point:initial.points.A0001.point}});await page.reload();await page.getByLabel('Run selector').selectOption(runId);await page.getByLabel('Saved neighborhood').selectOption('all');await page.getByLabel('Select A0001',{exact:true}).click();}
  const run=await (await page.request.get(api)).json();
  const listIds=()=>page.locator('.candidate-select strong').allTextContents().then(ids=>ids.map(id=>id.trim().split(' · ')[0]));
  assert.deepEqual(await listIds(),[...run.candidates].sort((a,b)=>b.metrics.raw_km2-a.metrics.raw_km2).map(p=>p.id));
@@ -53,9 +53,9 @@ try {
  await page.getByLabel('Import travel area').setInputFiles({name:'workflow-travel.geojson',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(area))});
  await page.getByText('More options · pinned departure and preferences',{exact:true}).click();
  await page.getByLabel('Maximum approach slope').fill('60');
- await page.locator('.approach-controls').getByRole('button',{name:'Compare approaches',exact:true}).click();
- await page.getByRole('button',{name:'Use this approach',exact:true}).first().waitFor({timeout:60000});
- await page.getByRole('button',{name:'Use this approach',exact:true}).first().click();
+ await page.getByRole('button',{name:'Confirm approach search boundary',exact:true}).click();
+ await page.getByRole('button',{name:'Use this approach & next spot',exact:true}).first().waitFor({timeout:60000});
+ await page.getByRole('button',{name:'Use this approach & next spot',exact:true}).first().click();
  await page.waitForFunction(()=>!Array.from(document.querySelectorAll('.workflow-stages button')).find(b=>b.textContent.includes('3 ·')).disabled);
  await page.screenshot({path:out+'/02-approaches-desktop.png',fullPage:true});
  await nav.getByRole('button',{name:/3 · Inspect and confirm/}).click();
@@ -89,4 +89,4 @@ try {
  assert.deepEqual(errors,[]);
  fs.writeFileSync(out+'/results.json',JSON.stringify({errors,workflow:state,scene:{key:scene.key,fidelity:scene.fidelity,runtime_s:scene.preparation_wall_s,peak_rss_mib:scene.peak_process_rss_mib}},null,2));
  console.log('Isolated new-run three-stage journey, gating, reload and 900px verified:',out);
-} finally {fs.writeFileSync(out+'/decisions.json',JSON.stringify(decisions,null,2));await browser.close();}
+} catch(e) {await page.screenshot({path:out+'/failure.png',fullPage:true});fs.writeFileSync(out+'/failure.txt',await page.locator('body').innerText());throw e;} finally {fs.writeFileSync(out+'/decisions.json',JSON.stringify(decisions,null,2));await browser.close();}

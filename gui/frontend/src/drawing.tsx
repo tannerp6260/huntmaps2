@@ -286,7 +286,7 @@ const descriptions = {
 
   name: 'A name used to identify this scouting analysis later. Use letters, numbers, hyphens or underscores; existing run names cannot be overwritten.',
   radius:
-    'How far from each observer the tool checks terrain visibility within the target area. A larger radius can include more distant terrain and require more data and processing; it does not mean you can identify deer at that distance. Default: 2 km.',
+    'How far from each observer the tool checks terrain visibility within the target area. A larger radius can include more distant terrain and require more data and processing; it does not mean you can identify deer at that distance. Default: 2,187 yards.',
   minutes:
     'An existing scoring assumption used to choose portions of a view that could be inspected within a limited time. It can change inspection scores and rankings, but does not change terrain-visible coverage. It is not a recommended stop duration. Default: 30 minutes.',
   count:

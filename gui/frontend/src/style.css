@@ -1352,3 +1352,26 @@ label:has(> input[type='checkbox']) input {
   padding: 10px;
   margin-bottom: 12px;
 }
+
+.guided-focus {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: #f7f9f0;
+  border: 1px solid #31574a;
+  border-radius: 5px;
+  padding: 10px;
+}
+.guided-focus h3 {
+  margin: 0 0 4px;
+}
+.guided-focus p {
+  margin: 4px 0;
+}
+.guided-focus button {
+  margin: 4px 4px 0 0;
+}
+.alternative-nav {
+  border-top: 1px solid #cdd8c1;
+  padding-top: 8px;
+}

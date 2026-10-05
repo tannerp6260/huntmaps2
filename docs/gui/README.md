@@ -30,7 +30,7 @@ verification. Existing CLI commands continue to work.
 1. Open a completed run in the header. The initial Soap Creek neighborhood review
    is explicitly experimental; choose **soap-creek-v1 · baseline** to see the
    unchanged normal analysis. Opening results starts no analysis or source acquisition; enabled online imagery requests display tiles.
-2. Expanded-search runs open **Recommended setups**, preferring low mapped nearby tree cover and then terrain-visible area. **All evaluated setups** retains every calculated location, ordered by terrain-visible area. Existing runs retain their original results. Original
+2. Expanded-search runs open **Recommended setups**, ordered by visible terrain matching your saved criteria, with spacing between suggestions. **All evaluated setups** retains every calculated location, ordered by terrain-visible area. Existing runs retain their original results. Original
    engine ranking and the historical leading collection remain optional. Select A0075, V010 or V008 to inspect
    coordinates, parent relationship, target area, cover breakdown and uncertainty.
 3. **Compare** selects up to three. Colored layers retain each individual saved
@@ -46,7 +46,7 @@ verification. Existing CLI commands continue to work.
    your notes. Target-opening coordinates are deliberately excluded. These are
    provisional waypoints, not navigation routes.
 
-Map controls include zoom, compass rotation/reset, metric scale, imagery and
+Map controls include zoom, compass rotation/reset, yard scale, imagery and
 visibility toggles, opacity sliders, legend and whole-area/close-up buttons.
 Online imagery fills gaps behind saved aerial clips by default, fetching visible USGS National Map tiles as you pan and zoom. Turn off **Online imagery — fill gaps** for entirely local viewing; this preference persists in your browser. Provider attribution appears on the map. Online acquisition dates vary and tiles are browsing context, separate from analysis sources and its download cap. There is no offline tile pack. Saved imagery dates and native/export resolutions remain in the source drawer. When online imagery fails, the map keeps cached imagery and local hillshade where covered, with a retry control. No PDF screenshots are used as map layers.
 

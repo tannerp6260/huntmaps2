@@ -1,3 +1,4 @@
+import { yards, feet } from './units';
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { request } from './http';
@@ -152,7 +153,7 @@ export default function Viewer({
     ctx.fillStyle = '#233b31';
     ctx.font = '14px sans-serif';
     ctx.fillText('N ↑', 10, 20);
-    ctx.fillText('Saved patch at centre · ' + range + ' m radius', 10, 390);
+    ctx.fillText('Saved patch at centre · ' + yards(range) + ' radius', 10, 390);
   };
   useEffect(() => {
     let alive = true,
@@ -660,10 +661,10 @@ export default function Viewer({
         }}
       />
       <small>
-        Green ring: unchanged 120 m foliage patch centred on the saved setup. Dark marker: current
-        observer. Orange ring: 300 m fine-data boundary. Distant terrain: separate coarse context
+        Green ring: unchanged 131 yd foliage patch centred on the saved setup. Dark marker: current
+        observer. Orange ring: 328 yd fine-data boundary. Distant terrain: separate coarse context
         with cached photographs where available. Pale gaps mark unknown fine ground and the
-        deliberately unjoined 300–320 m source boundary. Orange target, red terrain obstruction and
+        deliberately unjoined 328–350 yd source boundary. Orange target, red terrain obstruction and
         purple inferred-vegetation intersection are temporary inspection marks.
       </small>
     </>

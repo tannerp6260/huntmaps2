@@ -35,6 +35,16 @@ def router(jobs):
     def workflow_decide(ident, cid, body: dict = Body(...)):
         return workflow.decide(ident, cid, body, jobs)
 
+    from . import approach_review
+
+    @r.get("/runs/{ident}/approach-review")
+    def approach_review_get(ident):
+        return approach_review.get(ident, jobs)
+
+    @r.put("/runs/{ident}/approach-review")
+    def approach_review_save(ident, body: dict = Body(...)):
+        return approach_review.save(ident, body, jobs)
+
     @r.post("/networks/import")
     async def imported(
         kind: str, source_date: str = "unknown", file: UploadFile = File(...)
@@ -237,6 +247,14 @@ def router(jobs):
         with locked(STATE / "maintenance"):
             if any(j["status"] in ("running", "cancelling") for j in jobs.list(False)):
                 raise ValueError("Another job is running; wait or cancel it first")
+            if body.get("points") is not None:
+                expected = [
+                    workflow.point(ident, cid, jobs) for cid in body.get("ids", [])
+                ]
+                if body["points"] != expected:
+                    raise ValueError(
+                        "Waypoint changed; reload before calculating approaches"
+                    )
             scenario = approaches.create(ident, body, jobs)
             job = jobs.start(
                 [

@@ -60,3 +60,10 @@ Black and Prettier versions are pinned. Engine code is excluded. Older `gui/veri
 and the other browser scripts remain historical or specialist tools; they are not
 safe replacements for the isolated runner. Online preparation is intentionally not
 part of the offline default suite.
+
+Guided approach review records (`approach-reviews/*.json`) are protected definitions,
+covered by backups and the owner's record audit. Cache cleanup does not delete them
+or referenced comparisons. Explicit reviewed deletion of an unprotected generated
+run includes its review record. The guided journey now exercises independent jobs,
+preferences/reload, marker filtering, dismissal/Undo and the all-retained inspection
+requirement; see [verification and measurements](GUIDED_APPROACHES_2026-10-04.md).

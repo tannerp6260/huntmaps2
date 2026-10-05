@@ -134,7 +134,14 @@ def get(run, jobs=None):
             confirmed=bool(saved.get("confirmed") and selected and viewed),
             stale=bool(saved and not same),
         )
-    return dict(version=VERSION, revision=value["revision"], points=result)
+    from .approach_review import readiness
+
+    return dict(
+        version=VERSION,
+        revision=value["revision"],
+        points=result,
+        approach_review=readiness(run, result),
+    )
 
 
 def decide(run, cid, body, jobs=None):
@@ -198,6 +205,14 @@ def decide(run, cid, body, jobs=None):
             from .approach_service import status
 
             s = status(body["scenario"], jobs)
+            from .approach_review import records as review_records, matches
+
+            review = review_records(run)
+            draft = review.get("drafts", {}).get(cid) if review else None
+            if draft and not matches(draft, s["scenario"]):
+                raise ValueError(
+                    "Approach settings changed; recompute or reload this comparison's saved settings"
+                )
             chosen = dict(
                 scenario=body["scenario"],
                 alternative=body["alternative"],
@@ -226,7 +241,13 @@ def decide(run, cid, body, jobs=None):
                 entry["confirmed"] = False
             entry["viewed"] = meta["key"]
         elif action == "confirm":
-            state = get(run, jobs)["points"].get(cid, {})
+            snapshot = get(run, jobs)
+            review = snapshot["approach_review"]
+            if review["active"] and not review["ready"]:
+                raise ValueError(
+                    "Select a current approach for every retained shortlisted setup before confirming"
+                )
+            state = snapshot["points"].get(cid, {})
             if (
                 not state.get("shortlisted")
                 or not state.get("approach")

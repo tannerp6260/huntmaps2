@@ -34,6 +34,7 @@ def owner_records():
     files = []
     for folder in (
         "workflows",
+        "approach-reviews",
         "annotations",
         "manual-observers",
         "networks",
@@ -306,6 +307,7 @@ def main():
             for script in (
                 "browser-workflow-check.mjs",
                 "browser-target-search-check.mjs",
+                "browser-guided-approaches-check.mjs",
                 "browser-refinement-check.mjs",
                 "browser-workflow-regressions.mjs",
                 "browser-transfer-check.mjs",

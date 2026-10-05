@@ -1,6 +1,9 @@
+import { area, yards, KM2_PER_MI2 } from './units';
+import DecimalField from './decimal-field';
 import { Help } from './drawing';
 import TerrainCriteria, { type TargetCriteria } from './target-criteria';
 export default function AreaSettings({
+  onValidity,
   targets,
   setTargets,
   avoidDense,
@@ -22,6 +25,7 @@ export default function AreaSettings({
   treeThreshold,
   setTreeThreshold,
 }: {
+  onValidity: (v: boolean) => void;
   targets: TargetCriteria;
   setTargets: (v: TargetCriteria) => void;
   avoidDense: boolean;
@@ -78,7 +82,7 @@ export default function AreaSettings({
         >
           {[500, 1000, 1500, 2000, 2500, 3000].map((r) => (
             <option value={r} key={r}>
-              {r / 1000} km
+              {yards(r)}
             </option>
           ))}
         </select>
@@ -96,8 +100,8 @@ export default function AreaSettings({
       </label>
       {areaKm2 != null && areaKm2 > 0 && (
         <p className="hint" data-testid="search-density">
-          Approx. {areaKm2.toFixed(2)} km² observer area · {(count / areaKm2).toFixed(0)}{' '}
-          locations/km². Some evaluations refine promising spots; restrictions may leave fewer
+          Approx. {area(areaKm2)} observer area · {((count / areaKm2) * KM2_PER_MI2).toFixed(0)}{' '}
+          locations/mi². Some evaluations refine promising spots; restrictions may leave fewer
           candidates.
         </p>
       )}
@@ -129,13 +133,13 @@ export default function AreaSettings({
       <details>
         <summary>Advanced settings</summary>
         <label>
-          Spacing between suggestions (metres) <Help topic="separation" />
-          <input
+          Spacing between suggestions (yards) <Help topic="separation" />
+          <DecimalField
             aria-label="Recommendation separation"
-            type="text"
-            inputMode="decimal"
             value={separation}
-            onChange={(e) => setSeparation(+e.target.value)}
+            scale={0.9144}
+            onChange={setSeparation}
+            onValidity={onValidity}
           />
         </label>
         <label>
@@ -147,7 +151,7 @@ export default function AreaSettings({
           >
             {[10, 30, 60, 120].map((r) => (
               <option value={r} key={r}>
-                {r} metres
+                {yards(r)}
               </option>
             ))}
           </select>
@@ -182,7 +186,7 @@ export default function AreaSettings({
           </p>
           <p>
             A fixed random seed makes the same inputs repeatable. More locations means more
-            processing, not a guaranteed optimum. Broad spacing starts at 150 m and decreases for
+            processing, not a guaranteed optimum. Broad spacing starts at 164 yd and decreases for
             smaller areas, down to the analysis grid resolution. Exhausted eligible cells produce
             fewer evaluations with an explanation. Nearby refinement uses up to 20% of the search
             budget; broad sampling uses 80%. A limited area may leave some refinement budget unused.

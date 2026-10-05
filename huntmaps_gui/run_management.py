@@ -73,6 +73,7 @@ def preview(ident):
     candidates = [folder]
     for group, suffix in [
         ("workflows", ".json"),
+        ("approach-reviews", ".json"),
         ("annotations", ".json"),
         ("manual-observers", ".json"),
         ("working-waypoints", ""),

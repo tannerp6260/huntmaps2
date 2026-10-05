@@ -1,3 +1,4 @@
+import { decimalValue } from './decimal-input';
 import { Help } from './drawing';
 import { networkResponse } from './network-response';
 import { useEffect, useState } from 'react';
@@ -8,20 +9,22 @@ export type Sampling = {
   height_m: number | null;
 };
 export default function AccessSampling({
+  onValidity,
   onChange,
   includeNetwork,
   onNetwork,
   initialSampling,
 }: {
+  onValidity: (valid: boolean) => void;
   onChange: (v: Sampling | null) => void;
   initialSampling: Sampling | null;
   includeNetwork: boolean;
   onNetwork: (v: boolean) => void;
 }) {
   const [enabled, setEnabled] = useState(!!initialSampling),
-    [distance, setDistance] = useState((initialSampling?.distance_m ?? 804.672) / 1609.344),
+    [distance, setDistance] = useState(String((initialSampling?.distance_m ?? 804.672) / 0.9144)),
     [heightEnabled, setHeightEnabled] = useState(initialSampling?.height_m != null),
-    [height, setHeight] = useState((initialSampling?.height_m ?? 304.8) / 0.3048),
+    [height, setHeight] = useState(String((initialSampling?.height_m ?? 304.8) / 0.3048)),
     [ids, setIds] = useState<string[]>(initialSampling?.network_ids || []),
     [kinds, setKinds] = useState(initialSampling?.kinds || ['roads', 'trails']),
     [networks, setNetworks] = useState<{ id: string; kind: string; source: string }[]>([]);
@@ -49,13 +52,18 @@ export default function AccessSampling({
     };
   }, []);
   useEffect(() => {
+    const valid =
+      !enabled ||
+      (decimalValue(distance) !== null && (!heightEnabled || decimalValue(height) !== null));
+    onValidity(valid);
+    if (!valid) return;
     onChange(
       enabled
         ? {
             network_ids: ids,
             kinds,
-            distance_m: distance * 1609.344,
-            height_m: heightEnabled ? height * 0.3048 : null,
+            distance_m: decimalValue(distance)! * 0.9144,
+            height_m: heightEnabled ? decimalValue(height)! * 0.3048 : null,
           }
         : null,
     );
@@ -78,6 +86,10 @@ export default function AccessSampling({
             : 'Select at least one source dataset, or include the reviewed USFS acquisition.'}
         </p>
       )}
+      {enabled &&
+        (decimalValue(distance) === null || (heightEnabled && decimalValue(height) === null)) && (
+          <p className="error">Enter a complete nonnegative distance before reviewing downloads.</p>
+        )}
       {enabled && (
         <>
           <p className="hint">
@@ -121,13 +133,13 @@ export default function AccessSampling({
             ))}
           </details>{' '}
           <label>
-            Maximum distance from a road or trail (miles) <Help topic="proximity" />
+            Maximum distance from a road or trail (yards) <Help topic="proximity" />
             <input
-              aria-label="Maximum distance from a road or trail (miles)"
+              aria-label="Maximum distance from a road or trail (yards)"
               type="text"
               inputMode="decimal"
               value={distance}
-              onChange={(e) => setDistance(+e.target.value)}
+              onChange={(e) => setDistance(e.target.value)}
             />
           </label>
           <label>
@@ -142,10 +154,10 @@ export default function AccessSampling({
             <label>
               Maximum height (feet)
               <input
-                type="number"
-                min="0"
+                type="text"
+                inputMode="decimal"
                 value={height}
-                onChange={(e) => setHeight(+e.target.value)}
+                onChange={(e) => setHeight(e.target.value)}
               />
             </label>
           )}

@@ -16,7 +16,7 @@ await page.addInitScript(()=>localStorage.setItem('huntmaps-online-imagery','off
 await page.route('**/*',r=>r.request().url().startsWith(base)||r.request().url().startsWith('blob:')?r.continue():r.abort());
 try {
  await page.goto(base); await page.getByLabel('Run selector').selectOption('search-fixture');
- await page.locator('.metric span').filter({hasText:'km² matching visible terrain'}).waitFor();
+ await page.locator('.metric span').filter({hasText:'matching visible terrain'}).waitFor();
  const run=await (await page.request.get(base+'/api/runs/search-fixture')).json();
  assert.equal(run.search_summary.options.ranking_version,2);
  const expected=run.recommendation_ids;
@@ -25,13 +25,13 @@ try {
  assert.deepEqual(await list(),expected);
  await page.waitForFunction(()=>document.querySelector('.coverage-status')?.textContent.includes('Coverage ready'),undefined,{timeout:60000});
  assert.ok(tiles.length>0,'Saved target criteria must produce filtered blue coverage automatically');
- await page.reload();await page.getByLabel('Run selector').selectOption('search-fixture');await page.locator('.metric span').filter({hasText:'km² matching visible terrain'}).waitFor();
+ await page.reload();await page.getByLabel('Run selector').selectOption('search-fixture');await page.locator('.metric span').filter({hasText:'matching visible terrain'}).waitFor();
  await page.getByText('Observer access and visible-terrain filters',{exact:true}).click();
  assert.equal(await page.getByLabel('Elevation range (feet)',{exact:true}).isChecked(),true);
  assert.equal(await page.getByLabel('Avoid standing in dense vegetation',{exact:true}).isChecked(),false);
  await page.getByRole('button',{name:'Show original terrain',exact:true}).click();
  await page.getByLabel('Minimum Elevation range (feet)',{exact:true}).fill('20000');await page.getByLabel('Maximum Elevation range (feet)',{exact:true}).fill('21000');
- await page.getByRole('button',{name:'Apply review filters',exact:true}).click();await page.locator('.metric span').filter({hasText:'km² matching visible terrain'}).waitFor();
+ await page.getByRole('button',{name:'Apply review filters',exact:true}).click();await page.locator('.metric span').filter({hasText:'matching visible terrain'}).waitFor();
  assert.equal((await list()).length,0,'No matching visible area must mean no recommended spots');
  await page.getByLabel('Saved neighborhood').selectOption('all');assert.ok((await list()).length>0,'Zero-match points remain available');
  await page.getByRole('button',{name:'+ New baseline run',exact:true}).click();
@@ -45,7 +45,7 @@ try {
  await page.getByRole('button',{name:/2 · Compare approaches/}).click();
  const scenarios=await (await page.request.get(base+'/api/runs/workflow-fixture/approaches')).json();const saved=scenarios.find(s=>s.results?.results.some(r=>r.alternatives.length));assert.ok(saved);
  await page.locator('.approach-controls select').last().selectOption(saved.scenario.id);
- const use=page.getByRole('button',{name:'Use this approach',exact:true}).first(),show=page.getByRole('button',{name:'Show this alternative on map',exact:true}).first();
+ const use=page.getByRole('button',{name:'Use this approach & next spot',exact:true}).first(),show=page.getByRole('button',{name:'Show this alternative on map',exact:true}).first();
  assert.equal(await use.isDisabled(),false,'Reloading exact saved inputs must not falsely mark them dirty');
  await page.getByText('More options · pinned departure and preferences',{exact:true}).click();await page.getByLabel('Maximum approach slope').fill('45');
  assert.equal(await use.isDisabled(),true);assert.equal(await show.isDisabled(),false);

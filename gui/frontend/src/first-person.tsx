@@ -1,3 +1,4 @@
+import { yards, feet } from './units';
 import DownloadReview from './download-review';
 import JobProgress from './job-progress';
 import JobLogs from './job-logs';
@@ -29,6 +30,7 @@ export default function FirstPerson({
   globalBusy,
   onViewed,
   onConfirm,
+  reviewReady = true,
   approachCurrent,
   viewedSceneKey,
 }: {
@@ -43,6 +45,7 @@ export default function FirstPerson({
   globalBusy?: boolean;
   onViewed?: (key: string) => void;
   onConfirm?: () => void;
+  reviewReady?: boolean;
   approachCurrent?: boolean;
   viewedSceneKey?: string | null;
 }) {
@@ -274,7 +277,7 @@ export default function FirstPerson({
           setHeading(v.initial_bearing_deg || 0);
           if (v.vegetation?.meshes?.['120']?.unavailable)
             setError(
-              'The saved 120 m foliage patch is unavailable. Return to the map and review source preparation.',
+              'The saved 131 yd foliage patch is unavailable. Return to the map and review source preparation.',
             );
         }
       })
@@ -588,7 +591,7 @@ export default function FirstPerson({
           <>
             <div className="fp-controls">
               <label>
-                Eye height: {eye.toFixed(1)} m
+                Eye height: {feet(eye, 1)}
                 <input
                   aria-label="First-person eye height"
                   type="range"
@@ -640,7 +643,7 @@ export default function FirstPerson({
                   Inferred vegetation
                 </label>
               )}
-              {meta.fidelity !== 'terrain' && <span>Dense foliage · saved 120 m patch</span>}
+              {meta.fidelity !== 'terrain' && <span>Dense foliage · saved 131 yd patch</span>}
             </div>
             {meta.fidelity === 'terrain' ? (
               <p className="notice">
@@ -652,7 +655,7 @@ export default function FirstPerson({
                 {meta.fine_observer_available
                   ? 'Local lidar-derived ground'
                   : 'Baseline-only preview: fine ground at the observer is unknown.'}{' '}
-                · {(meta.coverage_fraction * 100).toFixed(1)}% of the 300 m circle has supported
+                · {(meta.coverage_fraction * 100).toFixed(1)}% of the 328 yd circle has supported
                 fine ground · {meta.acquisition_date}.{' '}
                 {points
                   ? 'Above-ground returns: green vegetation-class, amber unclassified, blue other classes. Missing returns do not mean empty space.'
@@ -661,7 +664,7 @@ export default function FirstPerson({
                 not reconstructed trees. Foliage clusters infer vegetation from returns; shape,
                 thickness and opacity are assumptions. Weaker measurements are included where nearby
                 stronger measurements support a patch. Colors follow cached photographs, not
-                vegetation identification. Only centres within {nearby} m are screened; farther
+                vegetation identification. Only centres within {yards(nearby)} are screened; farther
                 vegetation is unevaluated. Missing returns do not prove open space. Amber diagnostic
                 markers are unclassified.
               </p>
@@ -674,7 +677,7 @@ export default function FirstPerson({
                   ? ' · reduced detail to stay within the lightweight rendering budget'
                   : ''}
                 . {meta.vegetation.neighbor_supported_cell_count.toLocaleString()} cells added
-                through neighboring support across the prepared 120 m area. Missing measurements do
+                through neighboring support across the prepared 131 yd area. Missing measurements do
                 not establish a clear view.
               </p>
             )}
@@ -719,14 +722,19 @@ export default function FirstPerson({
                     . Recorded sources; this is not a live camera feed.
                   </p>
                   <p>
-                    {approachCurrent
-                      ? 'Current approach selected.'
-                      : 'Return to approaches to select a current alternative.'}
+                    {!reviewReady
+                      ? 'Finish approach review for every retained spot before confirming.'
+                      : approachCurrent
+                        ? 'Current approach selected.'
+                        : 'Return to approaches to select a current alternative.'}
                   </p>
                   <button
                     className="primary wide"
                     disabled={
-                      !approachCurrent || opened !== meta.key || viewedSceneKey !== meta.key
+                      !reviewReady ||
+                      !approachCurrent ||
+                      opened !== meta.key ||
+                      viewedSceneKey !== meta.key
                     }
                     onClick={onConfirm}
                   >
@@ -809,7 +817,7 @@ export default function FirstPerson({
                       </p>
                       <p>
                         Foliage coverage stays centred on {cid}. Moving does not extend the saved
-                        120 m patch. Farther vegetation is unevaluated.
+                        131 yd patch. Farther vegetation is unevaluated.
                       </p>
                       <button disabled={updating} onClick={returnPosition}>
                         Return to current waypoint
@@ -888,12 +896,12 @@ export default function FirstPerson({
                     value={range}
                     onChange={(e) => setRange(+e.target.value)}
                   >
-                    <option value={300}>300 m — fine ground</option>
-                    <option value={2000}>2 km — separate baseline profile</option>
+                    <option value={300}>328 yd — fine ground</option>
+                    <option value={2000}>2,187 yd — separate baseline profile</option>
                   </select>
                 </label>
                 <label>
-                  Assumed target height: {height.toFixed(1)} m
+                  Assumed target height: {feet(height, 1)}
                   <input
                     aria-label="Inspection target height"
                     type="range"
@@ -962,7 +970,7 @@ export default function FirstPerson({
                     {meta.vegetation?.inferred_cell_count.toLocaleString()} · classified support:{' '}
                     {meta.vegetation?.classified_cell_count.toLocaleString()}. Foliage colors sample
                     aerial imagery; missing imagery uses green. Colors do not indicate
-                    classification. No vegetation model beyond 300 m.
+                    classification. No vegetation model beyond 328 yd.
                   </p>
                   <p>
                     Display: {meta.display_point_count.toLocaleString()} of{' '}

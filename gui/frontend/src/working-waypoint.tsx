@@ -1,3 +1,4 @@
+import { area, yards } from './units';
 import type { WorkingWaypointRecord, ManualWaypoint, Candidate, Review } from './types';
 import { useState } from 'react';
 export default function WorkingWaypoint({
@@ -37,12 +38,12 @@ export default function WorkingWaypoint({
         {point.latitude.toFixed(7)}, {point.longitude.toFixed(7)}
       </p>
       <p>
-        {(point.displacement_m / 0.3048).toFixed(1)} ft from the original {point.anchor}
+        {yards(point.displacement_m, 1)} from the original {point.anchor}
       </p>
       <button onClick={onView}>Inspect now</button>
       <div className="metric">
-        <strong>{point.metrics.raw_km2.toFixed(3)}</strong>
-        <span>km² terrain-visible target area at this waypoint</span>
+        <strong>{area(point.metrics.raw_km2)}</strong>
+        <span>terrain-visible target area at this waypoint</span>
       </div>
       <p>
         The shading uses the saved 10 m terrain and baseline viewing assumptions. Small stance
@@ -60,7 +61,7 @@ export default function WorkingWaypoint({
         ].map(([label, key]) => (
           <div key={key}>
             <span>{label}</span>
-            <b>{point.metrics[key].toFixed(3)} km²</b>
+            <b>{area(point.metrics[key])}</b>
           </div>
         ))}
       </div>

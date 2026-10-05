@@ -1,3 +1,4 @@
+import { yards } from './units';
 import type { ProfileResult } from './types';
 export function ProfileChart({ profile }: { profile: ProfileResult | null }) {
   if (!profile)
@@ -31,7 +32,7 @@ export function ProfileChart({ profile }: { profile: ProfileResult | null }) {
         : null;
   return (
     <section className="fp-profile">
-      <h3>Inspection target · {profile.distance_m.toFixed(1)} m</h3>
+      <h3>Inspection target · {yards(profile.distance_m, 1)}</h3>
       <b>{profile.result}</b>
       <p className="hint">
         {profile.source_label}
@@ -68,7 +69,7 @@ export function ProfileChart({ profile }: { profile: ProfileResult | null }) {
       <small>
         Green: modeled ground. Orange: inspection line. Purple: selected inferred-vegetation
         intersection. Gaps: unknown ground.{' '}
-        {block ? 'First modeled obstruction at ' + block.distance_m.toFixed(1) + ' m.' : ''}{' '}
+        {block ? 'First modeled obstruction at ' + yards(block.distance_m, 1) + '.' : ''}{' '}
         {profile.warning}
       </small>
     </section>
@@ -105,7 +106,7 @@ export function VegetationResult({
                   <td>
                     {r.result}
                     {r.first_intersection
-                      ? ' · first at ' + r.first_intersection.distance_m.toFixed(1) + ' m'
+                      ? ' · first at ' + yards(r.first_intersection.distance_m, 1)
                       : ''}
                     {r.observer_inside ? ' · observer inside modeled foliage' : ''}
                     {r.target_inside ? ' · target inside modeled foliage' : ''}
@@ -115,8 +116,8 @@ export function VegetationResult({
             </tbody>
           </table>
           <p>
-            Nearby screening: {v.evaluated_radius_m} m · {v.included_cell_count.toLocaleString()}{' '}
-            supported cells.{' '}
+            Nearby screening: {yards(v.evaluated_radius_m)} ·{' '}
+            {v.included_cell_count.toLocaleString()} supported cells.{' '}
             {v.farther_vegetation_unevaluated
               ? 'Target extends beyond nearby range; farther vegetation is unevaluated.'
               : 'Vegetation outside this range is unevaluated.'}

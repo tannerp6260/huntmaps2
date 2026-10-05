@@ -1,3 +1,4 @@
+import { area } from './units';
 import type { Candidate, Review } from './types';
 const num = (value: unknown) => (typeof value === 'number' ? value.toFixed(3) : 'Not saved');
 export default function CandidateCard({
@@ -47,9 +48,9 @@ export default function CandidateCard({
           {p.working_revision ? ' · updated' : ''}
         </strong>
         <span>{p.parent ? 'Alternative to ' + p.parent : p.neighborhood || 'Original setup'}</span>
-        {matching !== undefined && <b>{num(matching)} km² matching visible terrain</b>}
+        {matching !== undefined && <b>{area(matching)} matching visible terrain</b>}
         <small>
-          {num(p.metrics.raw_km2)} km² original terrain view{' '}
+          {area(p.metrics.raw_km2)} original terrain view{' '}
           {p.working_revision ? '· working location ' : ''}
           {annotations[p.id]?.status && annotations[p.id].status !== 'unmarked'
             ? '· ' + annotations[p.id].status

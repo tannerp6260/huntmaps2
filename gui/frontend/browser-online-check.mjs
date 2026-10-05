@@ -12,7 +12,7 @@ try{
  const annotations=await (await page.request.get(base+'/api/runs/'+id+'/annotations')).text(),jobs=await (await page.request.get(base+'/api/jobs')).json();
  const idle=()=>page.waitForFunction(()=>{const s=JSON.parse(document.querySelector('.map').getAttribute('data-map-state')||'{}');return s.loaded},{timeout:45000});
  await page.goto(base);await page.getByLabel('Online imagery — fill gaps',{exact:true}).waitFor();assert.ok(await page.getByLabel('Online imagery — fill gaps',{exact:true}).isChecked());
- await page.getByLabel('Select A0075',{exact:true}).waitFor();await page.getByText('1.257',{exact:true}).waitFor();await page.getByRole('button',{name:'Whole area',exact:true}).click();await idle();assert.ok(successful.size>0);await page.screenshot({path:out+'/01-filled-gaps.png',fullPage:true});
+ await page.getByLabel('Select A0075',{exact:true}).waitFor();await page.getByText('0.485 mi²',{exact:true}).waitFor();await page.getByRole('button',{name:'Whole area',exact:true}).click();await idle();assert.ok(successful.size>0);await page.screenshot({path:out+'/01-filled-gaps.png',fullPage:true});
  assert.ok((await page.locator('.maplibregl-ctrl-attrib').innerText()).includes('USGS'));
  await page.getByRole('button',{name:'+ New baseline run',exact:true}).click();
  await page.locator('summary').filter({hasText:'Go to location'}).click();await page.getByLabel('Go to latitude').fill('39.1');await page.getByLabel('Go to longitude').fill('-106.9');
@@ -35,7 +35,7 @@ try{
  await page.reload();assert.equal(await page.getByLabel('Online imagery — fill gaps',{exact:true}).isChecked(),false);
  await page.route('https://basemap.nationalmap.gov/**',r=>r.abort());
  await page.getByLabel('Online imagery — fill gaps',{exact:true}).check();await page.getByText('Online imagery could not load.',{exact:false}).waitFor();assert.equal(await page.getByRole('alert').count(),0);
- await page.getByLabel('Select V010',{exact:true}).click();await page.getByText('1.316',{exact:true}).waitFor();await page.screenshot({path:out+'/04-offline-fallback.png',fullPage:true});
+ await page.getByLabel('Select V010',{exact:true}).click();await page.getByText('0.508 mi²',{exact:true}).waitFor();await page.screenshot({path:out+'/04-offline-fallback.png',fullPage:true});
  await page.unroute('https://basemap.nationalmap.gov/**');await page.getByRole('button',{name:'Retry online imagery',exact:true}).click();await idle();
  assert.equal(await page.getByRole('button',{name:'Retry online imagery',exact:true}).count(),0);
  await page.getByRole('button',{name:'3D terrain',exact:true}).click();await page.locator('.terrain-controls[data-mode="3d"]').waitFor();await page.waitForTimeout(2500);await page.screenshot({path:out+'/05-online-3d.png',fullPage:true});

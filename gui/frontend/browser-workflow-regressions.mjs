@@ -39,7 +39,7 @@ try {
  await page.setViewportSize({width:900,height:900});await page.screenshot({path:out+'/02-approaches-900.png',fullPage:true});
  // Recovery must retrieve the correct scenario, even when lists are still loading.
  const scenarios=await (await page.request.get(base+'/api/runs/workflow-fixture/approaches')).json();assert.ok(scenarios.length);
- const scenario=scenarios[0].scenario;
+ const scenario=scenarios.find(s=>s.scenario.points.some(p=>p.id==='A0001')).scenario;
  await page.route('**/api/jobs',r=>r.fulfill({json:[{id:'a'.repeat(32),kind:'approach',name:'workflow-fixture',plan:scenario.id,status:'failed',stage:'Synthetic approach recovery',error:'Controlled failure',elapsed_s:1}]}));
  await page.getByText('Job history and recovery',{exact:true}).click();await page.locator('details.jobs > summary').click();
  const job=page.locator('.job').filter({hasText:'Synthetic approach recovery'});await job.waitFor({timeout:15000});

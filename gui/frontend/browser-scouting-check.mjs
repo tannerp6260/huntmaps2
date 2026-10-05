@@ -16,11 +16,13 @@ const area={type:'Polygon',coordinates:[[[lon-.003,lat-.003],[lon+.003,lat-.003]
 const network={type:'Feature',properties:{trail_name:'Synthetic trail',terra_motorized:'N'},geometry:{type:'LineString',coordinates:[[lon-.001,lat-.002],[lon-.001,lat+.002]]}};
 await page.goto(base);await page.getByLabel('Select A0075',{exact:true}).click();await page.getByLabel('Candidate decision',{exact:true}).selectOption('keep');await page.getByRole('button',{name:'Save review',exact:true}).click();
 await page.locator('.workflow-task').getByRole('button',{name:'Shortlist',exact:true}).click();await page.getByRole('button',{name:/2 · Compare approaches/}).click();
+await page.getByLabel('Focused approach spot').selectOption('A0075');
 await page.getByLabel('Import road trail network',{exact:true}).setInputFiles({name:'synthetic-network.geojson',mimeType:'application/geo+json',buffer:Buffer.from(JSON.stringify(network))});
 await page.getByLabel('Import travel area',{exact:true}).setInputFiles({name:'synthetic-travel.geojson',mimeType:'application/geo+json',buffer:Buffer.from(JSON.stringify(area))});
-await page.getByText('Travel boundary saved',{exact:false}).waitFor();
+
 await page.getByText('More options · pinned departure and preferences',{exact:true}).click();await page.getByLabel('Maximum approach slope',{exact:true}).fill('60');
-await page.getByRole('button',{name:'Compare approaches',exact:true}).click();
+await page.getByRole('button',{name:'Confirm approach search boundary',exact:true}).click();
+await page.getByText('Travel boundary saved',{exact:false}).waitFor();
 await page.getByRole('link',{name:'Provisional approach GeoJSON',exact:true}).first().waitFor({timeout:60000});
 const href=await page.getByRole('link',{name:'Provisional approach GeoJSON',exact:true}).first().getAttribute('href');
 const data=await (await page.request.get(base+href)).json();
