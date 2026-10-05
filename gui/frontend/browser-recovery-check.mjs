@@ -21,7 +21,7 @@ const waitJob=async status=>{
 };
 try{
  await page.goto(base);
- await page.getByRole('button',{name:'+ New baseline run',exact:true}).click();
+ await page.getByRole('button',{name:'+ New area',exact:true}).click();
  await page.getByRole('button',{name:'Import file',exact:true}).click();
  await page.getByLabel('Import observer polygon').setInputFiles(process.env.HUNTMAPS_IMPORT_FILE);
  await page.getByLabel('New run name',{exact:true}).fill('browser-recovery');
@@ -40,7 +40,7 @@ try{
  assert.ok(plan.acquisition.already_cached_bytes>0);
  await page.reload();
  await page.locator('[data-testid="generation-status"]').waitFor();
- await page.getByText('Job history and recovery',{exact:true}).click();
+ await page.getByRole('button',{name:'Activity',exact:true}).click();
  await page.locator('summary').filter({hasText:'Analysis jobs'}).click();
  const card=page.locator('.job').filter({hasText:'Injected post-download'});
  await card.getByRole('button',{name:'Review / resume plan',exact:true}).click();
@@ -59,10 +59,10 @@ try{
  assert.equal(run.recommendation_ids.length,10);
  assert.ok(run.search_summary.sampling.spacing_m<150);
  await page.locator('[data-testid="generation-status"]').getByRole('button',{name:'Open results',exact:true}).click();
- await page.getByText(/Evaluated .* locations/).waitFor();
+ await page.locator('.search-summary > summary').click();await page.getByText(/Evaluated .* locations/).waitFor();
  assert.equal(await page.evaluate(()=>sessionStorage.getItem('huntmaps-generation-plan')),null);
  await page.reload();
- await page.getByText(/Evaluated .* locations/).waitFor();
+ await page.locator('.search-summary > summary').click();await page.getByText(/Evaluated .* locations/).waitFor();
  assert.equal(await page.getByLabel('Run selector').inputValue(),'browser-recovery');
  assert.equal(await page.locator('[data-testid="generation-status"]').count(),0,'Opening results must end generation recovery on reload');
  await page.setViewportSize({width:900,height:900});

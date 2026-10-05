@@ -1,3 +1,4 @@
+import { Icon } from './workspace-ui';
 import { yards, feet } from './units';
 import DownloadReview from './download-review';
 import JobProgress from './job-progress';
@@ -33,6 +34,8 @@ export default function FirstPerson({
   reviewReady = true,
   approachCurrent,
   viewedSceneKey,
+  confirmed = false,
+  confirmationPending = false,
 }: {
   runId: string;
   cid: string;
@@ -48,6 +51,8 @@ export default function FirstPerson({
   reviewReady?: boolean;
   approachCurrent?: boolean;
   viewedSceneKey?: string | null;
+  confirmed?: boolean;
+  confirmationPending?: boolean;
 }) {
   const [sceneAnchor, setSceneAnchor] = useState(cid);
   useEffect(() => setSceneAnchor(cid), [cid]);
@@ -378,13 +383,23 @@ export default function FirstPerson({
         aria-label="First-person modeled view"
       >
         <div className="section-title">
-          <h2>View from {cid} · modeled scene</h2>
+          <h2>
+            <Icon name="inspect" /> View from {cid}{' '}
+            <span className="status-badge">Modeled terrain</span>
+          </h2>
           <button onClick={onClose}>Return to map</button>
         </div>
-        <p>
-          Modeled view from recorded sources. Inspect the scene and selected approach before
-          confirming. Source coverage and limitations are shown below.
+        <p className="hint">
+          Drag to look around. Select terrain on the plan map to inspect a sightline. Recorded
+          sources, not a live camera.
         </p>
+        {!meta && !error && (
+          <div className="scene-loading" role="status">
+            <progress aria-label="Opening terrain view" />
+            <b>Opening your terrain view…</b>
+            <span>Loading the saved scene and source coverage.</span>
+          </div>
+        )}
         {sceneAnchor !== cid && (
           <p className="notice">
             Legacy nearby preview using the saved anchor scene. Prepare an exact waypoint scene
@@ -420,7 +435,7 @@ export default function FirstPerson({
           </div>
         )}
         <details open={meta?.status === 'unprepared'} className="fp-preparation">
-          <summary>Prepare local fine terrain and lidar</summary>
+          <summary>View preparation & source detail</summary>
           <p>
             Preparation uses exact waypoints from this run. Existing scores and outputs stay
             unchanged. New downloads require a reviewed allowance; storage checks keep 20 GiB free.
@@ -645,44 +660,63 @@ export default function FirstPerson({
               )}
               {meta.fidelity !== 'terrain' && <span>Dense foliage · saved 131 yd patch</span>}
             </div>
-            {meta.fidelity === 'terrain' ? (
-              <p className="notice">
-                Terrain-only view from the existing DEM. Fine ground and measured vegetation are
-                unavailable; shaded terrain marks missing imagery. This is not a live camera feed.
-              </p>
-            ) : (
-              <p className="notice">
-                {meta.fine_observer_available
-                  ? 'Local lidar-derived ground'
-                  : 'Baseline-only preview: fine ground at the observer is unknown.'}{' '}
-                · {(meta.coverage_fraction * 100).toFixed(1)}% of the 328 yd circle has supported
-                fine ground · {meta.acquisition_date}.{' '}
-                {points
-                  ? 'Above-ground returns: green vegetation-class, amber unclassified, blue other classes. Missing returns do not mean empty space.'
-                  : ''}{' '}
-                Aerial imagery is always shown where available; photographed canopy lies on ground,
-                not reconstructed trees. Foliage clusters infer vegetation from returns; shape,
-                thickness and opacity are assumptions. Weaker measurements are included where nearby
-                stronger measurements support a patch. Colors follow cached photographs, not
-                vegetation identification. Only centres within {yards(nearby)} are screened; farther
-                vegetation is unevaluated. Missing returns do not prove open space. Amber diagnostic
-                markers are unclassified.
-              </p>
-            )}
-            {meta.fidelity !== 'terrain' && meta.vegetation.meshes && (
-              <p className="hint">
-                Cluster surface detail:{' '}
-                {meta.vegetation.meshes[String(nearby)]?.sampling_interval_m} m sampling
-                {meta.vegetation.meshes[String(nearby)]?.sampling_interval_m > 0.25
-                  ? ' · reduced detail to stay within the lightweight rendering budget'
-                  : ''}
-                . {meta.vegetation.neighbor_supported_cell_count.toLocaleString()} cells added
-                through neighboring support across the prepared 131 yd area. Missing measurements do
-                not establish a clear view.
-              </p>
-            )}
+            <details className="fp-source-notes">
+              <summary>
+                {meta.fidelity === 'terrain'
+                  ? 'Terrain model · vegetation unmodeled · imagery where available'
+                  : 'Lidar ground + inferred vegetation · source coverage & limitations'}
+              </summary>
+              {meta.fidelity === 'terrain' ? (
+                <p className="notice">
+                  Terrain-only view from saved elevation. Fine ground and measured vegetation are
+                  unavailable; shaded terrain marks missing imagery. This is not a live camera feed.
+                </p>
+              ) : (
+                <p className="notice">
+                  {meta.fine_observer_available
+                    ? 'Local lidar-derived ground'
+                    : 'Baseline-only preview: fine ground at the observer is unknown.'}{' '}
+                  · {(meta.coverage_fraction * 100).toFixed(1)}% of the 328 yd circle has supported
+                  fine ground · {meta.acquisition_date}.{' '}
+                  {points
+                    ? 'Above-ground returns: green vegetation-class, amber unclassified, blue other classes. Missing returns do not mean empty space.'
+                    : ''}{' '}
+                  Aerial imagery is always shown where available; photographed canopy lies on
+                  ground, not reconstructed trees. Foliage clusters infer vegetation from returns;
+                  shape, thickness and opacity are assumptions. Weaker measurements are included
+                  where nearby stronger measurements support a patch. Colors follow cached
+                  photographs, not vegetation identification. Only centres within {yards(nearby)}{' '}
+                  are screened; farther vegetation is unevaluated. Missing returns do not prove open
+                  space. Amber diagnostic markers are unclassified.
+                </p>
+              )}
+              {meta.fidelity !== 'terrain' && meta.vegetation.meshes && (
+                <p className="hint">
+                  Cluster surface detail:{' '}
+                  {meta.vegetation.meshes[String(nearby)]?.sampling_interval_m} m sampling
+                  {meta.vegetation.meshes[String(nearby)]?.sampling_interval_m > 0.25
+                    ? ' · reduced detail to stay within the lightweight rendering budget'
+                    : ''}
+                  . {meta.vegetation.neighbor_supported_cell_count.toLocaleString()} cells added
+                  through neighboring support across the prepared 131 yd area. Missing measurements
+                  do not establish a clear view.
+                </p>
+              )}
+            </details>
             <div className="fp-workspace">
               <div>
+                <div className="fp-orientation">
+                  <strong>
+                    {['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(heading / 45) % 8]} ·{' '}
+                    {heading.toFixed(0)}°
+                  </strong>
+                  <span>
+                    Observer {cid} · eye {feet(eye, 1)}
+                  </span>
+                  <span>
+                    {target ? 'Inspection target selected' : 'Select a target on the plan map'}
+                  </span>
+                </div>
                 <Viewer
                   onOpened={() => {
                     setOpened(meta.key);
@@ -718,7 +752,7 @@ export default function FirstPerson({
                   <p>
                     {meta.fine_observer_available
                       ? 'Lidar ground with measured returns'
-                      : 'Terrain-only DEM; fine ground and measured vegetation unavailable'}
+                      : 'Terrain model; fine ground and measured vegetation unavailable'}
                     . Recorded sources; this is not a live camera feed.
                   </p>
                   <p>
@@ -731,6 +765,8 @@ export default function FirstPerson({
                   <button
                     className="primary wide"
                     disabled={
+                      confirmed ||
+                      confirmationPending ||
                       !reviewReady ||
                       !approachCurrent ||
                       opened !== meta.key ||
@@ -738,7 +774,11 @@ export default function FirstPerson({
                     }
                     onClick={onConfirm}
                   >
-                    Confirm setup
+                    {confirmed
+                      ? '✓ Saved to collection'
+                      : confirmationPending
+                        ? 'Saving…'
+                        : 'Confirm setup'}
                   </button>
                   {opened !== meta.key && (
                     <small>Wait for the current scene to open successfully.</small>

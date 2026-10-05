@@ -11,7 +11,7 @@ try{
  await page.addInitScript(()=>localStorage.setItem('huntmaps-online-imagery','off'));await page.route('**/*',r=>r.request().url().startsWith(base)||r.request().url().startsWith('blob:')?r.continue():r.abort());
  const api=base+'/api/runs/soap-creek-decision-review-v2';
  const annotations=await (await page.request.get(api+'/annotations')).text(),jobs=await (await page.request.get(base+'/api/jobs')).json();
- await page.goto(base);await page.getByLabel('Select A0075',{exact:true}).click();await page.getByRole('button',{name:'Inspect now',exact:true}).click();
+ await page.goto(base);await page.getByLabel('Select A0075',{exact:true}).click();await page.getByRole('button',{name:'View',exact:true}).click();
  const loaded=cid=>page.waitForFunction(cid=>{const s=JSON.parse(document.querySelector('.fp-scene')?.getAttribute('data-camera')||'{}');return s.candidate===cid&&s.loaded&&s.imageryPending===0},cid);
  const state=async()=>JSON.parse(await page.locator('.fp-scene').getAttribute('data-camera'));
  await loaded('A0075');assert.equal((await state()).vegetationRadius,120);

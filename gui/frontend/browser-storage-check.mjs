@@ -13,8 +13,8 @@ try {
   const api=base+'/api/runs/soap-creek-decision-review-v2';
   const headers={'X-HuntMaps':'local'};
   await page.request.put(api+'/annotations/A0075',{headers,data:{status:'keep',notes:'Storage recovery verification'}});
-  await page.goto(base);
-  const panel=page.locator('.storage-panel');await panel.locator('summary').first().click();
+  await page.goto(base);await page.getByRole('button',{name:'Activity',exact:true}).click();
+  const panel=page.locator('.storage-panel');if (!(await page.locator('.activity-drawer').isVisible())) await page.getByRole('button',{name:'Activity',exact:true}).click(); await panel.locator('summary').first().click();
   await panel.getByRole('button',{name:'Back up GUI records',exact:true}).click();
   await page.waitForFunction(()=>document.querySelector('.storage-panel [role="status"]')?.textContent.includes('backup'));
   const key=JSON.parse(await panel.locator('[role="status"]').innerText()).backup;
@@ -24,11 +24,11 @@ try {
   await panel.getByRole('button',{name:'Reset GUI records',exact:true}).click();
   await page.waitForFunction(()=>!document.querySelector('.storage-panel')?.hasAttribute('open'));
   assert.deepEqual(await (await page.request.get(api+'/annotations')).json(),{});
-  await panel.locator('summary').first().click();await page.getByLabel('Record backup',{exact:true}).selectOption(key);
+  if (!(await page.locator('.activity-drawer').isVisible())) await page.getByRole('button',{name:'Activity',exact:true}).click(); await panel.locator('summary').first().click();await page.getByLabel('Record backup',{exact:true}).selectOption(key);
   await panel.getByRole('button',{name:'Restore selected backup',exact:true}).click();
   await page.waitForFunction(()=>!document.querySelector('.storage-panel')?.hasAttribute('open'));
   assert.equal((await (await page.request.get(api+'/annotations')).json()).A0075.notes,'Storage recovery verification');
-  await panel.locator('summary').first().click();
+  if (!(await page.locator('.activity-drawer').isVisible())) await page.getByRole('button',{name:'Activity',exact:true}).click(); await panel.locator('summary').first().click();
   await panel.getByRole('button',{name:'Preview cache cleanup',exact:true}).click();
   await panel.getByRole('button',{name:'Clean previewed cache',exact:true}).waitFor();
   // Keep the viewer idle while previewing; regenerating tiles legitimately invalidates a preview.

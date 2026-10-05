@@ -46,10 +46,10 @@ print(json.dumps(dict(key=key,sha256=meta['hashes']['context-vertices.bin'])))
   assert.equal(stale.status(),400);
   // Restore original pointer for subsequent journeys, keeping both immutable bundles.
   execFileSync(python,['-c',`from huntmaps_gui import first_person as fp; from huntmaps_gui.storage import write; write(fp.ready_path('workflow-fixture','A0001'),dict(key=${JSON.stringify(before.key)}))`],{cwd:project});
-  await page.getByRole('button',{name:'+ New baseline run',exact:true}).click();
+  await page.getByRole('button',{name:'+ New area',exact:true}).click();
   assert.equal(await page.getByRole('button',{name:'Draw on map',exact:true}).count(),0);
   assert.equal(await page.getByRole('button',{name:'Draw boundary',exact:true}).count(),1);
-  await page.getByText('How we find places to glass',{exact:true}).waitFor();
+  await page.getByText('Find viewpoints with the most visible terrain matching your criteria.',{exact:true}).waitFor();
   await page.getByRole('button',{name:'Help: count',exact:true}).click();
   await page.getByRole('tooltip').filter({hasText:'How many possible standing'}).waitFor();
   await page.keyboard.press('Escape');

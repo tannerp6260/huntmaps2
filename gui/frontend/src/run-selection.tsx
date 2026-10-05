@@ -12,14 +12,14 @@ export default function RunSelection({
 }) {
   return (
     <label className="run-picker">
-      Open saved results
+      Scouting area
       <select
         aria-label="Run selector"
         disabled={disabled}
         value={value}
         onChange={(event) => onChange(event.target.value)}
       >
-        {!value && <option value="">Choose saved results…</option>}
+        {!value && <option value="">Choose a scouting area…</option>}
         {runs.map((r) => (
           <option key={r.id} value={r.id}>
             {r.label}

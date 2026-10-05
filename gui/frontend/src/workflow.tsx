@@ -40,12 +40,12 @@ export default function WorkflowPanel({
   api: (path: string, options?: RequestInit) => Promise<any>;
 }) {
   const alive = useRef(true);
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    alive.current = true;
+    return () => {
       alive.current = false;
-    },
-    [],
-  );
+    };
+  }, []);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [fidelity, setFidelity] = useState('terrain');
@@ -70,8 +70,8 @@ export default function WorkflowPanel({
   }
   return (
     <section className="workflow-task">
-      <h3>{inspect ? 'Inspect and confirm' : 'Setup decision'}</h3>
-      {p?.legacy && <small>Legacy Keep candidate; original annotation preserved.</small>}
+      <h3>{inspect ? `Inspect ${cid}` : 'Keep investigating?'}</h3>
+      {p?.legacy && <small>Retained from your earlier review.</small>}
       <div className="candidate-actions">
         <button
           onClick={() => onDecision(cid, 'shortlist')}
@@ -88,24 +88,20 @@ export default function WorkflowPanel({
       </div>
       {inspect && (
         <>
-          <p>
-            Prepare the selected approaches as one batch. Shared sources are reused. Review any new
-            download before preparation.
-          </p>
+          <p>Explore the view from your selected setups before adding them to your collection.</p>
           <label>
-            Scene fidelity
+            View detail
             <select value={fidelity} onChange={(e) => setFidelity(e.target.value)}>
-              <option value="terrain">Terrain-only · existing DEM</option>
-              <option value="lidar">Inspect available lidar acquisitions</option>
+              <option value="terrain">Terrain · saved elevation</option>
+              <option value="lidar">Detailed ground · check lidar sources</option>
             </select>
           </label>
           <button className="primary wide" disabled={!eligible.length || busy} onClick={prepare}>
-            Prepare views ({eligible.length})
+            {busy ? 'Checking view sources…' : `Prepare views (${eligible.length})`}
           </button>
           {p?.approach && (
             <p>
-              Selected approach: {p.approach.scenario.slice(0, 8)} · alternative{' '}
-              {p.approach.alternative + 1}.{' '}
+              Approach {p.approach.alternative + 1} selected.{' '}
               <a
                 href={`/api/approaches/${p.approach.scenario}/export/gpx?waypoint=${cid}&alternative=${p.approach.alternative}`}
               >
@@ -121,13 +117,14 @@ export default function WorkflowPanel({
             className="primary wide"
             disabled={
               pending ||
+              p?.confirmed ||
               !p?.approach ||
               !p?.viewed ||
               (workflow?.approach_review?.active && !workflow.approach_review.ready)
             }
             onClick={() => onDecision(cid, 'confirm')}
           >
-            {p?.confirmed ? 'Setup confirmed' : 'Confirm setup'}
+            {p?.confirmed ? '✓ Saved to collection' : 'Confirm setup'}
           </button>
           {(!p?.approach ||
             !p?.viewed ||
@@ -144,7 +141,7 @@ export default function WorkflowPanel({
       )}
       {error && <p role="alert">{error}</p>}
       {inspect && (
-        <details open>
+        <details>
           <summary>Confirmed collection</summary>
           {Object.values(workflow?.points || {})
             .filter((p) => p.confirmed)

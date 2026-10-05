@@ -1,8 +1,13 @@
+import { Icon } from './workspace-ui';
 import { area } from './units';
 import type { Candidate, Review } from './types';
 const num = (value: unknown) => (typeof value === 'number' ? value.toFixed(3) : 'Not saved');
 export default function CandidateCard({
   p,
+  rank,
+  bestArea,
+  approach,
+  confirmed,
   shortlisted,
   dismissed,
   busy,
@@ -18,6 +23,10 @@ export default function CandidateCard({
   toggleExport,
 }: {
   p: Candidate;
+  rank: number;
+  bestArea: number;
+  approach: boolean;
+  confirmed: boolean;
   shortlisted?: boolean;
   dismissed?: boolean;
   busy?: boolean;
@@ -41,30 +50,49 @@ export default function CandidateCard({
       <button
         className="candidate-select"
         aria-label={`Select ${p.id}`}
+        aria-pressed={!activeManual && p.id === selected}
         onClick={() => chooseOriginal(p.id)}
       >
-        <strong>
-          {p.id}
-          {p.working_revision ? ' · updated' : ''}
-        </strong>
-        <span>{p.parent ? 'Alternative to ' + p.parent : p.neighborhood || 'Original setup'}</span>
-        {matching !== undefined && <b>{area(matching)} matching visible terrain</b>}
-        <small>
-          {area(p.metrics.raw_km2)} original terrain view{' '}
-          {p.working_revision ? '· working location ' : ''}
-          {annotations[p.id]?.status && annotations[p.id].status !== 'unmarked'
-            ? '· ' + annotations[p.id].status
-            : ''}
-        </small>
+        <span className="candidate-topline">
+          <span className="candidate-rank">{rank > 0 ? String(rank).padStart(2, '0') : '—'}</span>
+          <strong>
+            {p.id}
+            {p.working_revision ? ' · updated' : ''}
+          </strong>
+          {shortlisted && <Icon name={confirmed ? 'check' : 'save'} size={14} />}
+        </span>
+        {(p.name || p.parent || p.neighborhood) && (
+          <span className="candidate-context">
+            {p.name || (p.parent ? 'Near ' + p.parent : p.neighborhood)}
+          </span>
+        )}
+        <span className="candidate-area">
+          <b>{area(matching ?? p.metrics.raw_km2)}</b>
+          <small>{matching !== undefined ? 'matching view' : 'visible terrain'}</small>
+        </span>
+        <span
+          className="coverage-meter"
+          title="Visible area relative to the largest view in this list"
+        >
+          <i
+            style={{
+              width: `${bestArea > 0 ? Math.min(100, ((Number(matching ?? p.metrics.raw_km2) || 0) / bestArea) * 100) : 0}%`,
+            }}
+          />
+        </span>
+        <span className="candidate-signals">
+          <small>{approach ? '✓ Approach selected' : 'Access to review'}</small>
+          <small>
+            {typeof p.metrics.foreground_tree_mean === 'number'
+              ? `${(p.metrics.foreground_tree_mean * 100).toFixed(0)}% nearby trees`
+              : 'Cover to inspect'}
+          </small>
+        </span>
+        {matching !== undefined && <small>{area(p.metrics.raw_km2)} total terrain view</small>}
+        {annotations[p.id]?.status && annotations[p.id].status !== 'unmarked' && (
+          <small>Review: {annotations[p.id].status}</small>
+        )}
       </button>
-      {typeof p.metrics.foreground_category === 'string' && (
-        <small className="hint">
-          {p.metrics.foreground_category} ·{' '}
-          {typeof p.metrics.foreground_tree_mean === 'number'
-            ? `${(p.metrics.foreground_tree_mean * 100).toFixed(0)}% tree cover nearby`
-            : 'tree cover unknown'}
-        </small>
-      )}
       {onDecision && (
         <div className="candidate-actions">
           <button disabled={busy || shortlisted} onClick={() => onDecision('shortlist')}>

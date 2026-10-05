@@ -49,20 +49,9 @@ export default function AreaSettings({
 }) {
   return (
     <div data-tour="run-settings">
-      <div className="notice">
-        <strong>How we find places to glass</strong>
-        <p>
-          We test possible places to stand, check how much terrain each can see, and recommend a
-          spread of promising spots. You choose which to inspect.
-        </p>
-        <p>
-          Locations to test controls how many standing points we calculate. Top spots to recommend
-          controls how many suggestions you see first, ranked by visible terrain matching your
-          criteria.
-        </p>
-      </div>
+      <p className="hint">Find viewpoints with the most visible terrain matching your criteria.</p>
       <label>
-        New run name <Help topic="name" />
+        Area name <Help topic="name" />
         <input
           aria-label="New run name"
           value={name}

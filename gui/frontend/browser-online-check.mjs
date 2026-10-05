@@ -12,9 +12,9 @@ try{
  const annotations=await (await page.request.get(base+'/api/runs/'+id+'/annotations')).text(),jobs=await (await page.request.get(base+'/api/jobs')).json();
  const idle=()=>page.waitForFunction(()=>{const s=JSON.parse(document.querySelector('.map').getAttribute('data-map-state')||'{}');return s.loaded},{timeout:45000});
  await page.goto(base);await page.getByLabel('Online imagery — fill gaps',{exact:true}).waitFor();assert.ok(await page.getByLabel('Online imagery — fill gaps',{exact:true}).isChecked());
- await page.getByLabel('Select A0075',{exact:true}).waitFor();await page.getByText('0.485 mi²',{exact:true}).waitFor();await page.getByRole('button',{name:'Whole area',exact:true}).click();await idle();assert.ok(successful.size>0);await page.screenshot({path:out+'/01-filled-gaps.png',fullPage:true});
+ await page.getByLabel('Select A0075',{exact:true}).click();await page.locator('.selected-setup').getByText('0.485 mi²',{exact:true}).waitFor();await page.getByRole('button',{name:'Whole area',exact:true}).click();await idle();assert.ok(successful.size>0);await page.screenshot({path:out+'/01-filled-gaps.png',fullPage:true});
  assert.ok((await page.locator('.maplibregl-ctrl-attrib').innerText()).includes('USGS'));
- await page.getByRole('button',{name:'+ New baseline run',exact:true}).click();
+ await page.getByRole('button',{name:'+ New area',exact:true}).click();
  await page.locator('summary').filter({hasText:'Go to location'}).click();await page.getByLabel('Go to latitude').fill('39.1');await page.getByLabel('Go to longitude').fill('-106.9');
  const before=tiles.size;await page.getByRole('button',{name:'Go to location',exact:true}).click();await page.waitForTimeout(4500);assert.ok(tiles.size>before);
  const canvas=page.locator('.maplibregl-canvas'),box=await canvas.boundingBox();await page.mouse.move(box.x+box.width*.65,box.y+box.height*.6);await page.mouse.wheel(0,500);await page.waitForTimeout(2500);

@@ -6,9 +6,9 @@ const browser=await chromium.launch({executablePath:process.env.HUNTMAPS_BROWSER
 try{
  const page=await browser.newPage({viewport:{width:1450,height:1050}});page.setDefaultTimeout(45000);const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.addInitScript(()=>localStorage.setItem('huntmaps-online-imagery','off'));
- await page.goto(base);await page.getByLabel('Select A0031',{exact:true}).click();await page.getByRole('button',{name:'Inspect now',exact:true}).click();
+ await page.goto(base);await page.getByLabel('Select A0031',{exact:true}).click();await page.getByRole('button',{name:'View',exact:true}).click();
  const oldPlan=await page.evaluate(()=>localStorage.getItem('huntmaps-first-person-plan'));
- await page.locator('summary').filter({hasText:'Prepare local fine terrain and lidar'}).click();await page.getByRole('button',{name:'Check source plan',exact:true}).click();
+ await page.locator('summary').filter({hasText:'View preparation & source detail'}).click();await page.getByRole('button',{name:'Check source plan',exact:true}).click();
  await page.waitForFunction(old=>localStorage.getItem('huntmaps-first-person-plan')!==old,oldPlan);
  await page.getByRole('button',{name:'Prepare views',exact:true}).waitFor();await page.waitForFunction(()=>!document.querySelector('.fp-preparation button:last-of-type')?.disabled);
  const pid=await page.evaluate(()=>localStorage.getItem('huntmaps-first-person-plan'));

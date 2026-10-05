@@ -47,7 +47,7 @@ try {
  const first=ids[0];
  const d={...prior.scenario,travel_area:area,maximum_slope_deg:60,scenario:null,alternative:0,attempted:false,boundary_confirmed:true,point:state.points[first].point};
  const res=await page.request.put(api+'/approach-review',{headers,data:{revision:old.revision,workflow_revision:state.revision,ids:['A0001',...ids],active_point:first,point:state.points[first].point,draft:d}});assert.equal(res.status(),200,await res.text());
- await page.reload();await page.getByLabel('Run selector').selectOption('workflow-fixture');await page.getByRole('button',{name:/2 · Compare approaches/}).click();
+ await page.reload();await page.getByLabel('Run selector').selectOption('workflow-fixture');await page.getByRole('button',{name:/Approach.*selected/}).click();
  await page.getByLabel('Focused approach spot').waitFor();assert.equal(await page.getByLabel('Focused approach spot').inputValue(),first);
  await page.getByRole('button',{name:'Use this approach & next spot',exact:true}).waitFor({timeout:60000});
  assert.equal(requests.length,1,'Uncomputed focused point starts one automatic comparison');
@@ -67,7 +67,7 @@ try {
  await page.getByRole('button',{name:'Show this alternative on map',exact:true}).click();
  assert.equal(await page.getByLabel('Focused approach spot').inputValue(),active);
  await page.waitForFunction(()=>{const b=Array.from(document.querySelectorAll('.approach-controls button')).find(b=>b.textContent.includes('Use this approach'));return b&&!b.disabled;});
- await page.getByText('More options · pinned departure and preferences',{exact:true}).click();
+ await page.locator('.approach-settings').waitFor();if (await page.locator('.approach-settings').getAttribute('open') === null) await page.locator('.approach-settings > summary').click();await page.getByText('More options · pinned departure and preferences',{exact:true}).click();
  await page.getByLabel('Approach tree weight').fill('4');
  assert.equal(await page.getByLabel('Approach tree weight').inputValue(),'4');
  const recalculated=page.waitForResponse(r=>r.url()===api+'/approaches'&&r.request().method()==='POST'&&r.request().postDataJSON().weights.tree===4);
@@ -75,22 +75,22 @@ try {
  const recalculation=await recalculated;assert.equal(recalculation.status(),200,await recalculation.text());
  await page.waitForFunction(()=>{const b=Array.from(document.querySelectorAll('.approach-controls button')).find(b=>b.textContent.includes('Use this approach'));return b&&!b.disabled;},undefined,{timeout:60000});
  await page.getByRole('button',{name:'Use this approach & next spot',exact:true}).waitFor();
- await page.reload();await page.getByLabel('Run selector').selectOption('workflow-fixture');await page.getByRole('button',{name:/2 · Compare approaches/}).click();
- await page.getByText('More options · pinned departure and preferences',{exact:true}).click();
+ await page.reload();await page.getByLabel('Run selector').selectOption('workflow-fixture');await page.getByRole('button',{name:/Approach.*selected/}).click();
+ await page.locator('.approach-settings').waitFor();if (await page.locator('.approach-settings').getAttribute('open') === null) await page.locator('.approach-settings > summary').click();await page.getByText('More options · pinned departure and preferences',{exact:true}).click();
  assert.equal(await page.getByLabel('Approach tree weight').inputValue(),'4','Reload restores individual preferences');
  assert.equal(requests.length,2,'Reload must not compute again');
  await page.getByRole('button',{name:'Use this approach & next spot',exact:true}).click();
  await page.waitForFunction(cid=>document.querySelector('[aria-label="Focused approach spot"]')?.value===cid,ids[1]);
  await page.getByRole('button',{name:'Dismiss spot & next',exact:true}).click();
- await page.waitForFunction(()=>!Array.from(document.querySelectorAll('.workflow-stages button')).find(b=>b.textContent.includes('3 ·')).disabled);
+ await page.waitForFunction(()=>!Array.from(document.querySelectorAll('.workflow-stages button')).find(b=>b.textContent.includes('Inspect')).disabled);
  await page.screenshot({path:out+'/guided-desktop.png',fullPage:true});
  await page.setViewportSize({width:900,height:900});await page.screenshot({path:out+'/guided-900.png',fullPage:true});
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  await page.getByRole('button',{name:'Undo',exact:true}).click();
- await page.waitForFunction(()=>Array.from(document.querySelectorAll('.workflow-stages button')).find(b=>b.textContent.includes('3 ·')).disabled);
+ await page.waitForFunction(()=>Array.from(document.querySelectorAll('.workflow-stages button')).find(b=>b.textContent.includes('Inspect')).disabled);
  // Keep the remainder of the suite's original single-point fixture intact.
  for(const cid of ids)await decide(cid,'remove');
- await page.getByRole('button',{name:'+ New baseline run',exact:true}).click();
+ await page.getByRole('button',{name:'+ New area',exact:true}).click();
  await page.getByRole('button',{name:'Import file',exact:true}).click();await page.getByLabel('Import observer polygon').setInputFiles(process.env.HUNTMAPS_WORKSPACE+'/workflow-fixture/observer.geojson');
  await page.getByText('More options · sampling restrictions',{exact:true}).click();await page.getByText('Observer access sampling and network acquisition',{exact:true}).click();
  const input=page.getByLabel('Maximum distance from a road or trail (yards)');await input.fill('');await input.pressSequentially('.');assert.equal(await input.inputValue(),'.');

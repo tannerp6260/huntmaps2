@@ -54,6 +54,11 @@ def owner_records():
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--skip-browser", action="store_true")
+    parser.add_argument(
+        "--browser-only",
+        action="store_true",
+        help="Reuse a prior passing unit-test run; check formatting, build and browser journeys",
+    )
     args = parser.parse_args()
     work = Path(tempfile.mkdtemp(prefix="huntmaps-check-"))
     state = work / "state"
@@ -114,7 +119,7 @@ def main():
             "test_owner.py",
             "test_vegetation_rays.py",
         ]
-        for pattern in patterns:
+        for pattern in [] if args.browser_only else patterns:
             run(
                 [
                     sys.executable,
@@ -306,6 +311,7 @@ def main():
                 raise RuntimeError("Dedicated test server did not become ready")
             for script in (
                 "browser-workflow-check.mjs",
+                "browser-redesign-check.mjs",
                 "browser-target-search-check.mjs",
                 "browser-guided-approaches-check.mjs",
                 "browser-refinement-check.mjs",

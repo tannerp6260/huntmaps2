@@ -17,7 +17,7 @@ try {
  await page.goto(base);
  await page.getByLabel('Run selector').selectOption('workflow-fixture');
  await page.getByLabel('Select A0001',{exact:true}).click();
- await page.getByRole('button',{name:'Inspect now',exact:true}).click();
+ await page.getByRole('button',{name:'View',exact:true}).click();
  const section=page.locator('.fp-preparation');
  await section.evaluate(el=>el.open=true);
  await section.getByText(/Estimated download time:/).waitFor();
@@ -50,7 +50,7 @@ try {
  await section.getByText(/Insufficient storage for this plan/).waitFor({timeout:15000});
  await page.reload();
  await page.getByLabel('Run selector').selectOption('workflow-fixture');
- await page.getByRole('button',{name:'Inspect now',exact:true}).click();
+ await page.getByRole('button',{name:'View',exact:true}).click();
  await section.evaluate(el=>el.open=true);
  await section.getByText('Validating outputs',{exact:true}).waitFor();
  assert.deepEqual(errors,[]);

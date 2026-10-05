@@ -49,7 +49,7 @@ const areaSteps = [
   {
     id: 'draw',
     title: 'Draw a practice area on the map',
-    text: 'We’ve opened cached Soap Creek imagery for practice. In the RIGHT panel, choose Draw boundary. Click at least three corners in the clear part of the MAP, finish the shape, then choose Use this boundary.',
+    text: 'We’ve opened cached Soap Creek imagery for practice. In the RIGHT panel, choose Draw boundary. Click at least three corners in the clear part of the MAP, finish the shape, then choose Confirm boundary.',
     target: 'drawing',
     extra:
       'The orange boundary defines where you are considering standing to glass. This is a training shape, not a suggested hunting area. No analysis or source acquisition starts; online imagery is optional.',
@@ -57,7 +57,7 @@ const areaSteps = [
   {
     id: 'edit',
     title: 'Check and adjust your boundary',
-    text: 'Inspect the orange shape on the MAP. Use Edit vertices in the RIGHT panel to drag a corner if needed, then choose Use this boundary again. Undo, Cancel drawing and Clear boundary let you correct mistakes.',
+    text: 'Inspect the orange shape on the MAP. Use Edit vertices in the RIGHT panel to drag a corner if needed, then choose Confirm boundary again. Undo, Cancel drawing and Clear boundary let you correct mistakes.',
     target: 'drawing',
     extra:
       'Your shape is preserved exactly as drawn; invalid shapes must be corrected. For a real area you can draw the same way or use Import file. Drawing uses 2D so corners land accurately.',
@@ -65,7 +65,7 @@ const areaSteps = [
   {
     id: 'settings',
     title: 'Understand the settings on the right',
-    text: 'Look at the settings in the RIGHT panel. Open How locations are chosen, then More options. Hover over, focus or click each question mark for a plain-language explanation. The current defaults are a starting point, not a guarantee of suitable setups.',
+    text: 'Look at the settings in the RIGHT panel. Expand More options for sampling restrictions and technical settings. Hover over, focus or click each question mark for a plain-language explanation. The current defaults are a starting point, not a guarantee of suitable setups.',
     target: 'run-settings',
     extra:
       'View radius controls analysis distance. Locations to test controls the calculation budget, while Top spots to recommend controls the initial suggestions; small areas use denser sampling, and exhausted eligible cells leave part of the budget unused. Calculation details show the fixed inspection assumption, which affects inherited scores rather than visible terrain or a stop duration. Inspect source metadata before reviewing the download ceiling; online browsing is separate.',
@@ -73,7 +73,7 @@ const areaSteps = [
   {
     id: 'handoff',
     title: 'What happens for your real area',
-    text: 'Practice stops here. After this lesson, choose New baseline run, draw YOUR area or import its boundary, and give it a new name. Prepare the acquisition plan and review source details, estimated size and the cap before explicitly allowing downloads.',
+    text: 'Practice stops here. After this lesson, choose New area, draw YOUR area or import its boundary, and give it a new name. Prepare the acquisition plan and review source details, estimated size and the cap before explicitly allowing downloads.',
     target: 'run-settings',
     extra:
       'Analysis jobs show actual stages, elapsed time and logs. You can cancel a running subprocess and review partial runs. New-area runs use the terrain baseline; Soap Creek vegetation experiments do not generalize automatically.',
@@ -397,7 +397,7 @@ export function Learning({
           <div aria-live="polite">
             <h2>{current.title}</h2>
             <p>{current.text}</p>
-            <details className="step-explanation" open>
+            <details className="step-explanation">
               <summary>Why this matters</summary>
               <p>{current.extra}</p>
             </details>
@@ -500,8 +500,8 @@ export function Learning({
           <p>
             LEFT: observer cards; expand saved alternatives to see related setups. Their Compare and
             Export checkboxes; GPX/KML below the list. TOP OF MAP: individual view toggles. RIGHT:
-            coordinates, metrics, review decisions and notes. New baseline run opens drawing,
-            imports and settings on the right.
+            coordinates, metrics, review decisions and notes. New area opens drawing, imports and
+            settings on the right.
           </p>
           <p>Comparison and export explanations appear as you work through lesson 1.</p>
         </details>

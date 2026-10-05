@@ -30,7 +30,7 @@ try {
  const selected=run.recommendation_ids[0];
  const failedPoint=selected === "A0002" ? "A0001" : "A0002";
  const originalRequests=requests.filter(v=>v.includes('/'+selected+'/')).length;
- if(await page.locator('.layers').getAttribute('open')===null) await page.getByText('Map layers',{exact:true}).click();
+ if(await page.locator('.layers').getAttribute('open')===null) await page.locator('.layers > summary').click();
  await page.getByLabel('Overlay opacity').fill('0.6');
  await page.locator('.coverage-status').filter({hasText:'Coverage ready'}).waitFor();
  assert.equal(requests.filter(v=>v.includes('/'+selected+'/')).length,originalRequests,'Opacity must reuse tiles');
@@ -57,7 +57,7 @@ try {
  await page.screenshot({path:out+'/03-ready-900.png',fullPage:true});
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  await page.setViewportSize({width:1500,height:1050});
- await page.getByRole('button',{name:'+ New baseline run',exact:true}).click();
+ await page.getByRole('button',{name:'+ New area',exact:true}).click();
  const help = page.getByRole('button',{name:'Help: radius',exact:true});
  const tooltip = page.getByRole('tooltip').filter({hasText:'How far from each observer'});
  await help.hover(); await tooltip.waitFor({state:'visible'});
@@ -90,7 +90,7 @@ try {
  await touchPage.addInitScript(()=>localStorage.setItem('huntmaps-online-imagery','off'));
  await touchPage.route('**/*',r=>r.request().url().startsWith(base)||r.request().url().startsWith('blob:')?r.continue():r.abort());
  await touchPage.goto(base);
- await touchPage.getByRole('button',{name:'+ New baseline run',exact:true}).click();
+ await touchPage.getByRole('button',{name:'+ New area',exact:true}).click();
  await touchPage.getByRole('button',{name:'Help: radius',exact:true}).tap();
  const touchTooltip=touchPage.getByRole('tooltip').filter({hasText:'How far from each observer'});
  await touchTooltip.waitFor({state:'visible'});

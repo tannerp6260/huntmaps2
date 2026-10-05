@@ -29,9 +29,9 @@ try {
  const ready=id=>page.locator('.coverage-status').filter({hasText:'Coverage ready · '+id}).waitFor({timeout:60000});
  await ready(first);
  const firstMs=Date.now()-began;
- await page.getByText('Preparing saved coverage',{exact:false}).waitFor({timeout:60000});
+ await page.locator('.coverage-preparation[title^="Preparing saved coverage"]').waitFor({timeout:60000});
  await page.screenshot({path:out+'/coverage-preparation-desktop.png',fullPage:false});
- await page.getByText('Coverage saved ahead for',{exact:false}).waitFor({timeout:60000});
+ await page.locator('.coverage-preparation[title^="Coverage saved ahead for"]').waitFor({timeout:60000});
  const warmed=requests.filter(r=>r.background);
  assert.ok(warmed.length>0);
  assert.ok(new Set(warmed.map(r=>r.url.split('/visible/')[1].split('/')[0])).size<=run.candidates.length);

@@ -16,7 +16,7 @@ await page.addInitScript(()=>localStorage.setItem('huntmaps-online-imagery','off
 await page.route('**/*',r=>r.request().url().startsWith(base)||r.request().url().startsWith('blob:')?r.continue():r.abort());
 try {
  await page.goto(base); await page.getByLabel('Run selector').selectOption('search-fixture');
- await page.locator('.metric span').filter({hasText:'matching visible terrain'}).waitFor();
+ await page.locator('.selected-setup').getByText('matching terrain',{exact:true}).waitFor();
  const run=await (await page.request.get(base+'/api/runs/search-fixture')).json();
  assert.equal(run.search_summary.options.ranking_version,2);
  const expected=run.recommendation_ids;
@@ -25,16 +25,16 @@ try {
  assert.deepEqual(await list(),expected);
  await page.waitForFunction(()=>document.querySelector('.coverage-status')?.textContent.includes('Coverage ready'),undefined,{timeout:60000});
  assert.ok(tiles.length>0,'Saved target criteria must produce filtered blue coverage automatically');
- await page.reload();await page.getByLabel('Run selector').selectOption('search-fixture');await page.locator('.metric span').filter({hasText:'matching visible terrain'}).waitFor();
- await page.getByText('Observer access and visible-terrain filters',{exact:true}).click();
+ await page.reload();await page.getByLabel('Run selector').selectOption('search-fixture');await page.locator('.selected-setup').getByText('matching terrain',{exact:true}).waitFor();
+ await page.getByRole('button',{name:/Terrain & access filters/}).click();
  assert.equal(await page.getByLabel('Elevation range (feet)',{exact:true}).isChecked(),true);
  assert.equal(await page.getByLabel('Avoid standing in dense vegetation',{exact:true}).isChecked(),false);
  await page.getByRole('button',{name:'Show original terrain',exact:true}).click();
  await page.getByLabel('Minimum Elevation range (feet)',{exact:true}).fill('20000');await page.getByLabel('Maximum Elevation range (feet)',{exact:true}).fill('21000');
- await page.getByRole('button',{name:'Apply review filters',exact:true}).click();await page.locator('.metric span').filter({hasText:'matching visible terrain'}).waitFor();
+ await page.getByRole('button',{name:'Apply review filters',exact:true}).click();await page.locator('.selected-setup').getByText('matching terrain',{exact:true}).waitFor();
  assert.equal((await list()).length,0,'No matching visible area must mean no recommended spots');
- await page.getByLabel('Saved neighborhood').selectOption('all');assert.ok((await list()).length>0,'Zero-match points remain available');
- await page.getByRole('button',{name:'+ New baseline run',exact:true}).click();
+ await page.getByRole('button',{name:'← All setups',exact:true}).click();await page.getByLabel('Saved neighborhood').selectOption('all');assert.ok((await list()).length>0,'Zero-match points remain available');
+ await page.getByRole('button',{name:'+ New area',exact:true}).click();
  assert.equal(await page.getByLabel('Locations to test',{exact:true}).count(),1);
  assert.equal(await page.getByLabel('Search effort',{exact:true}).count(),0);
  await page.getByRole('button',{name:'Import file',exact:true}).click();await page.getByLabel('Import observer polygon').setInputFiles(process.env.HUNTMAPS_WORKSPACE+'/workflow-fixture/observer.geojson');
@@ -42,12 +42,12 @@ try {
  await page.getByLabel('Terrain slope range (degrees)',{exact:true}).check();await page.getByLabel('Maximum Terrain slope range (degrees)').fill('25');
  await page.screenshot({path:out+'/01-search-desktop.png',fullPage:true});await page.setViewportSize({width:900,height:900});await page.screenshot({path:out+'/02-search-900.png',fullPage:true});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  await page.getByLabel('Run selector').selectOption('workflow-fixture');
- await page.getByRole('button',{name:/2 · Compare approaches/}).click();
+ await page.getByRole('button',{name:/Approach.*selected/}).click();
  const scenarios=await (await page.request.get(base+'/api/runs/workflow-fixture/approaches')).json();const saved=scenarios.find(s=>s.results?.results.some(r=>r.alternatives.length));assert.ok(saved);
  await page.locator('.approach-controls select').last().selectOption(saved.scenario.id);
  const use=page.getByRole('button',{name:'Use this approach & next spot',exact:true}).first(),show=page.getByRole('button',{name:'Show this alternative on map',exact:true}).first();
  assert.equal(await use.isDisabled(),false,'Reloading exact saved inputs must not falsely mark them dirty');
- await page.getByText('More options · pinned departure and preferences',{exact:true}).click();await page.getByLabel('Maximum approach slope').fill('45');
+ await page.locator('.approach-settings').waitFor();if (await page.locator('.approach-settings').getAttribute('open') === null) await page.locator('.approach-settings > summary').click();await page.getByText('More options · pinned departure and preferences',{exact:true}).click();await page.getByLabel('Maximum approach slope').fill('45');
  assert.equal(await use.isDisabled(),true);assert.equal(await show.isDisabled(),false);
  await show.click();await page.waitForFunction(()=>document.querySelector('.map')?.dataset.mapState && JSON.parse(document.querySelector('.map').dataset.mapState).loaded);
  await page.screenshot({path:out+'/03-saved-preview-900.png',fullPage:true});

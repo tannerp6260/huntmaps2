@@ -1,6 +1,7 @@
 # HuntMaps2 local scouting desk
 
-Current workflow: [Find, reach and inspect setups](WORKFLOW.md).
+Current interface: [Find → Approach → Inspect → Save](UI_REDESIGN.md).
+Workflow evidence and requirements: [Find, reach and inspect setups](WORKFLOW.md).
 
 Current guides: [setup](SETUP.md), this user guide, and
 [maintenance/testing](MAINTENANCE.md). Experimental protocols and `*_VERIFICATION.md`
@@ -38,7 +39,7 @@ verification. Existing CLI commands continue to work.
    removing the comparison. Shared terrain appears below the map. **Setup close-up**
    zooms into the active observer. Saved inspection sectors include hidden terrain;
    tree classes apply to the active setup only.
-4. **Shortlist** or **Dismiss** a setup. Then use the numbered stepper to compare
+4. **Shortlist** or **Dismiss** a setup. Then use the Find → Approach → Inspect → Save navigation to compare
    approaches, select an alternative, prepare a view and confirm. Legacy review
    annotations and notes remain separate from these workflow decisions.
 5. Check **Export** for the observer setups you want, then click GPX or KML.
@@ -50,9 +51,9 @@ Map controls include zoom, compass rotation/reset, yard scale, imagery and
 visibility toggles, opacity sliders, legend and whole-area/close-up buttons.
 Online imagery fills gaps behind saved aerial clips by default, fetching visible USGS National Map tiles as you pan and zoom. Turn off **Online imagery — fill gaps** for entirely local viewing; this preference persists in your browser. Provider attribution appears on the map. Online acquisition dates vary and tiles are browsing context, separate from analysis sources and its download cap. There is no offline tile pack. Saved imagery dates and native/export resolutions remain in the source drawer. When online imagery fails, the map keeps cached imagery and local hillshade where covered, with a retry control. No PDF screenshots are used as map layers.
 
-## New baseline run
+## New scouting area
 
-Choose **New baseline run**, import GeoJSON/KML/KMZ, explicitly select a polygon
+Choose **New area**, import GeoJSON/KML/KMZ, explicitly select a polygon
 (or deliberately combine all), and inspect the orange observer boundary. Historical
 candidate layers are hidden in this preview. Cached context belongs to the open
 run; it is not proof that new-area data are available.

@@ -15,13 +15,13 @@ try{
  const legacy=JSON.parse(fs.readFileSync((process.env.HUNTMAPS_SCENE_SOURCE||'../../.gui/first-person')+'/bundles/'+currentMeta.reused_base_bundle+'/scene.json','utf8'));
  const legacyRoute=route=>route.fulfill({json:{...legacy,key:currentMeta.key,initial_bearing_deg:currentMeta.initial_bearing_deg,initial_facing_note:currentMeta.initial_facing_note}});
  await page.route(api+'/first-person/A0075',legacyRoute);
- await page.goto(base);await page.getByLabel('Select A0075',{exact:true}).click();await page.getByRole('button',{name:'Inspect now',exact:true}).click();
+ await page.goto(base);await page.getByLabel('Select A0075',{exact:true}).click();await page.getByRole('button',{name:'View',exact:true}).click();
  const loaded=cid=>page.waitForFunction(cid=>{const s=JSON.parse(document.querySelector('.fp-scene')?.getAttribute('data-camera')||'{}');return s.candidate===cid&&s.loaded&&s.imageryPending===0},cid);
  const state=async()=>JSON.parse(await page.locator('.fp-scene').getAttribute('data-camera'));
  await loaded('A0075');await page.getByLabel('First-person heading',{exact:true}).fill('187');await page.getByLabel('First-person look angle',{exact:true}).fill('-16');
  await page.waitForFunction(()=>{const s=JSON.parse(document.querySelector('.fp-scene').getAttribute('data-camera'));return s.loaded&&s.heading===187&&s.look===-16});
  await page.locator('.fp-scene').scrollIntoViewIfNeeded();await page.locator('.fp-scene').screenshot({path:out+'/A0075-before-clumps-120m.png'});
- await page.getByRole('button',{name:'Return to map',exact:true}).click();await page.unroute(api+'/first-person/A0075',legacyRoute);await page.getByRole('button',{name:'Inspect now',exact:true}).click();
+ await page.getByRole('button',{name:'Return to map',exact:true}).click();await page.unroute(api+'/first-person/A0075',legacyRoute);await page.getByRole('button',{name:'View',exact:true}).click();
  await loaded('A0075');assert.equal((await state()).vegetationRadius,120);
  const evidence={};
  for(const cid of ['A0075','V010','V008','A0031']){

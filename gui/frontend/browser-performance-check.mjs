@@ -15,7 +15,7 @@ try {
   await page.goto(base);
   await page.getByLabel('Select A0075',{exact:true}).click();
   const started=performance.now();
-  await page.getByRole('button',{name:'Inspect now',exact:true}).click();
+  await page.getByRole('button',{name:'View',exact:true}).click();
   await page.waitForFunction(()=>{const camera=JSON.parse(document.querySelector('.fp-scene')?.getAttribute('data-camera')||'{}');return camera.loaded&&camera.imageryPending===0},undefined,{timeout:120000});
   const readyMs=performance.now()-started;
   const camera=async()=>JSON.parse(await page.locator('.fp-scene').getAttribute('data-camera'));

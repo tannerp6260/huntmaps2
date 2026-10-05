@@ -30,6 +30,16 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 maplibregl.setWorkerUrl(workerUrl);
 import './style.css';
+import './workspace.css';
+import {
+  Icon,
+  WorkflowNavigation,
+  SceneBoundary,
+  SelectedSetup,
+  SavedCollection,
+  EmptyState,
+  type Stage,
+} from './workspace-ui';
 import { useTraining, Learning, Meaning, practiceExport } from './training';
 import { Drawing, Help } from './drawing';
 import { TerrainControls } from './terrain';
@@ -84,7 +94,19 @@ async function api(path: string, options: RequestInit = {}) {
 const num = (v: unknown, d = 3) => (typeof v === 'number' ? v.toFixed(d) : 'Not saved');
 function App() {
   const jobs = useJobs();
+  const [savedStage, setSavedStage] = useState(false);
+  const [panelMode, setPanelMode] = useState<'results' | 'details' | 'filters'>('results');
+  const [utility, setUtility] = useState(false);
+  const [panelCollapsed, setPanelCollapsed] = useState(false);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setUtility(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
   const [workingLoaded, setWorkingLoaded] = useState(false);
+  const [filterReset, setFilterReset] = useState(0);
   const [appliedFilter, setAppliedFilter] = useState<AppliedFilter | null>(null);
   const [inspectStage, setInspectStage] = useState(false);
   const [workflow, setWorkflow] = useState<Workflow | null>(null);
@@ -163,6 +185,9 @@ function App() {
   };
   const shownCandidates = run?.candidates.map(effective) || [];
   const shownManual = manualPoints.map((p) => (working[p.id] ? { ...p, ...working[p.id] } : p));
+  const mapCompare = planningApproaches || inspectStage || savedStage ? [] : compare;
+  const collectionSelectionVisible =
+    !savedStage || !!workflow?.points[activeManual?.id || selected]?.shortlisted;
   const currentManual = activeManual
     ? working[activeManual.id]
       ? { ...activeManual, ...working[activeManual.id] }
@@ -369,7 +394,9 @@ function App() {
       map.current?.resize();
     };
     const observer = new ResizeObserver(resize);
-    document.querySelectorAll('header,.training-coach').forEach((e) => observer.observe(e));
+    document
+      .querySelectorAll('header,.training-coach,.map-pane')
+      .forEach((e) => observer.observe(e));
     resize();
     return () => observer.disconnect();
   }, [training.active, training.progress?.step]);
@@ -412,7 +439,9 @@ function App() {
             training.active &&
             r.some((v: RunSummary) => v.id === 'soap-creek-decision-review-v2')
             ? 'soap-creek-decision-review-v2'
-            : r[0]?.id || '',
+            : r.find((v: RunSummary) => v.id === localStorage.getItem('huntmaps-last-area'))?.id ||
+                r[0]?.id ||
+                '',
         );
       })
       .catch((e) => setError(e instanceof Error ? e.message : String(e)));
@@ -445,7 +474,15 @@ function App() {
   useEffect(() => {
     if (!runId) return;
     let alive = true;
+    localStorage.setItem('huntmaps-last-area', runId);
     setLoading(true);
+    setPlanningApproaches(recovery?.kind === 'approach');
+    setInspectStage(false);
+    setSavedStage(false);
+    setPanelMode('results');
+    setFirstPerson(false);
+    setAppliedFilter(null);
+    setSearch('');
     setRun(null);
     setAnnotations({});
     setManualPoints([]);
@@ -471,7 +508,17 @@ function App() {
           setRun(r);
           setAnnotations(a);
           setGroup(r.recommendation_ids?.length ? 'recommended' : 'all');
-          setSelected(r.recommendation_ids?.[0] || r.groups.West?.[0] || r.candidates[0]?.id || '');
+          setSelected(
+            r.recommendation_ids?.[0] ||
+              (training.active
+                ? r.groups.West?.[0]
+                : [...r.candidates].sort(
+                    (a: Candidate, b: Candidate) =>
+                      Number(b.metrics.raw_km2 || 0) - Number(a.metrics.raw_km2 || 0),
+                  )[0]?.id) ||
+              r.candidates[0]?.id ||
+              '',
+          );
           if (training.active && training.progress?.lesson === 'area' && !training.draft)
             map.current?.fitBounds(r.bounds, { padding: 60, duration: 0 });
           if (
@@ -604,7 +651,11 @@ function App() {
         id: 'candidate-halo',
         type: 'circle',
         source: 'candidates',
-        paint: { 'circle-color': '#fff', 'circle-radius': 8, 'circle-opacity': 0.85 },
+        paint: {
+          'circle-color': ['case', ['boolean', ['get', 'selected'], false], '#e5c888', '#fff'],
+          'circle-radius': ['case', ['boolean', ['get', 'selected'], false], 12, 6],
+          'circle-opacity': 0.95,
+        },
       });
       m.addLayer({
         id: 'candidate-points',
@@ -612,7 +663,7 @@ function App() {
         source: 'candidates',
         paint: {
           'circle-color': ['get', 'color'],
-          'circle-radius': 5,
+          'circle-radius': ['case', ['boolean', ['get', 'selected'], false], 7, 4],
           'circle-stroke-color': '#133c35',
           'circle-stroke-width': 1,
         },
@@ -705,7 +756,7 @@ function App() {
       features: (newRun ? [] : shownCandidates)
         .filter(
           (p) =>
-            (planningApproaches || inspectStage
+            (planningApproaches || inspectStage || savedStage
               ? !!workflow?.points[p.id]?.shortlisted &&
                 (!inspectStage || !!workflow?.points[p.id]?.approach)
               : group === 'dismissed'
@@ -713,6 +764,7 @@ function App() {
                 : !workflow?.points[p.id]?.dismissed) &&
             (planningApproaches ||
               inspectStage ||
+              savedStage ||
               group === 'all' ||
               (group === 'recommended' &&
                 !!(appliedFilter?.recommendation_ids ?? run?.recommendation_ids)?.includes(p.id)) ||
@@ -723,14 +775,15 @@ function App() {
                   ? !p.neighborhood
                   : p.neighborhood === group) ||
               p.id === selected ||
-              compare.includes(p.id)),
+              mapCompare.includes(p.id)),
         )
         .map((p) => ({
           type: 'Feature' as const,
           properties: {
             id: p.id,
-            color: compare.includes(p.id)
-              ? colors[compare.indexOf(p.id)]
+            selected: !activeManual && p.id === selected,
+            color: mapCompare.includes(p.id)
+              ? colors[mapCompare.indexOf(p.id)]
               : !activeManual && p.id === selected
                 ? '#ffdf80'
                 : '#31574a',
@@ -750,6 +803,7 @@ function App() {
     workflow?.revision,
     planningApproaches,
     inspectStage,
+    savedStage,
     appliedFilter,
   ]);
   useEffect(() => {
@@ -758,7 +812,7 @@ function App() {
         type: 'FeatureCollection',
         features: (newRun ? [] : shownManual)
           .filter((p) =>
-            planningApproaches || inspectStage
+            planningApproaches || inspectStage || savedStage
               ? !!workflow?.points[p.id]?.shortlisted &&
                 (!inspectStage || !!workflow?.points[p.id]?.approach)
               : group === 'dismissed'
@@ -785,6 +839,7 @@ function App() {
     group,
     planningApproaches,
     inspectStage,
+    savedStage,
   ]);
   useEffect(() => {
     if (!ready || !run || !selected || newRun) return;
@@ -849,9 +904,9 @@ function App() {
         imagery,
         imageOpacity,
         newRun,
-        compare,
-        activeManual,
-        selected,
+        compare: mapCompare,
+        activeManual: collectionSelectionVisible ? activeManual : null,
+        selected: collectionSelectionVisible ? selected : '',
         visibility,
         hiddenViews,
         opacity,
@@ -882,6 +937,10 @@ function App() {
     activeManual?.id,
     workingGeometryStamp,
     coverageRetry,
+    savedStage,
+    planningApproaches,
+    inspectStage,
+    collectionSelectionVisible,
     filterId,
     workflow?.revision,
   ]);
@@ -1061,6 +1120,10 @@ function App() {
       setError('');
       if (action === 'cancel') await api(`/jobs/${j.id}/cancel`, { method: 'POST' });
       else {
+        setUtility(false);
+        setSavedStage(false);
+        setPanelCollapsed(false);
+        setListOpen(false);
         if (j.kind === 'approach') {
           const v = await api('/approaches/' + j.plan);
           setRunId(v.scenario.run_id);
@@ -1178,6 +1241,35 @@ function App() {
       : (typeof b.metrics.raw_km2 === 'number' ? b.metrics.raw_km2 : -1) -
           (typeof a.metrics.raw_km2 === 'number' ? a.metrics.raw_km2 : -1) || original;
   });
+  const labelPoint = currentManual || shownCandidates.find((p) => p.id === selected);
+  useEffect(() => {
+    if (!ready || newRun || !labelPoint || !collectionSelectionVisible) return;
+    const label = document.createElement('button');
+    label.className = 'map-setup-label';
+    label.textContent = labelPoint.id;
+    label.title = 'Open selected setup details';
+    label.setAttribute('aria-label', 'Selected map setup ' + labelPoint.id);
+    label.addEventListener('click', () => {
+      setSavedStage(false);
+      setPlanningApproaches(false);
+      setInspectStage(false);
+      setPanelMode('details');
+      setPanelCollapsed(false);
+    });
+    const marker = new maplibregl.Marker({ element: label, anchor: 'bottom', offset: [0, -15] })
+      .setLngLat([labelPoint.longitude, labelPoint.latitude])
+      .addTo(map.current!);
+    return () => {
+      marker.remove();
+    };
+  }, [
+    ready,
+    newRun,
+    labelPoint?.id,
+    labelPoint?.longitude,
+    labelPoint?.latitude,
+    collectionSelectionVisible,
+  ]);
   const nextCoverage = sorted
     .slice(Math.max(0, sorted.findIndex((p) => p.id === selected) + 1))
     .filter(
@@ -1320,6 +1412,19 @@ function App() {
     <CandidateCard
       key={p.id}
       p={p}
+      rank={sorted.findIndex((row) => row.id === p.id) + 1}
+      bestArea={Math.max(
+        ...sorted.map(
+          (row) =>
+            Number(
+              appliedFilter?.candidates.find((f) => f.id === row.id)?.matching_km2 ??
+                row.metrics.raw_km2,
+            ) || 0,
+        ),
+        0,
+      )}
+      approach={!!workflow?.points[p.id]?.approach}
+      confirmed={!!workflow?.points[p.id]?.confirmed}
       shortlisted={workflow?.points[p.id]?.shortlisted}
       dismissed={workflow?.points[p.id]?.dismissed}
       busy={decisionBusy}
@@ -1403,16 +1508,77 @@ function App() {
     );
   });
 
+  const stage: Stage = savedStage
+    ? 'save'
+    : planningApproaches
+      ? 'approach'
+      : inspectStage
+        ? 'inspect'
+        : 'find';
+  useEffect(() => {
+    document.querySelector('.inspector')?.scrollTo(0, 0);
+  }, [stage, panelMode, newRun]);
+  useEffect(() => {
+    const list = document.querySelector('.candidate-list');
+    const card = list?.querySelector('.candidate.active');
+    if (!list || !card || !card.getClientRects().length) return;
+    const container = list.getBoundingClientRect(),
+      item = card.getBoundingClientRect();
+    if (item.top < container.top) list.scrollBy(0, item.top - container.top);
+    else if (item.bottom > container.bottom) list.scrollBy(0, item.bottom - container.bottom);
+  }, [selected, activeManual?.id]);
+  const changeStage = (next: Stage) => {
+    setSavedStage(next === 'save');
+    setPlanningApproaches(next === 'approach');
+    setInspectStage(next === 'inspect');
+    setListOpen(false);
+    setPanelCollapsed(false);
+    setPanelMode('results');
+    if (next !== 'find') setNewRun(false);
+    if (next === 'approach' || next === 'inspect' || next === 'save') {
+      const points =
+        next === 'inspect'
+          ? approached
+          : next === 'save' && confirmed.length
+            ? confirmed
+            : shortlisted;
+      const id = points.some((p) => p.point.id === (activeManual?.id || selected))
+        ? activeManual?.id || selected
+        : points[0]?.point.id;
+      const manual = shownManual.find((p) => p.id === id);
+      if (manual) chooseManual(manual);
+      else if (id) chooseOriginal(id);
+    }
+  };
+  const showResults =
+    !newRun && !savedStage && (stage === 'find' ? panelMode === 'results' : listOpen);
+  const showInspector = !savedStage && !showResults;
+  const openDetails = () => {
+    setPanelMode('details');
+    setPanelCollapsed(false);
+    setListOpen(false);
+  };
+
   return (
     <div
-      className={'app ' + (training.active ? 'is-training ' : '') + (newRun ? 'is-new-area' : '')}
+      className={
+        'app stage-' +
+        stage +
+        ' panel-' +
+        panelMode +
+        (panelCollapsed ? ' panel-collapsed' : '') +
+        (training.active ? ' is-training' : '') +
+        (newRun ? ' is-new-area' : '')
+      }
     >
       <header>
         <div className="brand">
-          <span className="brand-icon">△</span>
+          <span className="brand-icon">
+            <Icon name="mountain" size={27} />
+          </span>
           <div>
             <b>HuntMaps2</b>
-            <small>Local scouting desk</small>
+            <small>TERRAIN INTELLIGENCE</small>
           </div>
         </div>
         <RunSelection
@@ -1438,7 +1604,7 @@ function App() {
             }}
           />
         )}
-        <button onClick={refreshRuns} title="Refresh completed local runs">
+        <button onClick={refreshRuns} title="Refresh saved areas" aria-label="Refresh saved areas">
           ↻
         </button>
         <button onClick={() => training.setOpen(true)}>Learn</button>
@@ -1446,6 +1612,8 @@ function App() {
           className="primary"
           disabled={training.active}
           onClick={() => {
+            setSavedStage(false);
+            setPanelCollapsed(false);
             if (!newRun) {
               setMinutes(30);
               setIncludeNetwork(true);
@@ -1468,7 +1636,7 @@ function App() {
             setNewRun(!newRun);
           }}
         >
-          {newRun ? 'Back to review' : '+ New baseline run'}
+          {newRun ? 'Back to review' : '+ New area'}
         </button>
       </header>
       <Learning
@@ -1519,57 +1687,31 @@ function App() {
           setSaved('');
         }}
       />
-      <nav className="workflow-stages" aria-label="Scouting workflow">
-        <button
-          aria-current={!planningApproaches && !inspectStage ? 'step' : undefined}
-          className={!planningApproaches && !inspectStage ? 'primary' : ''}
-          onClick={() => {
-            setPlanningApproaches(false);
-            setInspectStage(false);
-          }}
-        >
-          1 · Find setups · {shortlisted.length} shortlisted
-        </button>
-        <button
-          aria-current={planningApproaches ? 'step' : undefined}
-          className={planningApproaches ? 'primary' : ''}
-          disabled={!shortlisted.length || training.active}
-          onClick={() => {
-            setNewRun(false);
-            setInspectStage(false);
-            setPlanningApproaches(true);
-          }}
-        >
-          2 · Compare approaches · {approached.length} selected
-        </button>
-        <button
-          aria-current={inspectStage ? 'step' : undefined}
-          className={inspectStage ? 'primary' : ''}
-          disabled={
-            !approached.length ||
-            training.active ||
-            (workflow?.approach_review?.active && !workflow.approach_review.ready)
-          }
-          onClick={() => {
-            setNewRun(false);
-            setPlanningApproaches(false);
-            setInspectStage(true);
-            const id = approached[0]?.point.id;
-            const manual = shownManual.find((p) => p.id === id);
-            if (manual) chooseManual(manual);
-            else if (id) chooseOriginal(id);
-          }}
-        >
-          3 · Inspect and confirm · {confirmed.length} confirmed
-        </button>
-        {!shortlisted.length && <small>Shortlist a setup to compare approaches.</small>}
-        {!!shortlisted.length && !approached.length && (
-          <small>Select an approach or dismiss each remaining spot to continue.</small>
-        )}
-        <button className="setup-drawer-toggle" onClick={() => setListOpen(!listOpen)}>
-          Setups
-        </button>
-      </nav>
+      <div className="workflow-bar">
+        <WorkflowNavigation
+          stage={stage}
+          shortlisted={shortlisted.length}
+          approached={approached.length}
+          confirmed={confirmed.length}
+          reviewReady={!workflow?.approach_review?.active || workflow.approach_review.ready}
+          disabled={training.active || !runId}
+          onStage={changeStage}
+        />
+        <div className="workspace-tools">
+          <button
+            title="Expand map or show scouting panel"
+            aria-label={panelCollapsed ? 'Show scouting panel' : 'Expand map'}
+            aria-pressed={panelCollapsed}
+            onClick={() => setPanelCollapsed((v) => !v)}
+          >
+            <Icon name="layers" />
+            {panelCollapsed ? 'Show panel' : 'Expand map'}
+          </button>
+          <button aria-expanded={utility} onClick={() => setUtility((v) => !v)}>
+            Activity{running ? ' •' : ''}
+          </button>
+        </div>
+      </div>
       {error && (
         <div className="error" role="alert">
           {error}
@@ -1579,8 +1721,11 @@ function App() {
         </div>
       )}
       {decisionFeedback && (
-        <p role="status">
+        <p className="decision-toast" role="status">
           {decisionFeedback}{' '}
+          <button aria-label="Dismiss update" onClick={() => setDecisionFeedback('')}>
+            ×
+          </button>
           {undoDecision && (
             <button
               disabled={decisionBusy || workflow?.revision !== undoDecision.revision}
@@ -1595,54 +1740,13 @@ function App() {
       )}
 
       <div className="workspace">
-        <aside className={'sidebar ' + (listOpen ? 'drawer-open' : '')}>
+        <aside
+          className={'sidebar ' + (listOpen ? 'drawer-open' : '')}
+          hidden={!showResults && !training.active}
+        >
           {newRun ? (
             <>
               <h2>{training.active ? 'Practice observer area' : 'Your new area'}</h2>
-              <details>
-                <summary>Go to location</summary>
-                <label>
-                  Latitude
-                  <input
-                    aria-label="Go to latitude"
-                    value={goLat}
-                    onChange={(e) => setGoLat(e.target.value)}
-                  />
-                </label>
-                <label>
-                  Longitude
-                  <input
-                    aria-label="Go to longitude"
-                    value={goLon}
-                    onChange={(e) => setGoLon(e.target.value)}
-                  />
-                </label>
-                <button
-                  disabled={drawing}
-                  onClick={() => {
-                    const lat = Number(goLat),
-                      lon = Number(goLon);
-                    if (
-                      !goLat ||
-                      !goLon ||
-                      !Number.isFinite(lat) ||
-                      !Number.isFinite(lon) ||
-                      Math.abs(lat) > 85 ||
-                      Math.abs(lon) > 180
-                    ) {
-                      setError('Enter latitude −85 to 85 and longitude −180 to 180.');
-                      return;
-                    }
-                    map.current?.flyTo({ center: [lon, lat], zoom: 13, pitch: 0, bearing: 0 });
-                  }}
-                >
-                  Go to location
-                </button>
-                <small>
-                  Online imagery can provide context beyond cached coverage. Analysis and 3D still
-                  require local sources for your real area.
-                </small>
-              </details>
               <Meaning topic="area" />
               <p>1. Draw your boundary or import a polygon.</p>
               <p>2. Select one polygon or explicitly combine all.</p>
@@ -1665,40 +1769,61 @@ function App() {
           ) : (
             <>
               <div className="section-title">
-                <h2>Observer setups</h2>
+                <h2>{stage === 'find' ? 'Glassing setups' : 'Your shortlist'}</h2>
                 <span>{`${visibleCandidates.length} / ${run?.candidates.length || 0}`}</span>
               </div>
-              {run?.search_summary && (
-                <p className="hint">
-                  Evaluated {run.search_summary.evaluated_count} of up to{' '}
-                  {run.search_summary.budget} locations. Broad spacing:{' '}
-                  {yards(run.search_summary.sampling?.spacing_m)}.
-                  {run.search_summary.unused_budget > 0 && (
-                    <>
-                      {' '}
-                      {run.search_summary.unused_budget} evaluations unused:{' '}
-                      {run.search_summary.exhaustion_reason}.
-                    </>
-                  )}
-                </p>
+              <div className="panel-intro">
+                {stage === 'find' ? 'Find a view worth the climb.' : 'Choose a setup to continue.'}
+              </div>
+              {stage !== 'find' && (
+                <button onClick={() => setListOpen(false)}>Back to {stage}</button>
               )}
-              <label>
-                Order
+              {run?.search_summary && (
+                <details className="search-summary">
+                  <summary>
+                    Search coverage · {run.search_summary.evaluated_count} locations
+                  </summary>
+                  <p className="hint">
+                    Evaluated {run.search_summary.evaluated_count} of up to{' '}
+                    {run.search_summary.budget} locations. Broad spacing:{' '}
+                    {yards(run.search_summary.sampling?.spacing_m)}.
+                    {run.search_summary.unused_budget > 0 && (
+                      <>
+                        {' '}
+                        {run.search_summary.unused_budget} evaluations unused:{' '}
+                        {run.search_summary.exhaustion_reason}.
+                      </>
+                    )}
+                  </p>
+                </details>
+              )}
+              <div className="result-toolbar">
+                <button
+                  onClick={() => {
+                    setPanelMode('filters');
+                    setPanelCollapsed(false);
+                  }}
+                >
+                  <Icon name="tune" /> Terrain & access filters{appliedFilter ? ' •' : ''}
+                </button>
+              </div>
+              <div className="result-controls">
+                <input
+                  aria-label="Find a setup"
+                  placeholder="Find a setup…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
                 <select
                   aria-label="Setup order"
+                  title="Order setups by"
                   value={sortMode}
                   onChange={(e) => setSortMode(e.target.value)}
                 >
-                  <option value="coverage">Terrain-visible area</option>
-                  <option value="engine">Original engine ranking</option>
+                  <option value="coverage">Visible area</option>
+                  <option value="engine">Inspection score</option>
                 </select>
-              </label>
-              <input
-                aria-label="Find a setup"
-                placeholder="Find a setup or parent…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
+              </div>
               {run && (
                 <select
                   aria-label="Saved neighborhood"
@@ -1731,15 +1856,41 @@ function App() {
                   choose All evaluated setups to inspect the original views.
                 </p>
               )}
-              <p className="hint">
-                Select a setup to see its saved view. Use Compare for up to three; Export chooses
-                observer waypoints.
-              </p>
+              <div className="ranking-caption">
+                <span>
+                  {sortMode === 'engine'
+                    ? 'Saved inspection score'
+                    : appliedFilter || group === 'recommended'
+                      ? 'Matching terrain first'
+                      : 'Largest terrain view first'}
+                </span>
+                <span>Area · mi²</span>
+              </div>
               <div className="candidate-list" data-tour="observer-list">
                 {loading ? (
                   <p>Opening saved results…</p>
                 ) : (
                   <>
+                    {!sorted.length && (
+                      <EmptyState title={run ? 'No matching setups' : 'Your next scouting area'}>
+                        {run
+                          ? 'Try another group or clear your search and filters.'
+                          : 'Choose a saved area above, or use New area to draw where you want to scout.'}
+                        {run && (
+                          <button
+                            className="wide"
+                            onClick={() => {
+                              setSearch('');
+                              setGroup('all');
+                              setAppliedFilter(null);
+                              setFilterReset((n) => n + 1);
+                            }}
+                          >
+                            Reset result filters
+                          </button>
+                        )}
+                      </EmptyState>
+                    )}
                     {['all', 'recommended'].includes(group) && !training.active ? (
                       sorted.map(renderCandidate)
                     ) : (
@@ -1831,10 +1982,12 @@ function App() {
                     ))}
                 </section>
               )}
-              <div className="export-box" data-tour="export-panel">
-                <b>
-                  {exportIds.length} observer{exportIds.length === 1 ? '' : 's'} selected for export
-                </b>
+              <details
+                className="export-box"
+                data-tour="export-panel"
+                open={exportIds.length > 0 || training.active}
+              >
+                <summary>Export waypoints · {exportIds.length} selected</summary>
                 <div className="row">
                   {['gpx', 'kml'].map((fmt) => (
                     <a
@@ -1870,11 +2023,36 @@ function App() {
                     ? 'PRACTICE files: real observer coordinates, separate practice notes.'
                     : 'Provisional waypoints, not routes. Target openings are excluded.'}
                 </small>
-              </div>
+              </details>
             </>
           )}
         </aside>
-        <main className="map-pane">
+        {savedStage && (
+          <SavedCollection
+            workflow={workflow}
+            runId={runId}
+            candidates={[
+              ...shownCandidates,
+              ...shownManual.map((p) => ({
+                id: p.id,
+                name: p.name,
+                metrics: 'metrics' in p ? p.metrics : {},
+              })),
+            ]}
+            selected={activeManual?.id || selected}
+            busy={decisionBusy}
+            onSelect={(id) => {
+              const manual = shownManual.find((p) => p.id === id);
+              if (manual) chooseManual(manual);
+              else chooseOriginal(id);
+            }}
+            onStage={changeStage}
+            onRemove={(id) => {
+              void decide(id, 'remove');
+            }}
+          />
+        )}
+        <main className="map-pane" aria-label="Scouting map">
           {!newRun && (loading || (runId && run?.id !== runId)) && (
             <div className="run-opening" role="status">
               Opening {runId}…
@@ -1886,7 +2064,13 @@ function App() {
               {coverageStatus.startsWith('Loading') && <progress aria-label="Loading coverage" />}
               <span>
                 {coverageStatus}
-                {coveragePreparation && <small> · {coveragePreparation}</small>}
+                {coveragePreparation && (
+                  <small className="coverage-preparation" title={coveragePreparation}>
+                    {coveragePreparation.startsWith('Preparing')
+                      ? ' · Preparing other views'
+                      : ' · Other views ready'}
+                  </small>
+                )}
               </span>
               {coverageStatus.startsWith('Coverage incomplete') && (
                 <button
@@ -1907,11 +2091,13 @@ function App() {
             <b>
               {newRun
                 ? 'Preview your observer area'
-                : activeManual
-                  ? currentManual?.name
-                  : compare.length
-                    ? 'Compare individual saved views'
-                    : working[selected]?.name || selected || 'Select an observer setup'}
+                : !collectionSelectionVisible
+                  ? 'Your scouting collection'
+                  : activeManual
+                    ? currentManual?.name
+                    : mapCompare.length
+                      ? 'Compare individual saved views'
+                      : working[selected]?.name || selected || 'Select an observer setup'}
             </b>
             <span>
               {newRun
@@ -1920,8 +2106,8 @@ function App() {
                   ? workingSelected
                     ? 'Updated terrain-only view'
                     : 'Nearby waypoint · no calculated view'
-                  : compare.length
-                    ? compare.map((id, i) => (
+                  : mapCompare.length
+                    ? mapCompare.map((id, i) => (
                         <span className="pill" style={{ borderColor: colors[i] }} key={id}>
                           <label>
                             <input
@@ -1950,10 +2136,19 @@ function App() {
                         ? `Alternative to ${detail.parent}`
                         : 'Saved terrain visibility'}
             </span>
-            {compare.length > 0 && <button onClick={() => setCompare([])}>Exit compare</button>}
+            {mapCompare.length > 0 && <button onClick={() => setCompare([])}>Exit compare</button>}
           </div>
           <details className="layers">
-            <summary>Map layers</summary>
+            <summary>
+              <Icon name="layers" /> Map layers{' '}
+              <span className="layer-count">
+                {Number(imagery) +
+                  Number(visibility && !newRun) +
+                  Number(classes && !newRun) +
+                  Number(sectors && !newRun)}
+              </span>
+            </summary>
+            <h4 className="layer-group-title">Base map</h4>
             <Meaning topic="layers" />
             {ready && <OnlineImagery map={map.current!} />}
             <label>
@@ -1973,6 +2168,7 @@ function App() {
               value={imageOpacity}
               onChange={(e) => setImageOpacity(+e.target.value)}
             />
+            <h4 className="layer-group-title">Analysis overlays</h4>
             <label>
               <input
                 type="checkbox"
@@ -2036,10 +2232,10 @@ function App() {
               />
             )}
             <div className="legend">
-              {(newRun
+              {(newRun || !collectionSelectionVisible
                 ? []
-                : compare.length
-                  ? compare
+                : mapCompare.length
+                  ? mapCompare
                   : activeManual
                     ? workingSelected
                       ? [activeManual.id]
@@ -2051,7 +2247,7 @@ function App() {
                   <span key={id}>
                     <i style={{ background: colors[i] }} />
                     {id} {working[id] ? 'updated' : 'saved'} terrain view{' '}
-                    {compare.length > 0 && hiddenViews.includes(id) ? '(hidden)' : ''}
+                    {mapCompare.length > 0 && hiddenViews.includes(id) ? '(hidden)' : ''}
                   </span>
                 ))}
               {classes && !newRun && (
@@ -2082,11 +2278,13 @@ function App() {
             </div>
           </details>
           <div className="map-footer">
-            {newRun
-              ? 'Online context when enabled · cached context where covered · analysis sources pending'
-              : imagery && run?.imagery.length
-                ? `Cached aerial imagery: ${[...new Set(run.imagery.flatMap((i) => i.dates || [i.acquisition_date]))].join(', ')} · ${run.id.startsWith('soap-creek') ? 'USGS/USDA NAIP' : 'supplied local imagery'}; online imagery fills gaps when enabled`
-                : 'Local DEM hillshade · online imagery fills gaps when enabled'}
+            <span>
+              {newRun
+                ? 'Online context when enabled · cached context where covered · analysis sources pending'
+                : imagery && run?.imagery.length
+                  ? `Cached aerial imagery: ${[...new Set(run.imagery.flatMap((i) => i.dates || [i.acquisition_date]))].join(', ')} · ${run.id.startsWith('soap-creek') ? 'USGS/USDA NAIP' : 'supplied local imagery'}; online imagery fills gaps when enabled`
+                  : 'Terrain hillshade · online imagery fills gaps when enabled'}
+            </span>
             <button
               onClick={() => {
                 if (run) map.current?.fitBounds(run.bounds, { padding: 45 });
@@ -2104,10 +2302,126 @@ function App() {
               Setup close-up
             </button>
           </div>
+          {!newRun && run && collectionSelectionVisible && (
+            <div className="map-key" aria-label="Active map legend">
+              <span>
+                <i className="key-boundary" />
+                Observer area
+              </span>
+              {visibility && (
+                <span>
+                  <i className="key-visible" />
+                  {appliedFilter ? 'Matching visible terrain' : 'Terrain-visible area'}
+                </span>
+              )}
+              {classes && (
+                <span>
+                  <i className="key-cover" />
+                  Tree cover · see layers
+                </span>
+              )}
+              {sectors && (
+                <span>
+                  <i className="key-sector" />
+                  Inspection sectors
+                </span>
+              )}
+            </div>
+          )}
+          {!newRun && !training.active && collectionSelectionVisible && (
+            <SelectedSetup
+              candidate={workingSelected || (activeManual ? null : detail)}
+              id={activeManual?.id || selected}
+              name={currentManual?.name || working[selected]?.name}
+              matching={
+                appliedFilter?.candidates.find((p) => p.id === (activeManual?.id || selected))
+                  ?.matching_km2
+              }
+              workflow={workflow}
+              busy={decisionBusy}
+              onApproach={() => changeStage('approach')}
+              onDetails={() => {
+                changeStage('find');
+                openDetails();
+              }}
+              onInspect={() => {
+                setInitialObserver(workingSelected || currentManual || null);
+                setFirstPerson(true);
+              }}
+              onDecision={(action) => {
+                void decide(activeManual?.id || selected, action);
+              }}
+            />
+          )}
         </main>
-        <aside className="inspector">
+        <aside className="inspector" hidden={!showInspector && !training.active}>
+          {!newRun && (
+            <div className="inspector-nav">
+              <button
+                onClick={() => {
+                  if (stage === 'find') setPanelMode('results');
+                  else setListOpen(true);
+                }}
+              >
+                ← {stage === 'find' ? 'All setups' : 'Shortlist'}
+              </button>
+              <span>
+                {stage === 'find'
+                  ? panelMode === 'filters'
+                    ? 'Refine your search'
+                    : 'Setup details'
+                  : stage === 'approach'
+                    ? 'Evaluate access'
+                    : 'Inspect the view'}
+              </span>
+            </div>
+          )}
           {newRun ? (
             <>
+              <details>
+                <summary>Go to location</summary>
+                <label>
+                  Latitude
+                  <input
+                    aria-label="Go to latitude"
+                    value={goLat}
+                    onChange={(e) => setGoLat(e.target.value)}
+                  />
+                </label>
+                <label>
+                  Longitude
+                  <input
+                    aria-label="Go to longitude"
+                    value={goLon}
+                    onChange={(e) => setGoLon(e.target.value)}
+                  />
+                </label>
+                <button
+                  disabled={drawing}
+                  onClick={() => {
+                    const lat = Number(goLat),
+                      lon = Number(goLon);
+                    if (
+                      !goLat ||
+                      !goLon ||
+                      !Number.isFinite(lat) ||
+                      !Number.isFinite(lon) ||
+                      Math.abs(lat) > 85 ||
+                      Math.abs(lon) > 180
+                    ) {
+                      setError('Enter latitude −85 to 85 and longitude −180 to 180.');
+                      return;
+                    }
+                    map.current?.flyTo({ center: [lon, lat], zoom: 13, pitch: 0, bearing: 0 });
+                  }}
+                >
+                  Go to location
+                </button>
+                <small>
+                  Online imagery can provide context beyond cached coverage. Analysis and 3D still
+                  require local sources for your real area.
+                </small>
+              </details>
               <div className="eyebrow">Find places to glass</div>
               <h2>Start with your observer area</h2>
               {planJob && (
@@ -2480,7 +2794,7 @@ function App() {
             </>
           ) : (
             <>
-              <div hidden={inspectStage}>
+              <div hidden={inspectStage || (stage === 'find' && panelMode !== 'filters')}>
                 {!training.active && runId && (
                   <ScoutingTools
                     key={'tools:' + runId}
@@ -2493,6 +2807,7 @@ function App() {
                       JSON.stringify(manualPoints.map((p) => [p.id, p.longitude, p.latitude]))
                     }
                     onFilter={setAppliedFilter}
+                    filterReset={filterReset}
                     stamp={
                       JSON.stringify(annotations) +
                       workingStamp +
@@ -2512,8 +2827,7 @@ function App() {
                     }}
                     onDecision={(cid, action) => decide(cid, action)}
                     onInspectStage={() => {
-                      setPlanningApproaches(false);
-                      setInspectStage(true);
+                      changeStage('inspect');
                     }}
                     onInputsChanged={(cid, scenario) => {
                       if (workflow?.points[cid]?.approach) void decide(cid, 'unselect');
@@ -2522,14 +2836,11 @@ function App() {
                       decide(cid, 'approach', { scenario, alternative })
                     }
                     planning={planningApproaches}
-                    onPlanning={(v) => {
-                      setPlanningApproaches(v);
-                      if (v) setInspectStage(false);
-                    }}
+                    onPlanning={(v) => changeStage(v ? 'approach' : 'find')}
                   />
                 )}
               </div>
-              {!training.active && (
+              {!training.active && !planningApproaches && panelMode !== 'filters' && (
                 <WorkflowPanel
                   key={'workflow:' + runId}
                   runId={runId}
@@ -2539,14 +2850,11 @@ function App() {
                   pending={decisionBusy}
                   onDecision={decide}
                   onInspect={() => setFirstPerson(true)}
-                  onApproaches={() => {
-                    setInspectStage(false);
-                    setPlanningApproaches(true);
-                  }}
+                  onApproaches={() => changeStage('approach')}
                   api={api}
                 />
               )}
-              <div hidden={planningApproaches || inspectStage}>
+              <div hidden={planningApproaches || inspectStage || panelMode === 'filters'}>
                 {workingSelected ? (
                   <WorkingWaypoint
                     key={workingSelected.revision}
@@ -2576,8 +2884,8 @@ function App() {
                       {run?.synthetic
                         ? 'Synthetic engineering fixture'
                         : run?.experimental
-                          ? 'Saved Soap Creek experiment'
-                          : 'Terrain baseline'}
+                          ? 'Soap Creek · experimental'
+                          : 'Glassing setup'}
                     </div>
                     <h2>{selected || 'Choose a setup'}</h2>
                     {detail ? (
@@ -2610,7 +2918,7 @@ function App() {
                           <span>
                             {appliedFilter
                               ? 'matching visible terrain'
-                              : 'original terrain-visible target area'}
+                              : 'terrain-visible target area'}
                           </span>
                           {appliedFilter && (
                             <p>
@@ -2642,118 +2950,121 @@ function App() {
                             cumulative approach gain.
                           </p>
                         )}
-                        {typeof detail.metrics.foreground_category === 'string' && (
-                          <div className="notice">
-                            <strong>
-                              Nearby setup cover · {String(detail.metrics.foreground_category)}
-                            </strong>
-                            <p>
-                              {num(
-                                typeof detail.metrics.foreground_tree_mean === 'number'
-                                  ? detail.metrics.foreground_tree_mean * 100
-                                  : undefined,
-                                1,
-                              )}
-                              % mapped tree cover ·{' '}
-                              {num(
-                                typeof detail.metrics.foreground_shrub_mean === 'number'
-                                  ? detail.metrics.foreground_shrub_mean * 100
-                                  : undefined,
-                                1,
-                              )}
-                              % mapped shrub cover ·{' '}
-                              {num(Number(detail.metrics.foreground_known_fraction) * 100, 0)}%
-                              known tree coverage within {yards(detail.metrics.foreground_radius_m)}
-                              .
-                            </p>
-                            <small>
-                              Potential clearing evidence only. Coarse mapping cannot verify a small
-                              opening, eye-height branches or clear sightlines. Blue coverage uses
-                              bare-earth terrain.
-                            </small>
-                          </div>
-                        )}
-                        <h3>Cover across {appliedFilter ? 'original ' : ''}visible terrain</h3>
-                        <div className="breakdown">
-                          {[
-                            ['Tree cover under 10%', 'tree_lt10_km2'],
-                            ['Tree cover 10–40%', 'tree_10to40_km2'],
-                            ['Tree cover 40% or more', 'tree_ge40_km2'],
-                            ['Unknown tree cover', 'tree_unknown_km2'],
-                            ['Shrub cover over 30%', 'shrub_gt30_km2'],
-                          ].map(([label, key]) => (
-                            <div key={key}>
-                              <span>{label}</span>
-                              <b>{areaText(detail.metrics[key])}</b>
-                            </div>
-                          ))}
-                        </div>
-                        <p className="hint">
-                          Shrubs overlap tree classes. Low tree cover does not guarantee visible
-                          deer or good habitat.
-                        </p>
-                        <details>
-                          <summary>Inherited inspection indices and calculation details</summary>
-                          <h3>Inspection scores</h3>
-                          <Meaning topic="scores" />
-                          <div className="breakdown">
-                            <div>
-                              <span>Inherited baseline index</span>
-                              <b>
+                        <details className="setup-evidence">
+                          <summary>Visibility, vegetation & tradeoffs</summary>
+                          {typeof detail.metrics.foreground_category === 'string' && (
+                            <div className="notice">
+                              <strong>
+                                Nearby setup cover · {String(detail.metrics.foreground_category)}
+                              </strong>
+                              <p>
                                 {num(
-                                  detail.metrics.baseline_score ?? detail.metrics.selective_score,
-                                  4,
+                                  typeof detail.metrics.foreground_tree_mean === 'number'
+                                    ? detail.metrics.foreground_tree_mean * 100
+                                    : undefined,
+                                  1,
                                 )}
-                              </b>
+                                % mapped tree cover ·{' '}
+                                {num(
+                                  typeof detail.metrics.foreground_shrub_mean === 'number'
+                                    ? detail.metrics.foreground_shrub_mean * 100
+                                    : undefined,
+                                  1,
+                                )}
+                                % mapped shrub cover ·{' '}
+                                {num(Number(detail.metrics.foreground_known_fraction) * 100, 0)}%
+                                known tree coverage within{' '}
+                                {yards(detail.metrics.foreground_radius_m)}.
+                              </p>
+                              <small>
+                                Potential clearing evidence only. Coarse mapping cannot verify a
+                                small opening, eye-height branches or clear sightlines. Blue
+                                coverage uses bare-earth terrain.
+                              </small>
                             </div>
-                            {run?.experimental && (
-                              <>
-                                <div>
-                                  <span>Target inspection index</span>
-                                  <b>{num(detail.metrics.target_heuristic, 4)}</b>
-                                </div>
-                                <div>
-                                  <span>20% / 40% foreground screens</span>
-                                  <b>
-                                    {num(detail.metrics.directional_20, 4)} /{' '}
-                                    {num(detail.metrics.directional_40, 4)}
-                                  </b>
-                                </div>
-                              </>
-                            )}
+                          )}
+                          <h3>Cover across {appliedFilter ? 'original ' : ''}visible terrain</h3>
+                          <div className="breakdown">
+                            {[
+                              ['Tree cover under 10%', 'tree_lt10_km2'],
+                              ['Tree cover 10–40%', 'tree_10to40_km2'],
+                              ['Tree cover 40% or more', 'tree_ge40_km2'],
+                              ['Unknown tree cover', 'tree_unknown_km2'],
+                              ['Shrub cover over 30%', 'shrub_gt30_km2'],
+                            ].map(([label, key]) => (
+                              <div key={key}>
+                                <span>{label}</span>
+                                <b>{areaText(detail.metrics[key])}</b>
+                              </div>
+                            ))}
                           </div>
                           <p className="hint">
-                            The inherited index combines cover, distance, seasonal and light
-                            assumptions within a fixed inspection budget. The experimental target
-                            index omits seasonal/light weighting; its 20% and 40% screens test
-                            nearby tree-cover cutoffs. None are acres or deer probabilities.
+                            Shrubs overlap tree classes. Low tree cover does not guarantee visible
+                            deer or good habitat.
                           </p>
+                          <details>
+                            <summary>Inherited inspection indices and calculation details</summary>
+                            <h3>Inspection scores</h3>
+                            <Meaning topic="scores" />
+                            <div className="breakdown">
+                              <div>
+                                <span>Inherited baseline index</span>
+                                <b>
+                                  {num(
+                                    detail.metrics.baseline_score ?? detail.metrics.selective_score,
+                                    4,
+                                  )}
+                                </b>
+                              </div>
+                              {run?.experimental && (
+                                <>
+                                  <div>
+                                    <span>Target inspection index</span>
+                                    <b>{num(detail.metrics.target_heuristic, 4)}</b>
+                                  </div>
+                                  <div>
+                                    <span>20% / 40% foreground screens</span>
+                                    <b>
+                                      {num(detail.metrics.directional_20, 4)} /{' '}
+                                      {num(detail.metrics.directional_40, 4)}
+                                    </b>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                            <p className="hint">
+                              The inherited index combines cover, distance, seasonal and light
+                              assumptions within a fixed inspection budget. The experimental target
+                              index omits seasonal/light weighting; its 20% and 40% screens test
+                              nearby tree-cover cutoffs. None are acres or deer probabilities.
+                            </p>
+                          </details>
+                          <h3>Foreground & access</h3>
+                          <p>
+                            {detail.foreground.foreground_cover_mean !== undefined
+                              ? `Nearby average tree cover: ${num(detail.foreground.foreground_cover_mean * 100, 1)}%.`
+                              : 'No historical foreground average saved for this alternative.'}
+                          </p>
+                          {detail.foreground.foreground_unknown_fraction !== undefined && (
+                            <p className="hint">
+                              Nearby cover unknown:{' '}
+                              {num(detail.foreground.foreground_unknown_fraction * 100, 1)}%.
+                            </p>
+                          )}
+                          <p className="hint">{detail.obstruction}</p>
+                          {!!detail.obstruction_scenarios?.length && (
+                            <p className="hint">
+                              {detail.obstruction_scenarios.length} saved sampled column scenarios
+                              are available in the diagnostics below. These do not measure
+                              vegetation-visible acreage.
+                            </p>
+                          )}
+                          <div className="notice">
+                            {typeof detail.access === 'string'
+                              ? detail.access
+                              : 'Mapped approach evidence available; legal and safe access remains unverified. Inspect diagnostics.'}
+                          </div>
                         </details>
-                        <h3>Foreground & access</h3>
-                        <p>
-                          {detail.foreground.foreground_cover_mean !== undefined
-                            ? `Nearby average tree cover: ${num(detail.foreground.foreground_cover_mean * 100, 1)}%.`
-                            : 'No historical foreground average saved for this alternative.'}
-                        </p>
-                        {detail.foreground.foreground_unknown_fraction !== undefined && (
-                          <p className="hint">
-                            Nearby cover unknown:{' '}
-                            {num(detail.foreground.foreground_unknown_fraction * 100, 1)}%.
-                          </p>
-                        )}
-                        <p className="hint">{detail.obstruction}</p>
-                        {!!detail.obstruction_scenarios?.length && (
-                          <p className="hint">
-                            {detail.obstruction_scenarios.length} saved sampled column scenarios are
-                            available in the diagnostics below. These do not measure
-                            vegetation-visible acreage.
-                          </p>
-                        )}
-                        <div className="notice">
-                          {typeof detail.access === 'string'
-                            ? detail.access
-                            : 'Mapped approach evidence available; legal and safe access remains unverified. Inspect diagnostics.'}
-                        </div>
                         <section data-tour="review-fields">
                           <h3>{training.active ? 'Practice review' : 'Your review'}</h3>
                           <Meaning topic="review" />
@@ -2826,7 +3137,7 @@ function App() {
           )}
         </aside>
       </div>
-      {compare.length > 0 && !newRun && (
+      {compare.length > 0 && !newRun && stage === 'find' && (
         <section className="comparison">
           <div className="section-title">
             <h2>Compare setups</h2>
@@ -2864,53 +3175,68 @@ function App() {
           </small>
         </section>
       )}
-      <details>
-        <summary>Job history and recovery</summary>
-        <JobMonitor
-          jobs={jobs}
-          running={running}
-          trainingActive={training.active}
-          onAction={jobAction}
-          onOpen={(name) => {
-            refreshRuns();
-            setRunId(name);
-            setNewRun(false);
-            setImported(null);
-          }}
-        />
-      </details>
-      {firstPerson && (
-        <Suspense
-          fallback={
-            <div className="fp-backdrop">
-              <p>Loading first-person viewer…</p>
-            </div>
-          }
-        >
-          <FirstPerson
-            waypointKey={activeManual?.id || selected}
-            workingWaypoint={workingSelected}
-            globalBusy={running}
-            initialObserver={initialObserver}
-            onWaypointUpdated={(p) => {
-              if (currentRunRef.current === p.run_id) setWorking((a) => ({ ...a, [p.id]: p }));
+      <div className="activity-drawer" hidden={!utility}>
+        <div className="section-title">
+          <h2>Activity & storage</h2>
+          <button aria-label="Close activity" onClick={() => setUtility(false)}>
+            <Icon name="close" />
+          </button>
+        </div>
+        <details open>
+          <summary>Job history and recovery</summary>
+          <JobMonitor
+            jobs={jobs}
+            running={running}
+            trainingActive={training.active}
+            onAction={jobAction}
+            onOpen={(name) => {
+              refreshRuns();
+              setRunId(name);
+              setNewRun(false);
+              setImported(null);
             }}
-            runId={runId}
-            cid={activeManual?.id || selected}
-            viewedSceneKey={workflow?.points[activeManual?.id || selected]?.viewed}
-            reviewReady={!workflow?.approach_review?.active || workflow.approach_review.ready}
-            approachCurrent={!!workflow?.points[activeManual?.id || selected]?.approach}
-            onConfirm={() => decide(activeManual?.id || selected, 'confirm')}
-            onViewed={(key) => decide(activeManual?.id || selected, 'viewed', { scene: key })}
-            onSelect={chooseOriginal}
-            onClose={() => setFirstPerson(false)}
           />
-        </Suspense>
+        </details>
+        <StoragePanel onRecordsChanged={() => location.reload()} />
+      </div>
+      {firstPerson && (
+        <SceneBoundary onClose={() => setFirstPerson(false)}>
+          <Suspense
+            fallback={
+              <div className="fp-backdrop">
+                <p>Loading first-person viewer…</p>
+              </div>
+            }
+          >
+            <FirstPerson
+              waypointKey={activeManual?.id || selected}
+              workingWaypoint={workingSelected}
+              globalBusy={running}
+              initialObserver={initialObserver}
+              onWaypointUpdated={(p) => {
+                if (currentRunRef.current === p.run_id) setWorking((a) => ({ ...a, [p.id]: p }));
+              }}
+              runId={runId}
+              cid={activeManual?.id || selected}
+              confirmed={!!workflow?.points[activeManual?.id || selected]?.confirmed}
+              confirmationPending={decisionBusy}
+              viewedSceneKey={workflow?.points[activeManual?.id || selected]?.viewed}
+              reviewReady={!workflow?.approach_review?.active || workflow.approach_review.ready}
+              approachCurrent={!!workflow?.points[activeManual?.id || selected]?.approach}
+              onConfirm={() => decide(activeManual?.id || selected, 'confirm')}
+              onViewed={(key) => decide(activeManual?.id || selected, 'viewed', { scene: key })}
+              onSelect={chooseOriginal}
+              onClose={() => setFirstPerson(false)}
+            />
+          </Suspense>
+        </SceneBoundary>
       )}
-      <StoragePanel onRecordsChanged={() => location.reload()} />
       <footer>
-        Provisional desktop scouting · access and field sightlines unverified · local application ·
-        optional online imagery
+        <span>
+          <i className="local-dot" /> Local workspace
+        </span>
+        <span>Provisional scouting · verify access and conditions in the field</span>
+        <span>HuntMaps2</span>
       </footer>
     </div>
   );

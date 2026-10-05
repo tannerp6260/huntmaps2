@@ -105,7 +105,7 @@ try {
   await pixels('01b-during-pan', true, false); await page.mouse.up();
   await ready(a);
 
-  await page.getByText('Map layers', { exact: true }).click();
+  await page.locator('.layers > summary').click();
   const cached = page.getByLabel('Cached aerial imagery', { exact: true }),
     network = page.getByLabel('Online imagery — fill gaps', { exact: true });
   await cached.uncheck();

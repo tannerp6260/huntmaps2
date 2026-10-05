@@ -612,7 +612,7 @@ export default function Viewer({
   }, [target, profile, range, heading, loading, foliage, scenario, nearby, observer]);
   const drag = useRef<{ x: number; y: number; heading: number; look: number } | null>(null);
   return (
-    <>
+    <div className="scene-view">
       <p role="status">{imageryStatus}</p>
       <div
         className="fp-scene"
@@ -647,12 +647,25 @@ export default function Viewer({
       />
       {loading && <p>Loading local scene assets…</p>}
       {error && <p role="alert">{error}</p>}
+      <div className="plan-inset-label">Plan view · choose a target</div>
       <canvas
         ref={plan}
         width="400"
         height="400"
         className="fp-plan"
         aria-label="Choose inspection target on plan map"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          const step = range / 20;
+          const next = { east_m: target?.east_m || 0, north_m: target?.north_m || 0 };
+          if (e.key === 'ArrowRight') next.east_m += step;
+          else if (e.key === 'ArrowLeft') next.east_m -= step;
+          else if (e.key === 'ArrowUp') next.north_m += step;
+          else if (e.key === 'ArrowDown') next.north_m -= step;
+          else if (e.key !== 'Enter') return;
+          e.preventDefault();
+          if (Math.hypot(next.east_m, next.north_m) <= range) onTarget(next);
+        }}
         onClick={(e) => {
           const b = e.currentTarget.getBoundingClientRect(),
             x = ((((e.clientX - b.left) / b.width) * 400 - 200) / 190) * range,
@@ -660,13 +673,16 @@ export default function Viewer({
           if (Math.hypot(x, y) <= range) onTarget({ east_m: x, north_m: y });
         }}
       />
-      <small>
-        Green ring: unchanged 131 yd foliage patch centred on the saved setup. Dark marker: current
-        observer. Orange ring: 328 yd fine-data boundary. Distant terrain: separate coarse context
-        with cached photographs where available. Pale gaps mark unknown fine ground and the
-        deliberately unjoined 328–350 yd source boundary. Orange target, red terrain obstruction and
-        purple inferred-vegetation intersection are temporary inspection marks.
-      </small>
-    </>
+      <details className="scene-legend">
+        <summary>Plan map & sightline legend</summary>
+        <small>
+          Green ring: unchanged 131 yd foliage patch centred on the saved setup. Dark marker:
+          current observer. Orange ring: 328 yd fine-data boundary. Distant terrain: separate coarse
+          context with cached photographs where available. Pale gaps mark unknown fine ground and
+          the deliberately unjoined 328–350 yd source boundary. Orange target, red terrain
+          obstruction and purple inferred-vegetation intersection are temporary inspection marks.
+        </small>
+      </details>
+    </div>
   );
 }

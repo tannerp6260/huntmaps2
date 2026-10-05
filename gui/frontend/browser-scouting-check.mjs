@@ -14,20 +14,20 @@ const p=await (await page.request.get(`${base}/api/runs/${rid}/candidates/A0075`
 const lon=p.longitude,lat=p.latitude;
 const area={type:'Polygon',coordinates:[[[lon-.003,lat-.003],[lon+.003,lat-.003],[lon+.003,lat+.003],[lon-.003,lat+.003],[lon-.003,lat-.003]]]};
 const network={type:'Feature',properties:{trail_name:'Synthetic trail',terra_motorized:'N'},geometry:{type:'LineString',coordinates:[[lon-.001,lat-.002],[lon-.001,lat+.002]]}};
-await page.goto(base);await page.getByLabel('Select A0075',{exact:true}).click();await page.getByLabel('Candidate decision',{exact:true}).selectOption('keep');await page.getByRole('button',{name:'Save review',exact:true}).click();
-await page.locator('.workflow-task').getByRole('button',{name:'Shortlist',exact:true}).click();await page.getByRole('button',{name:/2 · Compare approaches/}).click();
+await page.goto(base);await page.getByLabel('Select A0075',{exact:true}).click();await page.getByRole('button',{name:'Setup details',exact:true}).click();await page.getByLabel('Candidate decision',{exact:true}).selectOption('keep');await page.getByRole('button',{name:'Save review',exact:true}).click();
+await page.locator('.workflow-task').getByRole('button',{name:'Shortlist',exact:true}).click();await page.getByRole('button',{name:/Approach.*selected/}).click();
 await page.getByLabel('Focused approach spot').selectOption('A0075');
 await page.getByLabel('Import road trail network',{exact:true}).setInputFiles({name:'synthetic-network.geojson',mimeType:'application/geo+json',buffer:Buffer.from(JSON.stringify(network))});
 await page.getByLabel('Import travel area',{exact:true}).setInputFiles({name:'synthetic-travel.geojson',mimeType:'application/geo+json',buffer:Buffer.from(JSON.stringify(area))});
 
-await page.getByText('More options · pinned departure and preferences',{exact:true}).click();await page.getByLabel('Maximum approach slope',{exact:true}).fill('60');
+await page.locator('.approach-settings').waitFor();if (await page.locator('.approach-settings').getAttribute('open') === null) await page.locator('.approach-settings > summary').click();await page.getByText('More options · pinned departure and preferences',{exact:true}).click();await page.getByLabel('Maximum approach slope',{exact:true}).fill('60');
 await page.getByRole('button',{name:'Confirm approach search boundary',exact:true}).click();
 await page.getByText('Travel boundary saved',{exact:false}).waitFor();
 await page.getByRole('link',{name:'Provisional approach GeoJSON',exact:true}).first().waitFor({timeout:60000});
 const href=await page.getByRole('link',{name:'Provisional approach GeoJSON',exact:true}).first().getAttribute('href');
 const data=await (await page.request.get(base+href)).json();
 const destination=data.features.find(f=>f.geometry.type==='Point').geometry.coordinates;assert.deepEqual(destination,[lon,lat]);
-await page.getByText('Map layers',{exact:true}).click();const controls = page.locator('.network-map-controls');
+await page.locator('.layers > summary').click();const controls = page.locator('.network-map-controls');
 await controls.getByLabel('Roads', {exact:false}).uncheck();
 assert.ok(await page.getByRole('link',{name:'Provisional approach GeoJSON',exact:true}).count());
 await controls.getByLabel('Roads', {exact:false}).check();
@@ -40,8 +40,8 @@ await page.getByText('Observer access and visible-terrain filters',{exact:true})
 await page.getByLabel('Elevation range (feet)',{exact:true}).check();
 await page.getByLabel('Minimum Elevation range (feet)',{exact:true}).fill('10000');await page.getByLabel('Maximum Elevation range (feet)',{exact:true}).fill('10500');
 await page.getByRole('button',{name:'Apply review filters',exact:true}).click();await page.getByText('Applied matching-area order',{exact:false}).waitFor();
-await page.getByRole('button',{name:/1 · Find setups/}).click();
-await page.getByRole('button',{name:'+ New baseline run',exact:true}).click();
+await page.getByRole('button',{name:/Find/}).click();
+await page.getByRole('button',{name:'+ New area',exact:true}).click();
 await page.getByText('More options · sampling restrictions',{exact:true}).click();await page.getByText('Observer access sampling and network acquisition',{exact:true}).click();
 await page.getByLabel('Only look near mapped roads or trails',{exact:true}).check();
 await page.getByText('Advanced network sources',{exact:true}).click();
