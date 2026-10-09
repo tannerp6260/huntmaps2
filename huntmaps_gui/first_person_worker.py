@@ -8,9 +8,12 @@ import os
 import resource
 import signal
 import sys
+import tempfile
 import time
+import traceback
 import urllib.parse
 import urllib.request
+from contextlib import contextmanager
 from pathlib import Path
 import numpy as np
 from osgeo import gdal
@@ -20,6 +23,22 @@ from .catalog import ROOT, Run, read
 from .jobs import write
 from glassing.acquire import digest
 from .downloads import suggested_mb
+
+
+@contextmanager
+def preparation_stage(cid, label):
+    fp.stage(cid + " " + label)
+    try:
+        yield
+    except MemoryError as e:
+        raise MemoryError(
+            "Memory limit reached while "
+            + label
+            + " for "
+            + cid
+            + ". Downloaded sources and prior views were retained; see preparation log. "
+            + str(e)
+        ) from e
 
 
 def deps():
@@ -437,9 +456,18 @@ def acquire(s, allow):
 
 
 def crop_points(run, cid, sources, radius=308):
+    # Spool in source order instead of retaining decoded chunks alongside the
+    # concatenated array. TemporaryFile also removes the spool on any failure.
+    with tempfile.TemporaryFile() as spool:
+        total, vref, hist = _crop_points(run, cid, sources, radius, spool)
+        spool.seek(0)
+        points = np.fromfile(spool, dtype=np.float64, count=total * 4).reshape(-1, 4)
+    return points, vref, hist
+
+
+def _crop_points(run, cid, sources, radius, spool):
     laspy, pyproj = deps()
     p = run.points[cid]
-    parts = []
     references = set()
     hist = {}
     total = 0
@@ -479,7 +507,7 @@ def crop_points(run, cid, sources, radius=308):
                     raise ValueError(
                         "Local point count exceeds bounded preparation memory; no silent processing thinning."
                     )
-                parts.append(a)
+                a.tofile(spool)
                 u, n = np.unique(classes[keep], return_counts=True)
                 for k, v in zip(u, n):
                     hist[str(k)] = hist.get(str(k), 0) + int(v)
@@ -487,11 +515,7 @@ def crop_points(run, cid, sources, radius=308):
         raise ValueError(
             "Incompatible lidar vertical references; no guessed elevation adjustment"
         )
-    return (
-        (np.concatenate(parts) if parts else np.empty((0, 4))),
-        next(iter(references), ""),
-        hist,
-    )
+    return total, next(iter(references), ""), hist
 
 
 def fine_grid(points):
@@ -561,20 +585,23 @@ def fine_grid(points):
 def baseline_grid(run, cid):
     p = run.points[cid]
     gt = run.dem.GetGeoTransform()
-    a = run.dem.ReadAsArray().astype(np.float32)
-    r, c = np.indices(a.shape)
-    xx = gt[0] + (c + 0.5) * gt[1] - p["x"]
-    yy = gt[3] + (r + 0.5) * gt[5] - p["y"]
+    if gt[2] or gt[4] or gt[1] <= 0 or gt[5] >= 0:
+        raise ValueError("Baseline requires a north-up metric grid")
+    xx = gt[0] + (np.arange(run.dem.RasterXSize) + 0.5) * gt[1] - p["x"]
+    yy = gt[3] + (np.arange(run.dem.RasterYSize) + 0.5) * gt[5] - p["y"]
     # Crop around exact observer, retaining native cell centers.
-    mask = (abs(xx) <= 2020) & (abs(yy) <= 2020)
-    rr, cc = np.where(mask)
-    if not len(rr):
+    cc = np.flatnonzero(abs(xx) <= 2020)
+    rr = np.flatnonzero(abs(yy) <= 2020)
+    if not len(rr) or not len(cc):
         raise ValueError("Baseline has no local terrain coverage")
     lo, hi = rr.min(), rr.max() + 1
     left, right = cc.min(), cc.max() + 1
     nodata = run.dem.GetRasterBand(1).GetNoDataValue()
-    a = np.where(np.isfinite(a) & (a != nodata), a, np.nan)[lo:hi, left:right]
-    return a, float(gt[1]), float(xx[lo, left]), float(yy[lo, left])
+    a = run.dem.ReadAsArray(int(left), int(lo), int(right - left), int(hi - lo)).astype(
+        np.float32
+    )
+    a[~np.isfinite(a) | (a == nodata)] = np.nan
+    return a, float(gt[1]), float(xx[left]), float(yy[lo])
 
 
 def imagery_mosaic(images, epsg, bounds, pixels):
@@ -649,8 +676,38 @@ def texture(run, cid, folder, radius=300, pixels=1200, name="imagery.png"):
 
 
 def above_ground(points, ground):
-    z = fp.sample(ground, 1, -300, 300, points[:, 0], points[:, 1])
-    return points[(points[:, 3] != 2) & np.isfinite(z) & (points[:, 2] - z > 0.5)]
+    keep = np.empty(len(points), dtype=bool)
+    for start in range(0, len(points), 100000):
+        batch = points[start : start + 100000]
+        z = fp.sample(ground, 1, -300, 300, batch[:, 0], batch[:, 1])
+        keep[start : start + len(batch)] = (
+            (batch[:, 3] != 2) & np.isfinite(z) & (batch[:, 2] - z > 0.5)
+        )
+    return points[keep]
+
+
+def display_points(points, ground):
+    """Keep the disclosed global stride without copying all eligible returns."""
+
+    def batches():
+        for start in range(0, len(points), 100000):
+            batch = points[start : start + 100000]
+            within = batch[np.hypot(batch[:, 0], batch[:, 1]) <= 300]
+            yield len(within), above_ground(within, ground)
+
+    raw_count = eligible_count = 0
+    for raw, eligible in batches():
+        raw_count += raw
+        eligible_count += len(eligible)
+    step = max(1, math.ceil(eligible_count / 500000))
+    display = np.empty((math.ceil(eligible_count / step), 4), dtype=np.float64)
+    seen = written = 0
+    for _, eligible in batches():
+        selected = eligible[(-seen) % step :: step]
+        display[written : written + len(selected)] = selected
+        seen += len(eligible)
+        written += len(selected)
+    return display, raw_count, eligible_count, step
 
 
 def enrich_foliage(folder, meta):
@@ -827,7 +884,8 @@ def publish_clusters(run, cid, key, prior, target, started, sources):
         fp.verify_file(fp.asset_path(prior, meta, name), h)
     for image in run.images:
         run.validate(image["path"])
-    points, _, _ = crop_points(run, cid, sources, radius=122)
+    with preparation_stage(cid, "reading nearby measured returns"):
+        points, _, _ = crop_points(run, cid, sources, radius=122)
     path = fp.asset_path(prior, meta, "fine.npz")
     with np.load(path) as grid:
         ground_grid = grid["heights"]
@@ -838,7 +896,8 @@ def publish_clusters(run, cid, key, prior, target, started, sources):
         name: meta.get("asset_bundles", {}).get(name, prior.name)
         for name in meta["hashes"]
     }
-    enrich_clusters(folder, meta, points, ground_grid)
+    with preparation_stage(cid, "building connected foliage"):
+        enrich_clusters(folder, meta, points, ground_grid)
     meta.update(
         version=fp.VERSION,
         key=key,
@@ -907,20 +966,23 @@ def publish(run, cid, sources):
         publish_clusters(run, cid, key, prior, target, started, sources)
         return
     if any(cid in source[0]["candidates"] for source in sources):
-        points, vref, hist = crop_points(run, cid, sources)
+        with preparation_stage(cid, "reading measured returns"):
+            points, vref, hist = crop_points(run, cid, sources)
     else:
         points = np.empty((0, 4))
         vref, hist = "Terrain DEM only", {}
-    a, support = (
-        fine_grid(points)
-        if len(points)
-        else (
-            np.full((601, 601), np.nan, dtype=np.float32),
-            np.full((601, 601), np.nan, dtype=np.float32),
+    with preparation_stage(cid, "building fine terrain"):
+        a, support = (
+            fine_grid(points)
+            if len(points)
+            else (
+                np.full((601, 601), np.nan, dtype=np.float32),
+                np.full((601, 601), np.nan, dtype=np.float32),
+            )
         )
-    )
     fine_ground = float(fp.sample(a, 1, -300, 300, np.array([0.0]), np.array([0.0]))[0])
-    base, res, x0, y0 = baseline_grid(run, cid)
+    with preparation_stage(cid, "reading baseline terrain"):
+        base, res, x0, y0 = baseline_grid(run, cid)
     baseline_ground = float(
         fp.sample(base, res, x0, y0, np.array([0.0]), np.array([0.0]))[0]
     )
@@ -961,10 +1023,8 @@ def publish(run, cid, sources):
     bf.tofile(folder / "context-indices.bin")
     if len(faces) + len(bf) > 1_000_000:
         raise ValueError("Scene terrain triangle cap exceeded")
-    within = points[np.hypot(points[:, 0], points[:, 1]) <= 300]
-    eligible = above_ground(within, a)
-    step = max(1, math.ceil(len(eligible) / 500000))
-    display = eligible[::step]
+    with preparation_stage(cid, "preparing measured-point display"):
+        display, raw_count, above_count, step = display_points(points, a)
     pv = np.column_stack(
         [
             display[:, 0],
@@ -978,10 +1038,13 @@ def publish(run, cid, sources):
     ).astype("<f4")
     pv.tofile(folder / "points.bin")
     display[:, 3].astype("u1").tofile(folder / "classes.bin")
+    display_count = len(display)
+    del display, pv
     from . import vegetation_screen as veg
 
     if hasfine:
-        centres, kinds, counts, eligible_count = veg.cells(points, a, ground)
+        with preparation_stage(cid, "preparing vegetation support"):
+            centres, kinds, counts, eligible_count = veg.cells(points, a, ground)
     else:
         centres = np.empty((0, 3), dtype="<f4")
         kinds = np.empty(0, dtype="u1")
@@ -1043,10 +1106,10 @@ def publish(run, cid, sources):
         vertical_reference=vref,
         vertical_note="Local sources share the same recorded vertical CRS. Coarse NAVD88 context may differ in realization; the 300–320 m transition is deliberately not joined.",
         classification_counts=hist,
-        raw_local_point_count=len(within),
-        above_ground_point_count=len(eligible),
+        raw_local_point_count=raw_count,
+        above_ground_point_count=above_count,
         point_filter="Non-ground returns >0.5 m above supported fine ground; unknown ground excluded",
-        display_point_count=len(display),
+        display_point_count=display_count,
         display_stride=step,
         vegetation=vegetation,
         triangle_count=len(faces) + len(bf),
@@ -1093,7 +1156,8 @@ def publish(run, cid, sources):
             vertical_note="Terrain-only DEM; no mixing with another vertical dataset or vertical correction.",
             warning="Modeled terrain-only scene from the recorded DEM, not a live feed or verified sightline. Fine ground and measured vegetation are unavailable.",
         )
-    enrich_clusters(folder, meta, points, a)
+    with preparation_stage(cid, "building connected foliage"):
+        enrich_clusters(folder, meta, points, a)
     meta["hashes"] = {f.name: digest(f) for f in folder.iterdir() if f.is_file()}
     write(folder / "scene.json", meta)
     size = sum(
@@ -1160,6 +1224,9 @@ def prepare(ident, allow, review_signature=None):
         try:
             publish(run, cid, sources)
         except (ValueError, RuntimeError, MemoryError) as e:
+            # Keep the original allocation/source traceback before reducing the
+            # per-setup failure to the summary returned to the GUI.
+            traceback.print_exc()
             failures[cid] = str(e)
             fp.stage(cid + " could not prepare: " + str(e))
         emit(

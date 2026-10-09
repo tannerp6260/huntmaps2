@@ -34,6 +34,13 @@ await controls.getByLabel('Roads', {exact:false}).check();
 assert.equal(await controls.getByLabel('Trails', {exact:false}).isChecked(), true);
 await page.getByRole('button',{name:'Show this alternative on map',exact:true}).first().click();await page.waitForTimeout(800);
 await page.screenshot({path:out+'/20-scouting-desktop.png',fullPage:true});await page.setViewportSize({width:900,height:900});await page.screenshot({path:out+'/21-scouting-900.png',fullPage:true});
+await page.waitForFunction(()=>{
+ const use=Array.from(document.querySelectorAll('.approach-controls button')).find(b=>b.textContent.includes('Use this approach'));
+ return use&&!use.disabled;
+});
+if(await page.locator('.approach-settings').getAttribute('open')===null) await page.locator('.approach-settings > summary').click();
+const preferences=page.getByText('More options · pinned departure and preferences',{exact:true});
+if(await preferences.locator('..').getAttribute('open')===null) await preferences.click();
 await page.getByLabel('Approach tree weight',{exact:true}).fill('4');
 assert.equal(await page.getByRole('link',{name:'Provisional approach GeoJSON',exact:true}).count(),0);
 await page.getByText('Observer access and visible-terrain filters',{exact:true}).click();
@@ -68,4 +75,4 @@ await controls.getByRole('button',{name:'Download mapped roads/trails',exact:tru
 await controls.getByRole('alert').filter({hasText:'Synthetic network acquisition failure'}).waitFor();
 await page.screenshot({path:out+'/23-network-download-900.png',fullPage:true});
 await page.request.put(`${base}/api/runs/${rid}/annotations/A0075`,{headers,data:old.A0075||{status:'unmarked',notes:''}});
-assert.deepEqual(errors,[]);await browser.close();console.log('Scouting filter/keep/travel/approach/export/stale preferences and 1900 MB browser checks passed');
+assert.deepEqual(errors,[]);await browser.close();console.log('Scouting filter/keep/travel/approach/export/stale preferences and 600 MB allowance browser checks passed');

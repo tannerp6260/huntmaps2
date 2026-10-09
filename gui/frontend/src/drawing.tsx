@@ -130,8 +130,9 @@ export function Drawing({
         padding: {
           left: Math.min(240, map.getContainer().clientWidth * 0.4),
           right: 70,
-          top: 110,
-          bottom: 170,
+          // Keep corner handles clear of the map layers and terrain controls.
+          top: 180,
+          bottom: 190,
         },
         duration: 0,
       });

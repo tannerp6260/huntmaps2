@@ -1055,6 +1055,10 @@ pre {
 .panel-collapsed .comparison {
   left: 18px;
 }
+/* Leave room for the comparison panel's 240px maximum height and its footer gap. */
+.app:has(> .comparison) .terrain-controls {
+  bottom: 300px;
+}
 .saved-collection {
   display: flex;
   flex-direction: column;

@@ -4,6 +4,64 @@ Implemented and inspected the actual local application, using saved Soap Creek
 A0075, V010, V008 and A0031 observer coordinates. Sources and GUI caches are separate
 from protected results. This is a bounded terrain preview, not field validation.
 
+## R0006 preparation memory correction — October 5, 2026
+
+The owner's `scouting-2026-10-06` preparation failed allocating a 28.2 MiB
+float64 array for 3,698,058 returns. The limit is **1536 MiB of address space**,
+not resident RAM or downloaded-source size. The original implementation retained
+decoded chunks while concatenating, copied the full local display population, and
+interpolated ground for millions of returns at once. Vegetation preparation added
+exact deduplication and another full-population interpolation to these live arrays.
+
+An isolated cached-source replay of the original implementation succeeded at
+1369.23 MiB peak virtual memory and 1016.85 MiB peak RSS. Thus the owner's failure
+is sensitive to allocation headroom; it did not reproduce on every clean replay.
+A controlled replay reserving another 250 MiB of virtual address space failed in
+vegetation deduplication. The same reservation and unchanged production limit
+allowed the corrected implementation to finish.
+
+Preparation now spools cropped float64 returns to an automatically removed temporary
+file before allocating their exact-size array, reads only the native DEM window,
+and samples measured-return and vegetation ground eligibility in 100,000-return
+batches. Display selection preserves the original global stride across batch
+boundaries. No processing points, supported foliage cells, or terrain detail were
+discarded. Existing point-count, triangulation, time, download, and cache limits
+remain unchanged. Memory failures include the processing stage and full underlying
+traceback in the preparation log; prior ready views and sources remain retained.
+
+The corrected R0006 replay processed 3,902,433 cropped returns and finished in
+66.29 seconds overall, at 1131.41 MiB peak virtual memory and 778.91 MiB peak RSS. All
+**41 scene assets were byte-identical** to the reference; only preparation time
+and memory metadata changed. No downloads were made. Temporary validation state
+and logs are under `/tmp/huntmaps-memory-{eqc8g8mw,cwe8isw3,l8hu_bjd,ubz8tfrn}`.
+The real GUI `Jobs` launcher and storage guard also completed a fresh cached-source
+R0006 build in disposable state, with 756.05 MiB peak RSS and the same 41 validated
+asset hashes (`/tmp/huntmaps-memory-f9eecm2n`). Owner state was not modified.
+
+Six additional first-person regressions cover source-order/filter preservation and
+temporary-file cleanup, DEM window equivalence including native boundary cells,
+global display stride, exact vegetation duplicate/support rules across batches,
+stage-specific memory diagnostics, and the production address-space limit. The
+memory test reproduces failure of the old full-population interpolation with
+3,698,058 returns under controlled headroom, then requires bounded interpolation
+to retain every eligible return within the same limit.
+
+Focused validation passed: 21 first-person Python tests, seven vegetation-screen
+tests, and the disposable GUI harness with first-person, connected-foliage, and
+nearby-observer browser checks. Formatting, frontend build, recovery, and owner/
+protected-file preservation checks also passed. Harness evidence:
+`/tmp/huntmaps-check-g3gve3vb`.
+
+The complete `./gui/check` run passed with exit code 0: **150 Python tests**, Python
+and frontend formatting, production build, browser recovery, and all **20 browser
+checks**, including coverage-cache, redesign, working waypoints, and first-person/
+foliage/nearby-view workflows. Full diagnostics: `/tmp/huntmaps-check-l4mq6kei`.
+The final preservation review found no changes to 11,819 protected inventory
+files, owner records, or any pre-existing frontend source/browser-check files.
+The separate approach-review autosave/confirmation race remains outside this
+memory correction. Very dense scenes remain subject to the existing preparation
+caps; this change does not promise unlimited lidar capacity or field validation.
+
 ## Real data and processing
 
 Five new USGS lidar tiles transferred **314,136,329 bytes** within the 500 MB pilot

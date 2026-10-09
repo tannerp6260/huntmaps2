@@ -17,8 +17,15 @@ def cells(points, ground, observer_ground, neighbor_support=False):
     # Sort by XYZ then classification; duplicate spatial returns count only once.
     xyz, index = np.unique(eligible[:, :3], axis=0, return_index=True)
     eligible = eligible[index]
-    z = sample(ground, 1, -300, 300, xyz[:, 0], xyz[:, 1])
-    eligible = eligible[np.isfinite(z) & (xyz[:, 2] - z > 0.5)]
+    # Triangle sampling uses several arrays per return. Bound those temporaries
+    # independently of the number of measured returns; admission stays exact.
+    keep = np.empty(len(xyz), dtype=bool)
+    for start in range(0, len(xyz), 100000):
+        batch = xyz[start : start + 100000]
+        z = sample(ground, 1, -300, 300, batch[:, 0], batch[:, 1])
+        keep[start : start + len(batch)] = np.isfinite(z) & (batch[:, 2] - z > 0.5)
+    eligible = eligible[keep]
+    del xyz, index, keep
     keys = np.floor(eligible[:, :3] - [0, 0, observer_ground]).astype(np.int32)
     unique, inverse, count = np.unique(
         keys, axis=0, return_inverse=True, return_counts=True

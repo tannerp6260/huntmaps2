@@ -67,14 +67,30 @@ try {
    assert.ok((await cache()).length<=8,'Coverage source retention must remain bounded');
  }
  await page.getByLabel('Run selector').selectOption('workflow-fixture');
- await ready('A0001');
+ // Find opens the leading recommendation/coverage setup; the saved approach
+ // review focus is restored only when entering Approach.
+ const workflowRun=await (await page.request.get(base+'/api/runs/workflow-fixture')).json();
+ const workflowFirst=workflowRun.recommendation_ids[0]||[...workflowRun.candidates].sort((a,b)=>(b.metrics.raw_km2||0)-(a.metrics.raw_km2||0))[0].id;
+ await ready(workflowFirst);
+ assert.equal(await page.getByLabel('Select '+workflowFirst,{exact:true}).getAttribute('aria-pressed'),'true','Changing runs must select the new run’s coverage leader');
+ assert.ok(requests.some(r=>!r.background&&r.url.includes('/runs/workflow-fixture/')&&r.url.includes('/visible/'+workflowFirst+'/')),'New-run selection must request its own coverage');
+ assert.ok((await cache()).length>0);
  assert.ok((await cache()).every(key=>!key.includes('-search-fixture-')),'Changing runs must clear the old browser sources');
+ const review=await (await page.request.get(base+'/api/runs/workflow-fixture/approach-review')).json();
+ assert.equal(review.active_point,'A0001');
+ const nav=page.getByRole('navigation',{name:'Scouting workflow'});
+ await nav.getByRole('button',{name:/Approach.*selected/}).click();
+ await ready(review.active_point);
+ await page.getByRole('button',{name:'← Shortlist',exact:true}).click();
+ assert.equal(await page.getByLabel('Select '+review.active_point,{exact:true}).getAttribute('aria-pressed'),'true','Approach must restore the saved review focus');
+ await nav.getByRole('button',{name:/Find/}).click();
  await page.getByLabel('Run selector').selectOption('search-fixture'); await ready(first);
+ assert.ok((await cache()).every(key=>!key.includes('-workflow-fixture-')),'Returning must clear the other run’s browser sources');
  await page.screenshot({path:out+'/coverage-cache-desktop.png',fullPage:true});
  await page.setViewportSize({width:900,height:900}); await ready(first);
  await page.screenshot({path:out+'/coverage-cache-900.png',fullPage:true});
  const heap=await cdp.send('Runtime.getHeapUsage');
  assert.deepEqual(errors,[]);
- fs.writeFileSync(out+'/results.json',JSON.stringify({firstMs,prefetchedMs,returnMs,returnAdditionalTileRequests:after-before,httpCoverageCacheHits:coverageHits(),prefetchRequests:warmed.length,retainedSources:(await cache()).length,heap,errors},null,2));
+ fs.writeFileSync(out+'/results.json',JSON.stringify({firstMs,prefetchedMs,returnMs,returnAdditionalTileRequests:after-before,httpCoverageCacheHits:coverageHits(),prefetchRequests:warmed.length,retainedSources:(await cache()).length,workflowFirst,restoredReviewFocus:review.active_point,heap,errors},null,2));
  console.log('Real coverage prefetch, source retention, reload HTTP cache and dismiss/restore verified:',out);
 } finally {await browser.close()}

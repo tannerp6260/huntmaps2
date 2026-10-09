@@ -142,29 +142,283 @@ class GroundDiagnostics(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError,'safely resume'):worker.acquire(src,True)
             self.assertEqual((folder/'a.partial').read_bytes(),b'abc')
 
-if __name__=='__main__':unittest.main()
+
+
+class PreparationMemory(unittest.TestCase):
+    def test_spooled_crop_preserves_order_filters_and_cleanup(self):
+        from types import SimpleNamespace
+        from unittest.mock import MagicMock
+
+        original_file = tempfile.TemporaryFile
+        files = []
+
+        def temporary_file():
+            f = original_file()
+            files.append(f)
+            return f
+
+        vertical = SimpleNamespace(to_wkt=lambda: "NAVD88")
+        crs = SimpleNamespace(
+            axis_info=[SimpleNamespace(direction="up", unit_conversion_factor=1)],
+            is_compound=True,
+            sub_crs_list=[vertical],
+        )
+        chunk = SimpleNamespace(
+            x=np.array([10.1, 11.2, 12.3, 13.4, 500.0, 14.5]),
+            y=np.full(6, 20.2),
+            z=np.array([100.0, 101.0, 102.0, np.nan, 104.0, 105.0]),
+            classification=np.array([2, 4, 7, 1, 1, 1]),
+            withheld=np.array([False, False, False, False, False, True]),
+        )
+        reader = MagicMock()
+        reader.__enter__.return_value = reader
+        reader.header.parse_crs.return_value = crs
+        reader.chunk_iterator.side_effect = lambda size: iter([chunk, chunk])
+        laspy = SimpleNamespace(
+            open=lambda *a, **kw: reader, LazBackend=SimpleNamespace(Lazrs=1)
+        )
+        transformer = SimpleNamespace(transform=lambda x, y: (x, y))
+        pyproj = SimpleNamespace(
+            Transformer=SimpleNamespace(from_crs=lambda *a, **kw: transformer)
+        )
+        run = SimpleNamespace(
+            points={"X": {"x": 10.0, "y": 20.0}}, config={"epsg": 32613}
+        )
+        sources = [
+            ({"candidates": ["X"]}, Path("a.laz"), "a"),
+            ({"candidates": ["other"]}, Path("ignored.laz"), "b"),
+        ]
+        expected = np.tile(
+            np.column_stack(
+                [
+                    chunk.x[:2] - 10.0,
+                    chunk.y[:2] - 20.0,
+                    chunk.z[:2],
+                    chunk.classification[:2],
+                ]
+            ),
+            (2, 1),
+        )
+        with patch.object(worker, "deps", return_value=(laspy, pyproj)), patch.object(
+            worker.tempfile, "TemporaryFile", side_effect=temporary_file
+        ):
+            points, vref, hist = worker.crop_points(run, "X", sources)
+            np.testing.assert_array_equal(points, expected)
+            self.assertEqual(points.dtype, np.float64)
+            self.assertEqual((vref, hist), ("NAVD88", {"2": 2, "4": 2}))
+            self.assertTrue(files[-1].closed)
+            reader.chunk_iterator.side_effect = MemoryError("decoder allocation")
+            with self.assertRaises(MemoryError):
+                worker.crop_points(run, "X", sources)
+            self.assertTrue(files[-1].closed)
+            empty, _, hist = worker.crop_points(run, "X", [])
+            self.assertEqual(empty.shape, (0, 4))
+            self.assertEqual(hist, {})
+
+    def test_baseline_window_matches_native_crop_and_edges(self):
+        from types import SimpleNamespace
+        from unittest.mock import MagicMock
+        from osgeo import gdal
+
+        dem = gdal.GetDriverByName("MEM").Create("", 137, 127, 1, gdal.GDT_Float32)
+        gt = (123.25, 37.5, 0.0, 6543.75, 0.0, -37.5)
+        dem.SetGeoTransform(gt)
+        data = np.arange(137 * 127, dtype=np.float32).reshape(127, 137)
+        data[10, 10] = -9999
+        data[11, 11] = np.nan
+        dem.GetRasterBand(1).SetNoDataValue(-9999)
+        dem.GetRasterBand(1).WriteArray(data)
+        read = MagicMock(side_effect=dem.ReadAsArray)
+        proxy = SimpleNamespace(
+            RasterXSize=137,
+            RasterYSize=127,
+            GetGeoTransform=dem.GetGeoTransform,
+            GetRasterBand=dem.GetRasterBand,
+            ReadAsArray=read,
+        )
+        r, c = np.indices(data.shape)
+        for x, y in [
+            (2500.0, 4000.0),
+            (gt[0] + 18.75, gt[3] - 18.75),
+            (gt[0] - 2001.25, gt[3] + 2001.25),
+        ]:
+            with self.subTest(observer=(x, y)):
+                xx = gt[0] + (c + 0.5) * gt[1] - x
+                yy = gt[3] + (r + 0.5) * gt[5] - y
+                rr, cc = np.where((abs(xx) <= 2020) & (abs(yy) <= 2020))
+                lo, hi, left, right = rr.min(), rr.max() + 1, cc.min(), cc.max() + 1
+                expected = np.where(np.isfinite(data) & (data != -9999), data, np.nan)[
+                    lo:hi, left:right
+                ]
+                actual, res, x0, y0 = worker.baseline_grid(
+                    SimpleNamespace(dem=proxy, points={"X": {"x": x, "y": y}}), "X"
+                )
+                np.testing.assert_array_equal(actual, expected)
+                self.assertEqual((res, x0, y0), (37.5, xx[lo, left], yy[lo, left]))
+                self.assertEqual(read.call_args.args, (left, lo, right - left, hi - lo))
+        with self.assertRaisesRegex(ValueError, "no local terrain"):
+            worker.baseline_grid(
+                SimpleNamespace(
+                    dem=proxy, points={"X": {"x": -10000.0, "y": -10000.0}}
+                ),
+                "X",
+            )
+
+    def test_display_global_stride_and_filters_across_batches(self):
+        rng = np.random.default_rng(54)
+        points = np.column_stack(
+            [
+                rng.uniform(-310, 310, (1100003, 2)),
+                rng.uniform(0, 4, 1100003),
+                rng.integers(0, 7, 1100003),
+            ]
+        )
+        ground = np.zeros((601, 601))
+        ground[250:270, 290:310] = np.nan
+        within = points[np.hypot(points[:, 0], points[:, 1]) <= 300]
+        z = fp.sample(ground, 1, -300, 300, within[:, 0], within[:, 1])
+        eligible = within[
+            (within[:, 3] != 2) & np.isfinite(z) & (within[:, 2] - z > 0.5)
+        ]
+        step = max(1, math.ceil(len(eligible) / 500000))
+        self.assertGreater(step, 1)
+        with patch.object(fp, "sample", wraps=fp.sample) as sample:
+            display, raw, count, actual_step = worker.display_points(points, ground)
+            self.assertTrue(
+                all(len(call.args[4]) <= 100000 for call in sample.call_args_list)
+            )
+        np.testing.assert_array_equal(display, eligible[::step])
+        self.assertEqual((raw, count, actual_step), (len(within), len(eligible), step))
+        empty, raw, count, step = worker.display_points(np.empty((0, 4)), ground)
+        self.assertEqual((empty.shape, raw, count, step), ((0, 4), 0, 0, 1))
+
+    def test_sampling_under_actual_address_limit(self):
+        import os, subprocess, sys
+
+        code = """
+import mmap, pathlib, resource
+import numpy as np
+from huntmaps_gui import first_person as fp, first_person_worker as worker
+points = np.empty((3698058,4), dtype=np.float64)
+points[:] = [0.,0.,1.,1.]
+ground = np.zeros((601,601))
+limit = 1536*1024**2
+resource.setrlimit(resource.RLIMIT_AS, (limit,limit))
+size = int(next(line.split()[1] for line in pathlib.Path('/proc/self/status').read_text().splitlines() if line.startswith('VmSize:')))*1024
+# Model runtime/decoder reservations while leaving room for the exact output
+# and bounded sampling temporaries, under the unchanged production limit.
+reservation = mmap.mmap(-1, limit-size-points.nbytes-64*1024**2)
+try:
+    fp.sample(ground,1,-300,300,points[:,0],points[:,1])
+except MemoryError:
+    pass
+else:
+    raise AssertionError('Unbounded reference unexpectedly fit')
+actual = worker.above_ground(points,ground)
+assert actual.shape == points.shape
+assert np.array_equal(actual[0],points[0]) and np.array_equal(actual[-1],points[-1])
+"""
+        result = subprocess.run(
+            [sys.executable, "-c", code],
+            env=dict(os.environ, OPENBLAS_NUM_THREADS="1", OMP_NUM_THREADS="1"),
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_vegetation_distinct_support_across_sampling_batches(self):
+        from huntmaps_gui import vegetation_screen as veg
+
+        count = 200005
+        points = np.column_stack(
+            [
+                np.linspace(1.01, 1.99, count),
+                np.full(count, 0.1),
+                np.full(count, 1.1),
+                np.full(count, 4.0),
+            ]
+        )
+        points[0, 3] = 1
+        # A differently classified duplicate must not replace the original
+        # return or count toward the four-distinct-return support rule.
+        duplicate = points[0].copy()
+        duplicate[3] = 4
+        points = np.vstack(
+            [points, duplicate, [10.0, 0.1, 1.1, 1.0], [2.0, 0.1, 0.4, 1.0]]
+        )
+        ground = np.zeros((601, 601))
+        ground[300, 310] = np.nan
+        with patch.object(fp, "sample", wraps=fp.sample) as sample:
+            centres, kinds, counts, eligible = veg.cells(points, ground, 0)
+            self.assertTrue(
+                all(len(call.args[4]) <= 100000 for call in sample.call_args_list)
+            )
+        np.testing.assert_array_equal(counts, [count])
+        np.testing.assert_array_equal(kinds, [1])
+        self.assertEqual(eligible, count)
+        self.assertEqual(centres.shape, (1, 3))
+        self.assertEqual((centres[0, 0], centres[0, 2]), (1.5, -0.5))
+
+    def test_memory_failure_reports_stage(self):
+        with self.assertRaisesRegex(
+            MemoryError,
+            "preparing vegetation support for X.*prior views were retained",
+        ) as caught:
+            with worker.preparation_stage("X", "preparing vegetation support"):
+                raise MemoryError("allocation")
+        self.assertIsInstance(caught.exception.__cause__, MemoryError)
+        self.assertEqual(str(caught.exception.__cause__), "allocation")
+
+
+if __name__ == "__main__":
+    unittest.main()
+
 
 class ImageryAndReturns(unittest.TestCase):
     def test_sharp_source_priority_and_nodata(self):
-        from osgeo import gdal,osr
+        from osgeo import gdal, osr
+
         with tempfile.TemporaryDirectory() as tmp:
-            ref=osr.SpatialReference();ref.ImportFromEPSG(32613)
-            images=[]
-            for name,n,spacing,color in [('coarse',2,2,30),('fine',4,1,200)]:
-                path=str(Path(tmp)/(name+'.tif'));ds=gdal.GetDriverByName('GTiff').Create(path,n,n,4,gdal.GDT_Byte)
-                ds.SetGeoTransform((0,spacing,0,4,0,-spacing));ds.SetProjection(ref.ExportToWkt())
-                for b in range(1,4):ds.GetRasterBand(b).WriteArray(np.full((n,n),color,dtype=np.uint8))
-                alpha=np.full((n,n),255,dtype=np.uint8)
-                if name=='fine':alpha[0,0]=0
-                ds.GetRasterBand(4).SetColorInterpretation(gdal.GCI_AlphaBand);ds.GetRasterBand(4).WriteArray(alpha);ds=None
+            ref = osr.SpatialReference()
+            ref.ImportFromEPSG(32613)
+            images = []
+            for name, n, spacing, color in [("coarse", 2, 2, 30), ("fine", 4, 1, 200)]:
+                path = str(Path(tmp) / (name + ".tif"))
+                ds = gdal.GetDriverByName("GTiff").Create(path, n, n, 4, gdal.GDT_Byte)
+                ds.SetGeoTransform((0, spacing, 0, 4, 0, -spacing))
+                ds.SetProjection(ref.ExportToWkt())
+                for b in range(1, 4):
+                    ds.GetRasterBand(b).WriteArray(
+                        np.full((n, n), color, dtype=np.uint8)
+                    )
+                alpha = np.full((n, n), 255, dtype=np.uint8)
+                if name == "fine":
+                    alpha[0, 0] = 0
+                ds.GetRasterBand(4).SetColorInterpretation(gdal.GCI_AlphaBand)
+                ds.GetRasterBand(4).WriteArray(alpha)
+                ds = None
                 images.append(dict(path=path))
-            for order in [images,list(reversed(images))]:
-                a=worker.imagery_mosaic(order,32613,[0,0,4,4],4)
-                self.assertEqual(a[1,1,0],200);self.assertEqual(a[0,0,0],30);self.assertTrue((a[:,:,3]==255).all())
-            a=worker.imagery_mosaic(images,32613,[-4,-4,4,4],8)
-            self.assertEqual(a[7,0,3],0)
+            for order in [images, list(reversed(images))]:
+                a = worker.imagery_mosaic(order, 32613, [0, 0, 4, 4], 4)
+                self.assertEqual(a[1, 1, 0], 200)
+                self.assertEqual(a[0, 0, 0], 30)
+                self.assertTrue((a[:, :, 3] == 255).all())
+            a = worker.imagery_mosaic(images, 32613, [-4, -4, 4, 4], 8)
+            self.assertEqual(a[7, 0, 3], 0)
+
     def test_above_ground_excludes_ground_low_and_unknown(self):
-        a=np.full((601,601),100.);a[300,310]=np.nan
-        points=np.array([[0,0,101,2],[0,0,100.4,1],[0,0,101.2,1],[1,0,102,5],[10,0,104,1]],dtype=float)
-        chosen=worker.above_ground(points,a)
-        np.testing.assert_array_equal(chosen,points[[2,3]])
+        a = np.full((601, 601), 100.0)
+        a[300, 310] = np.nan
+        points = np.array(
+            [
+                [0, 0, 101, 2],
+                [0, 0, 100.4, 1],
+                [0, 0, 101.2, 1],
+                [1, 0, 102, 5],
+                [10, 0, 104, 1],
+            ],
+            dtype=float,
+        )
+        chosen = worker.above_ground(points, a)
+        np.testing.assert_array_equal(chosen, points[[2, 3]])

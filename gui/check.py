@@ -14,6 +14,28 @@ import time
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
+BROWSER_CHECKS = (
+    "browser-workflow-check",
+    "browser-redesign-check",
+    "browser-target-search-check",
+    "browser-guided-approaches-check",
+    "browser-refinement-check",
+    "browser-workflow-regressions",
+    "browser-transfer-check",
+    "browser-coverage-search-check",
+    "browser-coverage-cache-check",
+    "browser-coverage-render-check",
+    "browser-check",
+    "browser-training-check",
+    "browser-first-person-check",
+    "browser-working-waypoint-check",
+    "browser-storage-check",
+    "browser-scouting-check",
+    "browser-network-compat-check",
+    "browser-performance-check",
+    "browser-clusters-check",
+    "browser-nearby-observer-check",
+)
 
 
 def inventory():
@@ -59,7 +81,15 @@ def main():
         action="store_true",
         help="Reuse a prior passing unit-test run; check formatting, build and browser journeys",
     )
+    parser.add_argument(
+        "--browser-check",
+        action="append",
+        choices=BROWSER_CHECKS,
+        help="Run only these browser checks, in the supplied order, using disposable fixtures/state",
+    )
     args = parser.parse_args()
+    if args.skip_browser and args.browser_check:
+        parser.error("--browser-check cannot be combined with --skip-browser")
     work = Path(tempfile.mkdtemp(prefix="huntmaps-check-"))
     state = work / "state"
     state.mkdir()
@@ -309,28 +339,8 @@ def main():
                     time.sleep(0.1)
             else:
                 raise RuntimeError("Dedicated test server did not become ready")
-            for script in (
-                "browser-workflow-check.mjs",
-                "browser-redesign-check.mjs",
-                "browser-target-search-check.mjs",
-                "browser-guided-approaches-check.mjs",
-                "browser-refinement-check.mjs",
-                "browser-workflow-regressions.mjs",
-                "browser-transfer-check.mjs",
-                "browser-coverage-search-check.mjs",
-                "browser-coverage-cache-check.mjs",
-                "browser-coverage-render-check.mjs",
-                "browser-check.mjs",
-                "browser-training-check.mjs",
-                "browser-first-person-check.mjs",
-                "browser-working-waypoint-check.mjs",
-                "browser-storage-check.mjs",
-                "browser-scouting-check.mjs",
-                "browser-network-compat-check.mjs",
-                "browser-performance-check.mjs",
-                "browser-clusters-check.mjs",
-                "browser-nearby-observer-check.mjs",
-            ):
+            for check in args.browser_check or BROWSER_CHECKS:
+                script = check + ".mjs"
                 env["HUNTMAPS_SCREENSHOTS"] = str(
                     work / "screenshots" / script.removesuffix(".mjs")
                 )
