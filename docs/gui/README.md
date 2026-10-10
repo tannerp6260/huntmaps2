@@ -39,13 +39,31 @@ verification. Existing CLI commands continue to work.
    removing the comparison. Shared terrain appears below the map. **Setup close-up**
    zooms into the active observer. Saved inspection sectors include hidden terrain;
    tree classes apply to the active setup only.
-4. **Shortlist** or **Dismiss** a setup. Then use the Find → Approach → Inspect → Save navigation to compare
-   approaches, select an alternative, prepare a view and confirm. Legacy review
+4. **Shortlist** or **Dismiss** a setup. **Plan approach** opens the focused setup.
+   Draw and confirm a boundary containing that setup and a mapped road or trail,
+   check the boundary, then explicitly **Calculate approaches**. Select an
+   alternative, prepare a view and confirm through Approach → Inspect → Save. Legacy review
    annotations and notes remain separate from these workflow decisions.
 5. Check **Export** for the observer setups you want, then click GPX or KML.
    Export coordinates are the saved observer positions, with meaningful names and
    your notes. Target-opening coordinates are deliberately excluded. These are
    provisional waypoints, not navigation routes.
+
+**Prepare coverage** prepares the next 5, 10 or 20 setups in the displayed order,
+including the current setup. Ten is the default. Wait for **Coverage prepared**,
+then select each setup normally. Preparation can be cancelled and resumed; completed
+tiles remain cached. It pauses during map movement, 3D viewing and other jobs.
+Zooming beyond the prepared view or cache eviction can require more loading.
+The map shows a prominent loading card while a selected view's shading is being
+prepared and a retry button if it fails. **Compare** remains a separate display.
+
+Each shortlisted setup gets its own approach boundary and decision. The setup
+counter is a review queue. A new setup starts with no boundary; importing or copying
+another boundary is an advanced, explicit choice requiring confirmation for that
+setup. Boundary checks explain missing mapped departures before calculation.
+Terrain constraints can still prevent a path. **Terrain I want to see** belongs to
+Find; approach preferences describe climbing, steepness, vegetation and the hard
+slope limit. See [coverage and approach verification](COVERAGE_APPROACH_FLOW_2026-10-10.md).
 
 Map controls include zoom, compass rotation/reset, yard scale, imagery and
 visibility toggles, opacity sliders, legend and whole-area/close-up buttons.
@@ -71,6 +89,24 @@ can request catalog metadata (up to its existing 5 MB response limit). It does n
 perform bulk downloads. Review source items, estimate, cap, errors and required-data
 text in the interface. **Generate setups** approves the displayed plan and allowance; there is no separate checkbox and preparing a plan never starts bulk transfer. The existing streaming cap and validation remain authoritative.
 If the estimate exceeds the cap or source planning fails, analysis remains blocked.
+
+Preparation also checks project-local raw downloads from previous normal runs and
+source caches. Compatible USGS vegetation must match the requested 2023 product,
+30 m request and interpolation; CPW responses must match the seasonal layer and
+complete query semantics and cover the current analysis extent. Checksums, raster
+readability and footprint are verified before importing exact bytes into `.gui/sources`.
+Configured sources take precedence; managed imports are preferred over other raw
+caches, then paths are considered in sorted order. Unknown vegetation remains unknown.
+Original files and prior results are never edited, and later reuse needs only the managed
+copy. Source copies retain the 20 GiB free-space reserve and are outside disposable
+display-cache cleanup because saved analyses can reference them.
+
+After installing this update, restart HuntMaps2 and use **Refresh plan / recover
+partial preparation** on an existing failed plan. Review **Verified local sources**
+for original product/retrieval dates and source links, then **Generate setups**.
+Changed source selections require a fresh review. Local copies cost no new download
+bytes; uncovered areas still need the source services. This does not update old
+vegetation products to current conditions or guarantee legal access.
 
 Click **Generate setups**. One background process group runs at a time.
 The job panel shows elapsed time, actual wrapper stages, newly saved engine artifacts,
@@ -244,8 +280,12 @@ Original area and scores stay visible. Matching-area sorting uses original order
 ties. Aspect restrictions exclude flats and unknown aspect; unrestricted aspect keeps
 flats. Edited filters remain unapplied until Apply. Coordinates remain exact.
 
-Save at least one **Keep** decision to enable **Plan approaches**. Draw or import a
-separate travel polygon, optionally add exclusion polygons, and select loaded networks.
+Shortlist at least one setup to enable **Plan approach**. Draw and confirm a
+separate search boundary for each setup, including its destination and a mapped
+road/trail departure. Geometry/departure checks run before an explicit calculation.
+Imports, boundary copying and exclusion polygons are advanced options; copied
+boundaries require confirmation for their destination. Existing saved definitions
+remain available.
 The travel polygon is a search domain, not inferred permission. Departures within one
 mile are compared independently for each kept setup. **Include trail walk** adds a
 network start; use **Choose network start on map** or exact longitude,latitude.
@@ -318,11 +358,17 @@ For an existing failed preparation, restart the GUI, use **Refresh plan / recove
 partial preparation**, review the updated estimate and start/resume. Covering cached
 networks are reused without another download; prior completed runs are preserved.
 
-Coverage appears together once the selected setup’s current viewport tiles are loaded. The map shows Loading coverage, Coverage ready or Coverage incomplete with Retry. See [workflow guidance](WORKFLOW.md) for expanded search, checkpoints and resource guards.
+Coverage appears together once the selected setup’s current viewport tiles are loaded and rendered. Opening an uncached setup shows a prominent map loading card; failures show Retry. Panning uses the compact status. **Prepare next** offers 5, 10 or 20 setups (default 10), including the current setup and following the displayed ranking. Detailed tiles are prepared around each setup at the normal selection zoom, with bounded overview tiles. Preparation is sequential, pauses during jobs/map movement, and retains completed tiles after cancellation or retry. Only selected coverage is rendered; retained GPU sources remain capped at eight. Different zooms, expanded viewports or cache eviction can need more loading. See [workflow guidance](WORKFLOW.md) for expanded search, checkpoints and resource guards.
 
 ## Recovery and testing
 
 Small observer areas now use denser automated sampling down to grid resolution. Results disclose effective spacing and unused evaluation budget. Approved sources remain approved when they become verified cached files; retries retain cumulative transfer accounting. Older failed plans require one explicit refresh and review, preserving downloaded files. See [TESTING.md](TESTING.md) for the execution-level coverage matrix and acceptance procedure.
+
+Provider errors identify the requested source. Invalid responses are retained with
+their provenance under the run's `downloads/rejected/` directory and are excluded
+from reusable downloads. Retry reacquires rejected sources when the provider is
+available, while reusing validated files and retaining cumulative transfer accounting.
+See [source acquisition recovery](ACQUISITION_RECOVERY_2026-10-10.md).
 
 ### Filter-first viewpoint search
 

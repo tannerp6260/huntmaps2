@@ -24,6 +24,7 @@ BROWSER_CHECKS = (
     "browser-transfer-check",
     "browser-coverage-search-check",
     "browser-coverage-cache-check",
+    "browser-coverage-batch-check",
     "browser-coverage-render-check",
     "browser-check",
     "browser-training-check",

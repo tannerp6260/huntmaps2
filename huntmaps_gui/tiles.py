@@ -1,4 +1,4 @@
-from .display_cache import touch, evict, pin, remember
+from .display_cache import touch, maybe_evict, changed, pin, remember
 from .storage import locked
 
 """GDAL EPSG:3857 XYZ raster adapter. Nearest sampling for saved categorical cells."""
@@ -29,7 +29,7 @@ def cache_cleanup():
         yield
     finally:
         with locked(STATE / "maintenance"), LOCK:
-            evict()
+            maybe_evict()
 
 
 COLORS = [(0, 192, 232), (255, 103, 130), (170, 111, 255)]
@@ -55,6 +55,7 @@ def fingerprint(paths):
 
 def rgba_file(path, rgba, ds):
     path.parent.mkdir(parents=True, exist_ok=True)
+    changed()
     temp = path.with_suffix(".tmp.tif")
     out = gdal.GetDriverByName("GTiff").Create(
         str(temp),
@@ -118,6 +119,7 @@ def sources(run, layer, ident, color):
         else:
             mask, check = run.mask(ident)
             path.parent.mkdir(parents=True, exist_ok=True)
+            changed()
             (path.parent / f"{ident}-alignment.json").write_text(
                 __import__("json").dumps(check, indent=2)
             )
@@ -230,6 +232,7 @@ def tile(run, layer, ident, z, x, y, color=0, background=False):
             cache.parent.mkdir(parents=True, exist_ok=True)
             with locked(STATE / "maintenance"), LOCK:
                 if not cache.exists():
+                    changed()
                     temp = cache.with_suffix(".tmp")
                     temp.write_bytes(data)
                     temp.replace(cache)

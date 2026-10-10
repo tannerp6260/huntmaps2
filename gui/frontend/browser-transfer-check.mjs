@@ -53,6 +53,27 @@ try {
  await page.getByRole('button',{name:'View',exact:true}).click();
  await section.evaluate(el=>el.open=true);
  await section.getByText('Validating outputs',{exact:true}).waitFor();
+ // Source review displays the original dates/URLs for imported local raw data.
+ // Only this API boundary is mocked; backend import/approval has real-worker tests.
+ const localPage=await browser.newPage({viewport:{width:1500,height:1050}});
+ const localId='e'.repeat(32), sourceUrl='https://dmsdata.cr.usgs.gov/geoserver/mrlc_tree_westernconus_year_data/wcs?time=2023-01-01';
+ localPage.on('pageerror',e=>errors.push(e.message));
+ await localPage.addInitScript(id=>{localStorage.setItem('huntmaps-online-imagery','off');sessionStorage.setItem('huntmaps-generation-plan',id)},localId);
+ await localPage.route('**/*',r=>r.request().url().startsWith(base)||r.request().url().startsWith('blob:')?r.continue():r.abort());
+ await localPage.route('**/api/jobs',r=>r.fulfill({json:[{id:'f'.repeat(32),plan:localId,name:'Local reuse fixture',kind:'baseline',status:'interrupted',stage:'Checking sources',elapsed_s:1}]}));
+ await localPage.route(`**/api/plans/${localId}`,r=>r.fulfill({json:{id:localId,name:'Local reuse fixture',prepared:true,sources_ready:true,max_download_mb:30,review_signature:'fixture',settings:{radius_m:1500,observation_minutes:30,candidate_count:620,search:{recommendation_count:5}},acquisition:{estimated_bytes:0,already_cached_bytes:1000000,cached_keys:['dem','tree'],items:[],errors:[],estimate_note:'Offline source-review fixture',reused_sources:[{key:'tree',provider:'USGS RCMAP',acquisition_date:'2023 annual product',retrieved_utc:'2026-10-03T02:38:22Z',url:sourceUrl,sha256:'0'.repeat(64)}]}}}));
+ await localPage.goto(base);
+ await localPage.getByText('Verified local sources',{exact:true}).click();
+ const sources=localPage.locator('details').filter({has:localPage.getByText('Verified local sources',{exact:true})});
+ await sources.getByText(/tree: USGS RCMAP · 2023 annual product · retrieved 2026-10-03/).waitFor();
+ assert.equal(await sources.getByRole('link',{name:'Original source'}).getAttribute('href'),sourceUrl);
+ for (const width of [1500,900]) {
+  await localPage.setViewportSize({width,height:900});
+  await sources.scrollIntoViewIfNeeded();
+  await localPage.screenshot({path:out+`/03-local-sources-${width}.png`,fullPage:true});
+  assert.ok(await localPage.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ }
+ await localPage.close();
  assert.deepEqual(errors,[]);
  fs.writeFileSync(out+'/results.json',JSON.stringify({errors,source:'synthetic progress only; no downloads',plan,progress},null,2));
  console.log('Download estimate, custom speed, progress, stall, reserve block, reload and 900px verified:',out);

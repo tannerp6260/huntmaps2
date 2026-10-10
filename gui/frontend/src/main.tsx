@@ -12,8 +12,9 @@ import {
 import NetworkMap from './network-map';
 import AccessSampling, { type Sampling } from './access-sampling';
 import ScoutingTools, { type AppliedFilter } from './scouting-tools';
-import { updateMapLayers } from './map-layers';
-import { prepareCoverage } from './coverage-cache';
+import { updateMapLayers, type CoverageDisplay } from './map-layers';
+import CoverageBatch from './coverage-batch';
+import { COVERAGE_REVIEW_ZOOM } from './coverage-cache';
 import AreaSettings from './area-creation';
 import StoragePanel from './storage-panel';
 import RunManagement from './run-management';
@@ -116,8 +117,26 @@ function App() {
   const [treeThreshold, setTreeThreshold] = useState(10);
   const [targets, setTargets] = useState<TargetCriteria>(defaultCriteria);
   const [avoidDense, setAvoidDense] = useState(false);
-  const [coverageStatus, setCoverageStatus] = useState('');
-  const [coveragePreparation, setCoveragePreparation] = useState('');
+  const [coverageDisplay, setCoverageDisplay] = useState<CoverageDisplay>({
+    phase: 'idle',
+    ids: [],
+    initial: false,
+  });
+  const coverageStatus =
+    coverageDisplay.phase === 'idle'
+      ? ''
+      : `${coverageDisplay.phase === 'ready' ? 'Coverage ready' : coverageDisplay.phase === 'error' ? 'Coverage incomplete' : 'Loading additional coverage'} · ${coverageDisplay.ids.join(', ')}`;
+  const [coverageOverlay, setCoverageOverlay] = useState(false);
+  useEffect(() => {
+    setCoverageOverlay(false);
+    if (coverageDisplay.phase === 'error') {
+      setCoverageOverlay(true);
+      return;
+    }
+    if (coverageDisplay.phase !== 'loading' || !coverageDisplay.initial) return;
+    const timer = window.setTimeout(() => setCoverageOverlay(true), 150);
+    return () => clearTimeout(timer);
+  }, [coverageDisplay.phase, coverageDisplay.initial, coverageDisplay.ids.join(',')]);
   const [coverageRetry, setCoverageRetry] = useState(0);
   const [sortMode, setSortMode] = useState('coverage');
   const [planningApproaches, setPlanningApproaches] = useState(false);
@@ -844,7 +863,12 @@ function App() {
   useEffect(() => {
     if (!ready || !run || !selected || newRun) return;
     const p = shownCandidates.find((p) => p.id === selected);
-    if (p) map.current!.flyTo({ center: [p.longitude, p.latitude], zoom: 13.8, duration: 0 });
+    if (p)
+      map.current!.flyTo({
+        center: [p.longitude, p.latitude],
+        zoom: COVERAGE_REVIEW_ZOOM,
+        duration: 0,
+      });
   }, [ready, selected, run, newRun, workingGeometryStamp]);
   useEffect(() => {
     if (!ready) return;
@@ -918,7 +942,7 @@ function App() {
       },
       api,
       setError,
-      setCoverageStatus,
+      setCoverageDisplay,
       coverageRetry,
     );
   }, [
@@ -948,6 +972,7 @@ function App() {
     if (
       !ready ||
       !newRun ||
+      drawing ||
       !training.active ||
       training.progress?.lesson !== 'area' ||
       training.draft ||
@@ -966,7 +991,7 @@ function App() {
         });
     }, 400);
     return () => clearTimeout(timer);
-  }, [ready, newRun, training.active, run?.id]);
+  }, [ready, newRun, drawing, training.active, run?.id]);
   const toggleCompare = (id: string) => {
     setActiveManual(null);
     setInitialObserver(null);
@@ -1269,51 +1294,6 @@ function App() {
     labelPoint?.longitude,
     labelPoint?.latitude,
     collectionSelectionVisible,
-  ]);
-  const nextCoverage = sorted
-    .slice(Math.max(0, sorted.findIndex((p) => p.id === selected) + 1))
-    .filter(
-      (p) =>
-        p.id !== selected &&
-        !workflow?.points[p.id]?.dismissed &&
-        typeof p.metrics.raw_km2 === 'number',
-    )
-    .slice(0, 200)
-    .map((p) => p.id);
-  useEffect(() => {
-    setCoveragePreparation('');
-    if (
-      !ready ||
-      !run ||
-      newRun ||
-      !visibility ||
-      compare.length ||
-      activeManual ||
-      !coverageStatus.startsWith('Coverage ready') ||
-      jobs.some((j) => ['queued', 'running', 'cancelling'].includes(j.status))
-    )
-      return;
-    return prepareCoverage(
-      map.current!,
-      run.id,
-      nextCoverage,
-      working,
-      filterId,
-      setCoveragePreparation,
-      run.bounds,
-    );
-  }, [
-    ready,
-    run?.id,
-    newRun,
-    visibility,
-    compare.join(','),
-    activeManual?.id,
-    coverageStatus,
-    nextCoverage.join(','),
-    workingGeometryStamp,
-    filterId,
-    jobs.map((j) => j.status).join(','),
   ]);
   useEffect(() => {
     setInspectStage(false);
@@ -1856,6 +1836,28 @@ function App() {
                   choose All evaluated setups to inspect the original views.
                 </p>
               )}
+              {stage === 'find' &&
+                ready &&
+                run &&
+                visibility &&
+                !compare.length &&
+                !activeManual && (
+                  <CoverageBatch
+                    map={map.current!}
+                    run={run.id}
+                    points={sorted.filter(
+                      (p) =>
+                        !workflow?.points[p.id]?.dismissed && typeof p.metrics.raw_km2 === 'number',
+                    )}
+                    selected={selected}
+                    working={working}
+                    filter={filterId}
+                    wholeArea={run.bounds}
+                    paused={jobs.some((j) =>
+                      ['queued', 'running', 'cancelling'].includes(j.status),
+                    )}
+                  />
+                )}
               <div className="ranking-caption">
                 <span>
                   {sortMode === 'engine'
@@ -2052,7 +2054,11 @@ function App() {
             }}
           />
         )}
-        <main className="map-pane" aria-label="Scouting map">
+        <main
+          className="map-pane"
+          aria-label="Scouting map"
+          aria-busy={coverageDisplay.phase === 'loading'}
+        >
           {!newRun && (loading || (runId && run?.id !== runId)) && (
             <div className="run-opening" role="status">
               Opening {runId}…
@@ -2062,17 +2068,8 @@ function App() {
           {coverageStatus && (
             <div className="coverage-status" role="status" aria-live="polite">
               {coverageStatus.startsWith('Loading') && <progress aria-label="Loading coverage" />}
-              <span>
-                {coverageStatus}
-                {coveragePreparation && (
-                  <small className="coverage-preparation" title={coveragePreparation}>
-                    {coveragePreparation.startsWith('Preparing')
-                      ? ' · Preparing other views'
-                      : ' · Other views ready'}
-                  </small>
-                )}
-              </span>
-              {coverageStatus.startsWith('Coverage incomplete') && (
+              <span>{coverageStatus}</span>
+              {coverageStatus.startsWith('Coverage incomplete') && !coverageOverlay && (
                 <button
                   onClick={() => {
                     setError('');
@@ -2084,6 +2081,38 @@ function App() {
               )}
             </div>
           )}
+          {coverageOverlay &&
+            ['loading', 'error'].includes(coverageDisplay.phase) &&
+            !newRun &&
+            visibility && (
+              <div className="coverage-loading" data-phase={coverageDisplay.phase}>
+                <div role="status" aria-live="polite" className="coverage-loading-card">
+                  <strong>
+                    {coverageDisplay.phase === 'error'
+                      ? 'Coverage couldn’t load'
+                      : `Loading visible terrain for ${coverageDisplay.ids.join(', ')}…`}
+                  </strong>
+                  {coverageDisplay.phase === 'loading' && (
+                    <progress aria-label="Loading visible terrain" />
+                  )}
+                  <p>
+                    {coverageDisplay.phase === 'error'
+                      ? 'Missing shading does not mean there is no visible terrain. Retry or select another setup.'
+                      : 'Coverage shading will appear when ready. You can select another setup while this loads.'}
+                  </p>
+                  {coverageDisplay.phase === 'error' && (
+                    <button
+                      onClick={() => {
+                        setError('');
+                        setCoverageRetry((v) => v + 1);
+                      }}
+                    >
+                      Retry coverage
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
           {ready && run && (
             <TerrainControls map={map.current!} runId={run.id} drawing={drawing} newArea={newRun} />
           )}
@@ -2715,6 +2744,34 @@ function App() {
                         {num((plan.acquisition?.already_cached_bytes || 0) / 1e6, 1)} MB ·{' '}
                         {plan.acquisition?.cached_keys?.join(', ') || 'none recorded'}
                       </p>
+                      {!!plan.acquisition?.reused_sources?.length && (
+                        <details>
+                          <summary>Verified local sources</summary>
+                          <p className="hint">
+                            Reused raw downloads retain their original dates and source information.
+                          </p>
+                          <ul>
+                            {plan.acquisition.reused_sources.map((s) => (
+                              <li key={s.key}>
+                                {s.key}: {s.provider} ·{' '}
+                                {s.acquisition_date || 'product date unknown'}
+                                {s.retrieved_utc && (
+                                  <> · retrieved {s.retrieved_utc.slice(0, 10)}</>
+                                )}
+                                {s.url && (
+                                  <>
+                                    {' '}
+                                    ·{' '}
+                                    <a href={s.url} target="_blank" rel="noreferrer">
+                                      Original source
+                                    </a>
+                                  </>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        </details>
+                      )}
                       <ul>
                         {plan.acquisition?.items?.map((i) => (
                           <li key={i.key}>

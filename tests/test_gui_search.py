@@ -196,14 +196,14 @@ class SearchTests(unittest.TestCase):
 from huntmaps_gui import search
 from unittest.mock import patch
 c=transfer.read('fixture.json');transfer.prepare(c);search.candidates(c)
-original=transfer.evaluate
+original=search.Evaluation.evaluate
 calls=0
 def interrupted(*args):
  global calls
  calls+=1
  if calls==2:raise ValueError('synthetic interruption')
  return original(*args)
-with patch.object(transfer,'evaluate',side_effect=interrupted):
+with patch.object(search.Evaluation,'evaluate',autospec=True,side_effect=interrupted):
  try:search.score(c)
  except ValueError as error:assert str(error)=='synthetic interruption'
  else:raise AssertionError('Expected interruption')

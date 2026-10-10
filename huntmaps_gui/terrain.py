@@ -1,4 +1,4 @@
-from .display_cache import bounded, touch
+from .display_cache import bounded, touch, changed
 
 """Display-only local DEM adapter. Never changes analysis elevations or masks."""
 
@@ -163,5 +163,6 @@ def elevation_tile(run, z, x, y):
         Image.fromarray(rgba, "RGBA").save(stream, format="PNG")
         data = stream.getvalue()
         cache.parent.mkdir(parents=True, exist_ok=True)
+        changed()
         cache.write_bytes(data)
         return data

@@ -49,8 +49,12 @@ try {
  const res=await page.request.put(api+'/approach-review',{headers,data:{revision:old.revision,workflow_revision:state.revision,ids:['A0001',...ids],active_point:first,point:state.points[first].point,draft:d}});assert.equal(res.status(),200,await res.text());
  await page.reload();await page.getByLabel('Run selector').selectOption('workflow-fixture');await page.getByRole('button',{name:/Approach.*selected/}).click();
  await page.getByLabel('Focused approach spot').waitFor();assert.equal(await page.getByLabel('Focused approach spot').inputValue(),first);
+ await page.locator('.approach-boundary-check[data-ready="true"]').waitFor();
+ assert.equal(requests.length,0,'Valid saved inputs must wait for an explicit calculation');
+ assert.equal(await page.getByText('Terrain I want to see',{exact:false}).isVisible(),false);
+ await page.getByRole('button',{name:'Calculate approaches for '+first,exact:true}).click();
  await page.getByRole('button',{name:'Use this approach & next spot',exact:true}).waitFor({timeout:60000});
- assert.equal(requests.length,1,'Uncomputed focused point starts one automatic comparison');
+ assert.equal(requests.length,1,'Explicit calculation starts one independent comparison');
  assert.deepEqual(requests[0].ids,[first]);
  await page.waitForFunction(ids=>{const s=JSON.parse(document.querySelector('.map').dataset.mapState||'{}');return s.loaded&&JSON.stringify(s.candidateIds?.sort())===JSON.stringify(ids.sort());},['A0001',...ids],{timeout:60000});
  const mapBox=await page.locator('.map').boundingBox();
@@ -81,6 +85,16 @@ try {
  assert.equal(requests.length,2,'Reload must not compute again');
  await page.getByRole('button',{name:'Use this approach & next spot',exact:true}).click();
  await page.waitForFunction(cid=>document.querySelector('[aria-label="Focused approach spot"]')?.value===cid,ids[1]);
+ await page.getByText('Draw this setup’s boundary to begin',{exact:false}).waitFor();
+ assert.equal(requests.length,2,'Next setup must not inherit or calculate another boundary');
+ assert.equal(await page.getByRole('button',{name:'Calculate approaches for '+ids[1],exact:true}).isDisabled(),true);
+ await page.getByText('Advanced boundary options · import, copy and areas to avoid',{exact:true}).click();
+ await page.getByLabel('Copy approach boundary').selectOption(first);
+ await page.getByRole('button',{name:'Copy boundary for this setup',exact:true}).click();
+ assert.equal(await page.getByRole('button',{name:'Calculate approaches for '+ids[1],exact:true}).isDisabled(),true,'Copy requires separate confirmation');
+ await page.getByRole('button',{name:'Confirm approach search boundary',exact:true}).click();
+ await page.locator('.approach-boundary-check[data-ready="true"]').waitFor();
+ assert.equal(requests.length,2,'Confirmation must not start calculation');
  await page.getByRole('button',{name:'Dismiss spot & next',exact:true}).click();
  await page.waitForFunction(()=>!Array.from(document.querySelectorAll('.workflow-stages button')).find(b=>b.textContent.includes('Inspect')).disabled);
  await page.screenshot({path:out+'/guided-desktop.png',fullPage:true});
@@ -88,6 +102,24 @@ try {
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  await page.getByRole('button',{name:'Undo',exact:true}).click();
  await page.waitForFunction(()=>Array.from(document.querySelectorAll('.workflow-stages button')).find(b=>b.textContent.includes('Inspect')).disabled);
+ // The primary flow is drawing a new boundary for the restored setup.
+ await page.getByLabel('Focused approach spot').selectOption(ids[1]);
+ if (await page.locator('.approach-settings').getAttribute('open')===null) await page.locator('.approach-settings > summary').click();
+ await page.waitForFunction(()=>JSON.parse(document.querySelector('.map').dataset.mapState||'{}').loaded);
+ const drawBox=await page.locator('.map').boundingBox();
+ const drawnPixel=await page.locator('.map').getAttribute('data-map-state').then(v=>JSON.parse(v).candidatePixels.find(p=>p.id===ids[1]));
+ assert.ok(drawnPixel);
+ await page.locator('.approach-controls .drawing-tools').getByRole('button',{name:'Draw boundary',exact:true}).click();
+ assert.equal(await page.getByRole('button',{name:'Confirm approach search boundary',exact:true}).count(),0,'An unfinished drawing cannot be confirmed through the imported-boundary shortcut');
+ const corners=[[-110,-110],[110,-110],[110,110],[-110,110]];
+ for(const [dx,dy] of corners)await page.mouse.click(drawBox.x+drawnPixel.x+dx,drawBox.y+drawnPixel.y+dy);
+ await page.getByRole('button',{name:'Finish shape',exact:true}).click();
+ await page.getByRole('button',{name:'Confirm boundary',exact:true}).click();
+ await page.getByText('Boundary confirmed for this setup',{exact:false}).waitFor();
+ await page.screenshot({path:out+'/drawn-boundary-900.png',fullPage:true});
+ await page.setViewportSize({width:1500,height:1050});
+ await page.screenshot({path:out+'/drawn-boundary-desktop.png',fullPage:true});
+ assert.equal(requests.length,2,'Confirming a drawn boundary must wait for explicit calculation');
  // Keep the remainder of the suite's original single-point fixture intact.
  for(const cid of ids)await decide(cid,'remove');
  await page.getByRole('button',{name:'+ New area',exact:true}).click();
@@ -97,5 +129,5 @@ try {
  assert.equal(await page.getByRole('button',{name:'Review downloads',exact:true}).isDisabled(),true);
  await input.pressSequentially('75');assert.equal(await input.inputValue(),'.75');assert.equal(await page.getByRole('button',{name:'Review downloads',exact:true}).isDisabled(),false);
  assert.deepEqual(errors,[]);fs.writeFileSync(out+'/results.json',JSON.stringify({errors,requests,session:await review()},null,2));
- console.log('Imperial known answers, raw decimal keystrokes, isolated automatic comparisons, preferences/reload, next/dismiss/Undo and queue gate verified');
+ console.log('Imperial known answers, raw decimal keystrokes, explicit independent comparisons and per-spot boundaries, preferences/reload, next/dismiss/Undo and queue gate verified');
 } catch(e) {await page.screenshot({path:out+'/failure.png',fullPage:true});fs.writeFileSync(out+'/failure.txt',await page.locator('body').innerText());fs.writeFileSync(out+'/requests.json',JSON.stringify(requests,null,2));throw e;} finally {await browser.close();}

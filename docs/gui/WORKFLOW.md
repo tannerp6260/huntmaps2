@@ -71,3 +71,31 @@ The GUI shows areas in square miles, distances in yards, and elevations/heights/
 Review order, focused spot, individual settings, previewed alternative and latest scenario are saved per run in `approach-reviews`. An existing order stays stable; new/restored spots append in coverage order. Reloads and back navigation preserve the review. Marker clicks in Step 2 show only shortlisted points; Step 3 shows points with selected approaches. Editing one spot does not invalidate selections for other spots, including selections from older multi-spot comparisons. Coordinate/source changes reopen affected requirements. A guided session's final confirmation requires all retained spots to have current approaches; early inspection remains available.
 
 Maintenance protects review definitions and existing approach results. Reviewed permanent run deletion explicitly includes that run's review record; it retains shared data and protected evidence. See [guided review verification](GUIDED_APPROACHES_2026-10-04.md) for tests and measured per-point overhead.
+
+## Coverage batches and per-setup approach boundaries
+
+In Find, **Prepare next** prepares 5, 10 or 20 views in the displayed order,
+including the selected setup. This prepares display tiles, not additional terrain
+analysis. Cancel or resume while retaining successful tiles. Jobs and map movement
+pause preparation. Ranking/filter/revision changes invalidate the displayed batch.
+A loading card explains missing shading until the active coverage has rendered;
+map panning retains the smaller status. Preparation covers normal setup views,
+not every zoom or future cache eviction.
+
+**Plan approach** opens a separate review for each shortlisted setup. The queue
+number counts setups needing a decision, not itinerary stops or path alternatives.
+Draw and confirm a boundary for that setup, check the mapped departures inside it,
+then explicitly calculate alternatives and select an approach. New setups do not
+inherit another boundary or start calculation automatically. Existing saved
+boundaries/results remain readable. Boundary copying and imports are advanced,
+explicit actions requiring confirmation; exclusions remain optional.
+
+Visible-terrain and observer filters stay in Find. Approach preferences affect path
+costs: climbing means total ascent; steepness adds a penalty below the hard slope
+limit; tree and shrub preferences penalize mapped cover. Zero removes a preference;
+distance always contributes. Defaults and the 20 m calculation grid are unchanged.
+Nearby departure mode starts where you leave a mapped road/trail within one mile;
+including network travel also needs an explicit network start. Smaller boundaries
+reduce the grid's bounding rectangle, but must retain room for credible detours.
+Preflight checks geometry and departures; terrain constraints can still prevent a
+modeled path. Mapped access does not establish permission.

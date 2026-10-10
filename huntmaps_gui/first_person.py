@@ -102,7 +102,13 @@ def new_plan(run=RUN, ids=None, fidelity="lidar", acquisition=None):
 
 def verify_file(path, expected):
     st = path.stat()
-    check_hash(str(path), st.st_mtime_ns, st.st_size, expected)
+    check_hash(
+        str(path),
+        st.st_mtime_ns,
+        st.st_size,
+        expected,
+        (st.st_dev, st.st_ino, st.st_ctime_ns),
+    )
 
 
 def scene(ident, cid, run_data=None, orientation=True):

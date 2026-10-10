@@ -145,6 +145,14 @@ export type BaselinePlan = DownloadReviewInfo & {
   acquisition?: {
     already_cached_bytes?: number;
     cached_keys?: string[];
+    reused_sources?: {
+      key: string;
+      provider?: string;
+      acquisition_date?: string;
+      retrieved_utc?: string;
+      url?: string;
+      sha256: string;
+    }[];
     estimated_bytes: number;
     estimate_note: string;
     errors: string[];

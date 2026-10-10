@@ -94,7 +94,13 @@ def cached(folder, key, r):
             "Working mask provenance changed. Restore or retry the update."
         )
     st = path.stat()
-    check_hash(str(path), st.st_mtime_ns, st.st_size, meta["mask_sha256"])
+    check_hash(
+        str(path),
+        st.st_mtime_ns,
+        st.st_size,
+        meta["mask_sha256"],
+        (st.st_dev, st.st_ino, st.st_ctime_ns),
+    )
     ds = gdal.Open(str(path))
     if (
         ds is None

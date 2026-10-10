@@ -1866,3 +1866,83 @@ pre {
   color: var(--muted);
   padding: 3px 0;
 }
+
+.coverage-batch {
+  margin: 10px 0;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface, #f5f8f7);
+}
+.coverage-batch .row {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.coverage-batch label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.coverage-batch select {
+  width: auto;
+}
+.coverage-batch small {
+  display: block;
+  margin-top: 5px;
+}
+.coverage-preparation {
+  margin-top: 8px;
+  font-size: 11px;
+}
+.coverage-preparation progress {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+}
+.coverage-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: #15252b40;
+  pointer-events: none;
+}
+.coverage-loading-card {
+  width: min(390px, 100%);
+  padding: 22px;
+  border-radius: 8px;
+  background: #fffffff5;
+  color: #17292f;
+  box-shadow: var(--shadow);
+  font-size: 14px;
+  line-height: 1.5;
+  pointer-events: auto;
+}
+.coverage-loading-card strong {
+  font-size: 17px;
+}
+.coverage-loading-card progress {
+  display: block;
+  width: 100%;
+  margin-top: 14px;
+}
+.approach-steps {
+  padding-left: 22px;
+  line-height: 1.6;
+  font-size: 12px;
+}
+.approach-boundary-check {
+  padding: 10px;
+  border: 1px solid var(--line);
+  margin: 10px 0;
+}
+.approach-boundary-check[data-ready='false'] {
+  background: #fff0ee;
+}
+.approach-controls .preference-help {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+}

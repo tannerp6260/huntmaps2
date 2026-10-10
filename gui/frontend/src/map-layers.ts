@@ -5,6 +5,12 @@ import { COVERAGE_DISPLAY_VERSION } from './coverage-cache';
 const retainedRun = new WeakMap<Map, string>();
 const retained = new WeakMap<Map, globalThis.Map<string, number>>();
 const colors = ['#00c0e8', '#ff6782', '#aa6fff'];
+export type CoverageDisplay = {
+  phase: 'idle' | 'loading' | 'ready' | 'error';
+  ids: string[];
+  initial: boolean;
+};
+const displayed = new WeakMap<Map, string>();
 type LayerState = {
   run: Run;
   filterId?: string;
@@ -43,7 +49,7 @@ export function updateMapLayers(
   }: LayerState,
   api: (path: string) => Promise<GeoJSON.GeoJSON>,
   setError: (message: string) => void,
-  setCoverage: (message: string) => void,
+  setCoverage: (value: CoverageDisplay) => void,
   retry = 0,
 ) {
   let disposed = false;
@@ -168,21 +174,25 @@ export function updateMapLayers(
   );
   let failed = false;
   let revealed = false;
-  const label = ids.join(', ');
+  let awaitingRender = false;
+  const signature = coverage.map(({ key }) => key).join('|');
+  let initial = displayed.get(m) !== signature;
+  const report = (phase: CoverageDisplay['phase']) => setCoverage({ phase, ids, initial });
   const pending = () => {
     revealed = false;
     if (!coverage.length) {
-      setCoverage('');
+      report('idle');
       return;
     }
-    setCoverage(`${failed ? 'Coverage incomplete' : 'Loading additional coverage'} · ${label}`);
+    report(failed ? 'error' : 'loading');
   };
   const check = () => {
-    if (disposed || revealed || !coverage.length || failed || m.isMoving()) return;
+    if (disposed || revealed || awaitingRender || !coverage.length || failed || m.isMoving())
+      return;
     if (coverage.every(({ key }) => m.getSource(key) && m.isSourceLoaded(key))) {
-      revealed = true;
+      awaitingRender = true;
       coverage.forEach(({ key, alpha }) => m.setPaintProperty(key, 'raster-opacity', alpha));
-      setCoverage(`Coverage ready · ${label}`);
+      m.triggerRepaint();
     }
   };
   const error = (event: unknown) => {
@@ -191,11 +201,25 @@ export function updateMapLayers(
     if (coverage.some(({ key }) => key === sourceId)) {
       failed = true;
       pending();
-      setCoverage(`Coverage incomplete · ${label}`);
+      report('error');
     }
   };
   const loading = (event: { sourceId?: string }) => {
     if (!failed && coverage.some(({ key }) => key === event.sourceId)) pending();
+  };
+  const rendered = () => {
+    if (disposed || !awaitingRender) return;
+    awaitingRender = false;
+    if (
+      failed ||
+      m.isMoving() ||
+      !coverage.every(({ key }) => m.getSource(key) && m.isSourceLoaded(key))
+    )
+      return;
+    revealed = true;
+    displayed.set(m, signature);
+    report('ready');
+    initial = false;
   };
   pending();
   m.on('movestart', pending);
@@ -204,6 +228,7 @@ export function updateMapLayers(
   m.on('sourcedata', check);
   m.on('idle', check);
   m.on('error', error);
+  m.on('render', rendered);
   check();
   return () => {
     disposed = true;
@@ -213,5 +238,6 @@ export function updateMapLayers(
     m.off('sourcedata', check);
     m.off('idle', check);
     m.off('error', error);
+    m.off('render', rendered);
   };
 }

@@ -11,11 +11,26 @@ from .catalog import ROOT, STATE, read
 from .jobs import write
 from .config import WORKSPACE
 
+_last_error = None
+
 
 def run(args):
-    return subprocess.run(
-        [sys.executable, "-u", "-m", "huntmaps_gui.owner_worker", *args], cwd=WORKSPACE
-    ).returncode
+    global _last_error
+    _last_error = None
+    with subprocess.Popen(
+        [sys.executable, "-u", "-m", "huntmaps_gui.owner_worker", *args],
+        cwd=WORKSPACE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    ) as process:
+        for line in process.stdout:
+            print(line, end="", flush=True)
+            if line.startswith(
+                ("SCOUT:", "GUI JOB:", "ValueError:", "FileNotFoundError:")
+            ):
+                _last_error = line.strip()[:4000]
+        return process.wait()
 
 
 def plan_digest(plan):
@@ -30,6 +45,10 @@ def approval_inventory(config, acquisition):
             return [source(v) for v in value]
         if not isinstance(value, dict):
             return value
+        if value.get("reuse_origin") or value.get("raw_source", {}).get("reuse_origin"):
+            # Imported bytes and all original provenance belong to this review.
+            # Existing remote-request approvals cannot authorize a local crop.
+            return {"verified_local_source": value}
         if value.get("url"):
             return {
                 k: value[k]
@@ -209,7 +228,22 @@ def main():
             if source.is_file():
                 cached_bytes += source.stat().st_size
     acquisition = dict(
-        acquisition, already_cached_bytes=cached_bytes, cached_keys=cached_keys
+        acquisition,
+        already_cached_bytes=cached_bytes,
+        cached_keys=cached_keys,
+        reused_sources=[
+            dict(
+                key=key,
+                provider=v.get("provider"),
+                acquisition_date=v.get("acquisition_date"),
+                retrieved_utc=v.get("retrieved_utc"),
+                url=v.get("url"),
+                sha256=v.get("sha256"),
+            )
+            for key, v in current_config.get("data", {}).items()
+            if isinstance(v, dict)
+            and (v.get("reuse_origin") or v.get("raw_source", {}).get("reuse_origin"))
+        ],
     )
     inventory = approval_inventory(current_config, acquisition)
     checksums = {
@@ -340,8 +374,16 @@ def main():
         if code != 0:
             if not a.download:
                 raise ValueError("Sampling eligibility requires approved DEM sources")
+            print(
+                "STAGE Downloading and validating approved sources for observer sampling",
+                flush=True,
+            )
             if run(["prepare", *args, "--download"]) != 0:
-                raise ValueError("Could not prepare approved DEM for observer sampling")
+                write(path, refresh_source_display(p, root))
+                raise ValueError(
+                    (_last_error.removeprefix("SCOUT: ") if _last_error else None)
+                    or "Source preparation failed; inspect the current job log"
+                )
         from .scouting_filters import sampling_exclusion
 
         c = read(root / "scouting.json")

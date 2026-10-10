@@ -48,12 +48,14 @@ try {
  const lon=p.longitude,lat=p.latitude;
  const network={type:'LineString',coordinates:[[lon-.0008,lat-.001],[lon-.0008,lat+.001]]};
  const area={type:'Polygon',coordinates:[[[lon-.002,lat-.002],[lon+.002,lat-.002],[lon+.002,lat+.002],[lon-.002,lat+.002],[lon-.002,lat-.002]]]};
- await page.getByText('Advanced road/trail sources',{exact:true}).click();
+ await page.getByText('Road/trail sources for this boundary',{exact:true}).click();
  await page.locator('.scouting-tools').getByLabel('Import road trail network',{exact:true}).setInputFiles({name:'workflow-fixture-network.geojson',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(network))});
  await page.getByLabel('Import travel area').setInputFiles({name:'workflow-travel.geojson',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(area))});
  await page.locator('.approach-settings').waitFor();if (await page.locator('.approach-settings').getAttribute('open') === null) await page.locator('.approach-settings > summary').click();await page.getByText('More options · pinned departure and preferences',{exact:true}).click();
  await page.getByLabel('Maximum approach slope').fill('60');
  await page.getByRole('button',{name:'Confirm approach search boundary',exact:true}).click();
+ await page.locator('.approach-boundary-check[data-ready="true"]').waitFor();
+ await page.getByRole('button',{name:'Calculate approaches for A0001',exact:true}).click();
  await page.getByRole('button',{name:'Use this approach & next spot',exact:true}).first().waitFor({timeout:60000});
  await page.getByRole('button',{name:'Use this approach & next spot',exact:true}).first().click();
  await page.waitForFunction(()=>!Array.from(document.querySelectorAll('.workflow-stages button')).find(b=>b.textContent.includes('Inspect')).disabled);

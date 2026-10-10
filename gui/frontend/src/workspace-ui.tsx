@@ -222,7 +222,7 @@ export function SelectedSetup({
         </button>
         {point?.shortlisted && !point?.approach && (
           <button className="primary" onClick={onApproach}>
-            Approach <Icon name="arrow" size={14} />
+            Plan approach <Icon name="arrow" size={14} />
           </button>
         )}
         <button

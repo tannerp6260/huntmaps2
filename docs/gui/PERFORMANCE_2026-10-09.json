@@ -1,0 +1,1013 @@
+{
+  "date_local": "2026-10-09",
+  "baseline_commit": "8c2d277daa05c761124b2cacd5b5b9f1e8ed0674",
+  "benchmark_root": "/tmp/huntmaps-performance-5yaetjgo",
+  "hardware": {
+    "cpu": "AMD Ryzen 7 5700G",
+    "cores": 8,
+    "threads": 16,
+    "max_mhz": 4673,
+    "usable_ram_gib": 14,
+    "ubuntu_storage": "Samsung MZVLW256HEHP NVMe, 238.5 GiB",
+    "filesystem": "ext4, 234 GiB, approximately 97 GiB available after disposable measurements",
+    "os": "Ubuntu 22.04.5 LTS"
+  },
+  "comparisons": [
+    {
+      "workflow": "Real setup preparation, 150 locations",
+      "stage": "prepare",
+      "before_artifact": "/tmp/huntmaps-performance-5yaetjgo/before-search-paired",
+      "after_artifact": "/tmp/huntmaps-performance-5yaetjgo/after-search-paired",
+      "before": {
+        "median_s": 1.096412065000095,
+        "samples_s": [
+          1.096412065000095,
+          0.8323973250003291,
+          1.1264876519999234
+        ],
+        "median_cpu_percent": 99.72929292782867,
+        "peak_rss_mib": 302.3359375
+      },
+      "after": {
+        "median_s": 1.1504383030001009,
+        "samples_s": [
+          1.1504383030001009,
+          1.1173628080000526,
+          1.1538817870000457
+        ],
+        "median_cpu_percent": 99.65708904979485,
+        "peak_rss_mib": 302.15625
+      },
+      "speedup": 0.9530385611648041
+    },
+    {
+      "workflow": "Real candidate generation, 150",
+      "stage": "candidates",
+      "before_artifact": "/tmp/huntmaps-performance-5yaetjgo/before-search-paired",
+      "after_artifact": "/tmp/huntmaps-performance-5yaetjgo/after-search-paired",
+      "before": {
+        "median_s": 0.25416190099986125,
+        "samples_s": [
+          0.25416190099986125,
+          0.24206069800038676,
+          0.25481951700021455
+        ],
+        "median_cpu_percent": 99.96790143917264,
+        "peak_rss_mib": 302.875
+      },
+      "after": {
+        "median_s": 0.23338406499988196,
+        "samples_s": [
+          0.23338406499988196,
+          0.23915539700010413,
+          0.23173047000000224
+        ],
+        "median_cpu_percent": 99.62608715202539,
+        "peak_rss_mib": 306.515625
+      },
+      "speedup": 1.0890285118651515
+    },
+    {
+      "workflow": "Real scoring, 150 total including nearby refinement",
+      "stage": "score-cold",
+      "before_artifact": "/tmp/huntmaps-performance-5yaetjgo/before-search-paired",
+      "after_artifact": "/tmp/huntmaps-performance-5yaetjgo/after-search-paired",
+      "before": {
+        "median_s": 3.2848797130000094,
+        "samples_s": [
+          3.4108662590001586,
+          3.2848797130000094,
+          3.1511254319998443
+        ],
+        "median_cpu_percent": 96.47842366486196,
+        "peak_rss_mib": 302.875
+      },
+      "after": {
+        "median_s": 2.8396529659999032,
+        "samples_s": [
+          3.1791253119999965,
+          2.8396529659999032,
+          2.833678159000101
+        ],
+        "median_cpu_percent": 95.56523393852247,
+        "peak_rss_mib": 306.515625
+      },
+      "speedup": 1.156789140198099
+    },
+    {
+      "workflow": "Real checkpoint reuse, 150",
+      "stage": "score-checkpoint-warm",
+      "before_artifact": "/tmp/huntmaps-performance-5yaetjgo/before-search-paired",
+      "after_artifact": "/tmp/huntmaps-performance-5yaetjgo/after-search-paired",
+      "before": {
+        "median_s": 0.21264725399987583,
+        "samples_s": [
+          0.21264725399987583,
+          0.2781674549996751,
+          0.20651764599961098
+        ],
+        "median_cpu_percent": 95.05569226288867,
+        "peak_rss_mib": 302.875
+      },
+      "after": {
+        "median_s": 0.175482127000123,
+        "samples_s": [
+          0.18090678999988086,
+          0.16916119400002572,
+          0.175482127000123
+        ],
+        "median_cpu_percent": 99.93840549504164,
+        "peak_rss_mib": 306.515625
+      },
+      "speedup": 1.2117886740666575
+    },
+    {
+      "workflow": "Real setup preparation, 600",
+      "stage": "prepare",
+      "before_artifact": "/tmp/huntmaps-performance-5yaetjgo/before-search600-paired",
+      "after_artifact": "/tmp/huntmaps-performance-5yaetjgo/after-search600-paired",
+      "before": {
+        "median_s": 1.0860396729999593,
+        "samples_s": [
+          1.1253600599998208,
+          0.8472643290001542,
+          1.0860396729999593
+        ],
+        "median_cpu_percent": 99.74617197985567,
+        "peak_rss_mib": 310.06640625
+      },
+      "after": {
+        "median_s": 1.085259083999972,
+        "samples_s": [
+          1.156451552999897,
+          1.085259083999972,
+          0.8421917259997826
+        ],
+        "median_cpu_percent": 99.96060768834498,
+        "peak_rss_mib": 347.3671875
+      },
+      "speedup": 1.000719265115119
+    },
+    {
+      "workflow": "Real candidate generation, 600",
+      "stage": "candidates",
+      "before_artifact": "/tmp/huntmaps-performance-5yaetjgo/before-search600-paired",
+      "after_artifact": "/tmp/huntmaps-performance-5yaetjgo/after-search600-paired",
+      "before": {
+        "median_s": 0.6996309169999222,
+        "samples_s": [
+          0.7611328329999196,
+          0.6936714350003967,
+          0.6996309169999222
+        ],
+        "median_cpu_percent": 99.96519461690144,
+        "peak_rss_mib": 324.71484375
+      },
+      "after": {
+        "median_s": 0.2665659730000698,
+        "samples_s": [
+          0.27929286999960823,
+          0.2665659730000698,
+          0.23442551500011177
+        ],
+        "median_cpu_percent": 99.98485019853128,
+        "peak_rss_mib": 347.3671875
+      },
+      "speedup": 2.624606993630575
+    },
+    {
+      "workflow": "Real scoring, 600 total including nearby refinement",
+      "stage": "score-cold",
+      "before_artifact": "/tmp/huntmaps-performance-5yaetjgo/before-search600-paired",
+      "after_artifact": "/tmp/huntmaps-performance-5yaetjgo/after-search600-paired",
+      "before": {
+        "median_s": 16.65988301599964,
+        "samples_s": [
+          16.65988301599964,
+          17.174935872999868,
+          15.902414529999987
+        ],
+        "median_cpu_percent": 97.01904637789806,
+        "peak_rss_mib": 324.71484375
+      },
+      "after": {
+        "median_s": 9.299862501999996,
+        "samples_s": [
+          9.299862501999996,
+          10.22854502600012,
+          8.480372091999925
+        ],
+        "median_cpu_percent": 95.98513970488256,
+        "peak_rss_mib": 347.3671875
+      },
+      "speedup": 1.7914117560788476
+    },
+    {
+      "workflow": "Real checkpoint reuse, 600",
+      "stage": "score-checkpoint-warm",
+      "before_artifact": "/tmp/huntmaps-performance-5yaetjgo/before-search600-paired",
+      "after_artifact": "/tmp/huntmaps-performance-5yaetjgo/after-search600-paired",
+      "before": {
+        "median_s": 0.8877205529997809,
+        "samples_s": [
+          0.6016899830001421,
+          0.8877205529997809,
+          0.8963382659999297
+        ],
+        "median_cpu_percent": 96.88976058956578,
+        "peak_rss_mib": 324.71484375
+      },
+      "after": {
+        "median_s": 0.36819781699978194,
+        "samples_s": [
+          0.36819781699978194,
+          0.3674539520002327,
+          0.409281971999917
+        ],
+        "median_cpu_percent": 99.99634188629392,
+        "peak_rss_mib": 347.80859375
+      },
+      "speedup": 2.410988093936219
+    },
+    {
+      "workflow": "Large synthetic candidate generation, 4000",
+      "stage": "sampling-4000",
+      "before_artifact": "/tmp/huntmaps-performance-5yaetjgo/before-sampling",
+      "after_artifact": "/tmp/huntmaps-performance-5yaetjgo/after-sampling",
+      "before": {
+        "median_s": 43.741158642000016,
+        "samples_s": [
+          43.99849039999998,
+          43.741158642000016,
+          43.08251043299998
+        ],
+        "median_cpu_percent": 99.99308749011082,
+        "peak_rss_mib": 275.73828125
+      },
+      "after": {
+        "median_s": 0.8236010420000639,
+        "samples_s": [
+          0.7895294559999684,
+          0.8236010420000639,
+          0.8343543269999145
+        ],
+        "median_cpu_percent": 99.99671661415117,
+        "peak_rss_mib": 236.65234375
+      },
+      "speedup": 53.109644611154614
+    },
+    {
+      "workflow": "Real coverage tile, first request",
+      "stage": "tile-first",
+      "before_artifact": "/tmp/huntmaps-performance-5yaetjgo/before-tiles",
+      "after_artifact": "/tmp/huntmaps-performance-5yaetjgo/after-tiles-validated",
+      "before": {
+        "median_s": 0.2525037010000233,
+        "samples_s": [
+          0.2719953049999617,
+          0.2525037010000233,
+          0.2502600770000072
+        ],
+        "median_cpu_percent": 95.22395079665696,
+        "peak_rss_mib": 210.55078125
+      },
+      "after": {
+        "median_s": 0.21916566900017642,
+        "samples_s": [
+          0.22105566699974588,
+          0.21916566900017642,
+          0.18993198100088193
+        ],
+        "median_cpu_percent": 95.11247081615029,
+        "peak_rss_mib": 212.2890625
+      },
+      "speedup": 1.1521133859693145
+    },
+    {
+      "workflow": "Real coverage tile, repeated request",
+      "stage": "tile-repeat-warm",
+      "before_artifact": "/tmp/huntmaps-performance-5yaetjgo/before-tiles",
+      "after_artifact": "/tmp/huntmaps-performance-5yaetjgo/after-tiles-validated",
+      "before": {
+        "median_s": 0.20217981400003282,
+        "samples_s": [
+          0.22644268900000952,
+          0.22334114000000227,
+          0.200901478999981,
+          0.20106320400003597,
+          0.22618813200000432,
+          0.20075661299995318,
+          0.20217981400003282,
+          0.19967611900000293,
+          0.22856950599998527
+        ],
+        "median_cpu_percent": 99.99959738807905,
+        "peak_rss_mib": 210.57421875
+      },
+      "after": {
+        "median_s": 0.00047807000009925105,
+        "samples_s": [
+          0.0006899999998495332,
+          0.0006537890003528446,
+          0.000643508000393922,
+          0.00047876099961285945,
+          0.0004677799997807597,
+          0.00045990000035089906,
+          0.0004672210006901878,
+          0.0004622900005415431,
+          0.00047807000009925105
+        ],
+        "median_cpu_percent": 100.54265053486415,
+        "peak_rss_mib": 212.2890625
+      },
+      "speedup": 422.90838989699984
+    },
+    {
+      "workflow": "Real coverage tile, warm switching",
+      "stage": "tile-switch-warm",
+      "before_artifact": "/tmp/huntmaps-performance-5yaetjgo/before-tiles",
+      "after_artifact": "/tmp/huntmaps-performance-5yaetjgo/after-tiles-validated",
+      "before": {
+        "median_s": 0.21319595349999076,
+        "samples_s": [
+          0.22891365899999983,
+          0.20250722499997664,
+          0.20023392799998874,
+          0.2238846820000049,
+          0.22725839499997846,
+          0.20019199399996523
+        ],
+        "median_cpu_percent": 99.99659042350082,
+        "peak_rss_mib": 210.57421875
+      },
+      "after": {
+        "median_s": 0.00048458100036441465,
+        "samples_s": [
+          0.0004958520003128797,
+          0.00048606100062897895,
+          0.00048310100009985035,
+          0.0004886409997197916,
+          0.0004788509995705681,
+          0.0004720309998447192
+        ],
+        "median_cpu_percent": 100.60236901132609,
+        "peak_rss_mib": 212.2890625
+      },
+      "speedup": 439.95937385011615
+    },
+    {
+      "workflow": "Real approach grid preparation, 4 km square",
+      "stage": "approach-grid",
+      "before_artifact": "/tmp/huntmaps-performance-5yaetjgo/before-approach-valid",
+      "after_artifact": "/tmp/huntmaps-performance-5yaetjgo/after-approach",
+      "before": {
+        "median_s": 0.0620370730000559,
+        "samples_s": [
+          0.0632047760000205,
+          0.06165644999998676,
+          0.0620370730000559
+        ],
+        "median_cpu_percent": 100.00575771069153,
+        "peak_rss_mib": 149.52734375
+      },
+      "after": {
+        "median_s": 0.06486368499997752,
+        "samples_s": [
+          0.06486368499997752,
+          0.06425124299994422,
+          0.06731309400004193
+        ],
+        "median_cpu_percent": 100.00877392436901,
+        "peak_rss_mib": 139.1953125
+      },
+      "speedup": 0.9564222723404845
+    },
+    {
+      "workflow": "Real approaches, 3 objectives",
+      "stage": "approach-three-objectives",
+      "before_artifact": "/tmp/huntmaps-performance-5yaetjgo/before-approach-valid",
+      "after_artifact": "/tmp/huntmaps-performance-5yaetjgo/after-approach",
+      "before": {
+        "median_s": 1.9757491070000128,
+        "samples_s": [
+          1.991789563999987,
+          1.9703268149999644,
+          1.9757491070000128
+        ],
+        "median_cpu_percent": 99.99289262266731,
+        "peak_rss_mib": 149.64453125
+      },
+      "after": {
+        "median_s": 0.11152011999990918,
+        "samples_s": [
+          0.4828587110000626,
+          0.11152011999990918,
+          0.10930967100000544
+        ],
+        "median_cpu_percent": 99.99847131549281,
+        "peak_rss_mib": 139.1953125
+      },
+      "speedup": 17.716526013437054
+    },
+    {
+      "workflow": "Synthetic approaches, 8 km square, 3 objectives",
+      "stage": "approach-three-objectives",
+      "before_artifact": "/tmp/huntmaps-performance-5yaetjgo/before-approach-large",
+      "after_artifact": "/tmp/huntmaps-performance-5yaetjgo/after-approach-large",
+      "before": {
+        "median_s": 16.405877792000183,
+        "samples_s": [
+          16.405877792000183,
+          15.011073669000098,
+          17.528437179000093
+        ],
+        "median_cpu_percent": 99.80992914615403,
+        "peak_rss_mib": 225.140625
+      },
+      "after": {
+        "median_s": 0.24275824099981946,
+        "samples_s": [
+          0.6389627219998602,
+          0.2382322829998884,
+          0.24275824099981946
+        ],
+        "median_cpu_percent": 99.81659077855159,
+        "peak_rss_mib": 157.80078125
+      },
+      "speedup": 67.58113637844485
+    },
+    {
+      "workflow": "Real lidar crop, 3 observers",
+      "stage": "lidar-three-observers",
+      "before_artifact": "/tmp/huntmaps-performance-5yaetjgo/before-lidar-valid",
+      "after_artifact": "/tmp/huntmaps-performance-5yaetjgo/after-lidar",
+      "before": {
+        "median_s": 25.504534476000003,
+        "samples_s": [
+          25.41417037100007,
+          25.504534476000003,
+          25.524922040999968
+        ],
+        "median_cpu_percent": 99.97080484325087,
+        "peak_rss_mib": 429.30078125
+      },
+      "after": {
+        "median_s": 9.513444541000013,
+        "samples_s": [
+          9.494126319999964,
+          9.513444541000013,
+          9.515035635000004
+        ],
+        "median_cpu_percent": 99.93053262851507,
+        "peak_rss_mib": 419.8046875
+      },
+      "speedup": 2.6808937988846546
+    },
+    {
+      "workflow": "Real terrain-only scene creation, per observer",
+      "stage": "scene-terrain-first",
+      "before_artifact": "/tmp/huntmaps-performance-5yaetjgo/before-scene",
+      "after_artifact": "/tmp/huntmaps-performance-5yaetjgo/after-scene",
+      "before": {
+        "median_s": 2.9899421300000313,
+        "samples_s": [
+          3.0366605970000364,
+          2.9899421300000313,
+          2.9706045200000517
+        ],
+        "median_cpu_percent": 99.48393215222426,
+        "peak_rss_mib": 304.5078125
+      },
+      "after": {
+        "median_s": 3.1523253330001353,
+        "samples_s": [
+          3.1523253330001353,
+          3.0907245889998194,
+          3.189468960999875
+        ],
+        "median_cpu_percent": 99.51170677030174,
+        "peak_rss_mib": 303.09765625
+      },
+      "speedup": 0.9484878031781192
+    },
+    {
+      "workflow": "Real terrain-only scene verification, per observer",
+      "stage": "scene-terrain-warm",
+      "before_artifact": "/tmp/huntmaps-performance-5yaetjgo/before-scene",
+      "after_artifact": "/tmp/huntmaps-performance-5yaetjgo/after-scene",
+      "before": {
+        "median_s": 0.053723671000000195,
+        "samples_s": [
+          0.05854665499998646,
+          0.0583132399999613,
+          0.059454877999996825,
+          0.04913410200003909,
+          0.048340651999978945,
+          0.04832234199989216
+        ],
+        "median_cpu_percent": 91.0613942550973,
+        "peak_rss_mib": 304.5078125
+      },
+      "after": {
+        "median_s": 0.06268448699984219,
+        "samples_s": [
+          0.07784309599992412,
+          0.07505178300016269,
+          0.07089472799998475,
+          0.05447424599969963,
+          0.04703705699967031,
+          0.04733378299988544
+        ],
+        "median_cpu_percent": 90.01697673195349,
+        "peak_rss_mib": 303.09765625
+      },
+      "speedup": 0.8570489058981282
+    },
+    {
+      "workflow": "Real lidar scene creation, 3 observers",
+      "stage": "scene-lidar-three-cold",
+      "before_artifact": "/tmp/huntmaps-performance-5yaetjgo/before-scene-lidar",
+      "after_artifact": "/tmp/huntmaps-performance-5yaetjgo/after-scene-lidar",
+      "before": {
+        "median_s": 162.30196442800002,
+        "samples_s": [
+          150.446763185,
+          166.87411733099998,
+          162.30196442800002
+        ],
+        "median_cpu_percent": 99.85376305897681,
+        "peak_rss_mib": 785.49609375
+      },
+      "after": {
+        "median_s": 162.07076317399992,
+        "samples_s": [
+          177.58190849699986,
+          162.07076317399992,
+          155.00029356000005
+        ],
+        "median_cpu_percent": 99.690422160514,
+        "peak_rss_mib": 798.875
+      },
+      "speedup": 1.001426545105806
+    },
+    {
+      "workflow": "Real saved-run lookup, first construction",
+      "stage": "catalog-first",
+      "before_artifact": "/tmp/huntmaps-performance-5yaetjgo/before-catalog",
+      "after_artifact": "/tmp/huntmaps-performance-5yaetjgo/after-catalog",
+      "before": {
+        "median_s": 0.15619618500022625,
+        "samples_s": [
+          0.15619618500022625
+        ],
+        "median_cpu_percent": 99.74315313768668,
+        "peak_rss_mib": 177.99609375
+      },
+      "after": {
+        "median_s": 0.1148799739999049,
+        "samples_s": [
+          0.1148799739999049
+        ],
+        "median_cpu_percent": 100.00350452733814,
+        "peak_rss_mib": 179.01953125
+      },
+      "speedup": 1.3596467648952946
+    },
+    {
+      "workflow": "Real saved-run lookup, warm",
+      "stage": "catalog-warm",
+      "before_artifact": "/tmp/huntmaps-performance-5yaetjgo/before-catalog",
+      "after_artifact": "/tmp/huntmaps-performance-5yaetjgo/after-catalog",
+      "before": {
+        "median_s": 0.05597251400013192,
+        "samples_s": [
+          0.05597251400013192,
+          0.06014953899966713,
+          0.04918927000016993
+        ],
+        "median_cpu_percent": 98.75918741093146,
+        "peak_rss_mib": 204.78125
+      },
+      "after": {
+        "median_s": 0.010944589000246197,
+        "samples_s": [
+          0.010944589000246197,
+          0.011106052999821259,
+          0.010835136999958195
+        ],
+        "median_cpu_percent": 100.08956377372697,
+        "peak_rss_mib": 207.44140625
+      },
+      "speedup": 5.1141723091541245
+    },
+    {
+      "workflow": "Offline real map first load",
+      "stage": "map-browser-first",
+      "before_artifact": "/tmp/huntmaps-performance-5yaetjgo/before-browser",
+      "after_artifact": "/tmp/huntmaps-performance-5yaetjgo/after-browser-validated",
+      "before": {
+        "median_s": 11.972486071999999,
+        "samples_s": [
+          11.865997442,
+          11.972486071999999,
+          12.070917056
+        ]
+      },
+      "after": {
+        "median_s": 6.029165351,
+        "samples_s": [
+          6.084618451,
+          6.029165351,
+          5.995299471
+        ]
+      },
+      "speedup": 1.9857617721521335
+    },
+    {
+      "workflow": "Offline map switching, mixed first visits/returns",
+      "stage": "map-browser-switch",
+      "before_artifact": "/tmp/huntmaps-performance-5yaetjgo/before-browser",
+      "after_artifact": "/tmp/huntmaps-performance-5yaetjgo/after-browser-validated",
+      "before": {
+        "median_s": 0.18310682799999994,
+        "samples_s": [
+          2.8936198180000012,
+          2.903109215,
+          0.10678385799999887,
+          0.16118382500000006,
+          0.18762719599999764,
+          0.17858646000000225,
+          2.883610275000001,
+          2.899292070999998,
+          0.10861962999999741,
+          0.16999740600000224,
+          0.19700653999999848,
+          0.143143376,
+          2.9209207449999997,
+          2.888674700999998,
+          0.10682128999999986,
+          0.15074409899999955,
+          0.16649135699999898,
+          0.192071608000002
+        ]
+      },
+      "after": {
+        "median_s": 0.1977667954999997,
+        "samples_s": [
+          1.4360784539999996,
+          1.4123026330000001,
+          0.09413412199999947,
+          0.19209926200000155,
+          0.202444207999999,
+          0.17954431599999954,
+          1.4246946950000001,
+          1.3843177270000007,
+          0.09993245399999978,
+          0.18772831299999962,
+          0.2005213330000006,
+          0.19501225799999883,
+          1.4545020140000007,
+          1.4042261800000007,
+          0.11042406300000039,
+          0.19043756400000167,
+          0.20767424599999867,
+          0.1843244649999997
+        ]
+      },
+      "speedup": 0.9258724526382904
+    },
+    {
+      "workflow": "Prepared real scene opens, 2.7 million triangles",
+      "stage": "scene-browser-ready",
+      "before_artifact": "/tmp/huntmaps-performance-5yaetjgo/before-browser",
+      "after_artifact": "/tmp/huntmaps-performance-5yaetjgo/after-browser-validated",
+      "before": {
+        "median_s": 24.716321608999998,
+        "samples_s": [
+          23.721302523000002,
+          24.716321608999998,
+          24.785319129
+        ]
+      },
+      "after": {
+        "median_s": 6.843864233000001,
+        "samples_s": [
+          6.562043188,
+          6.843864233000001,
+          7.980608386
+        ]
+      },
+      "speedup": 3.61145703180696
+    },
+    {
+      "workflow": "Prepared real scene one-foot move",
+      "stage": "scene-browser-move",
+      "before_artifact": "/tmp/huntmaps-performance-5yaetjgo/before-browser",
+      "after_artifact": "/tmp/huntmaps-performance-5yaetjgo/after-browser-validated",
+      "before": {
+        "median_s": 1.0296631319999978,
+        "samples_s": [
+          1.2049328080000015,
+          0.9305844939999988,
+          1.0296631319999978
+        ]
+      },
+      "after": {
+        "median_s": 0.364397234,
+        "samples_s": [
+          0.3541404500000008,
+          0.37432986999999956,
+          0.364397234
+        ]
+      },
+      "speedup": 2.8256612178345946
+    },
+    {
+      "workflow": "Offline real map first visit to another setup",
+      "stage": "map-browser-switch-by-cache-state",
+      "before": {
+        "median_s": 2.8964559444999995,
+        "samples_s": [
+          2.8936198180000012,
+          2.903109215,
+          2.883610275000001,
+          2.899292070999998,
+          2.9209207449999997,
+          2.888674700999998
+        ]
+      },
+      "after": {
+        "median_s": 1.4184986640000001,
+        "samples_s": [
+          1.4360784539999996,
+          1.4123026330000001,
+          1.4246946950000001,
+          1.3843177270000007,
+          1.4545020140000007,
+          1.4042261800000007
+        ]
+      },
+      "speedup": 2.0419165826581276
+    },
+    {
+      "workflow": "Offline real map returning to a cached setup",
+      "stage": "map-browser-switch-by-cache-state",
+      "before": {
+        "median_s": 0.1638375909999995,
+        "samples_s": [
+          0.10678385799999887,
+          0.16118382500000006,
+          0.18762719599999764,
+          0.17858646000000225,
+          0.10861962999999741,
+          0.16999740600000224,
+          0.19700653999999848,
+          0.143143376,
+          0.10682128999999986,
+          0.15074409899999955,
+          0.16649135699999898,
+          0.192071608000002
+        ]
+      },
+      "after": {
+        "median_s": 0.18908293850000063,
+        "samples_s": [
+          0.09413412199999947,
+          0.19209926200000155,
+          0.202444207999999,
+          0.17954431599999954,
+          0.09993245399999978,
+          0.18772831299999962,
+          0.2005213330000006,
+          0.19501225799999883,
+          0.11042406300000039,
+          0.19043756400000167,
+          0.20767424599999867,
+          0.1843244649999997
+        ]
+      },
+      "speedup": 0.86648532278865
+    }
+  ],
+  "measurement_note": "Application-cold, not kernel-cold; no OS cache flushing or downloads. Three timing repeats except tiles and per-observer terrain scenes include three observers. High-water RSS is process cumulative, not incremental stage allocation. Sampling and approach large fixtures are synthetic. Some verification ran concurrently on other cores; frequency/background-load variability matters, particularly small searches and full scenes. Profiled runs excluded from timing medians.",
+  "browser_sessions": {
+    "before-browser": {
+      "records": [
+        {
+          "stage": "map-browser-session",
+          "wall_s": 19.46282329099995,
+          "cpu_s": 0.013052000000000015,
+          "cpu_percent": 11.527972927943722,
+          "child_cpu_s": 2.2306169999999996,
+          "child_peak_rss_mib": 202.20703125,
+          "peak_rss_mib": 122.15625,
+          "server_cpu_s": 23.779999999999998,
+          "server_cpu_percent": 122.18165702093388
+        },
+        {
+          "stage": "scene-browser-session",
+          "wall_s": 32.684390727999926,
+          "cpu_s": 0.020566000000000063,
+          "cpu_percent": 7.8959005889901865,
+          "child_cpu_s": 2.560161,
+          "child_peak_rss_mib": 202.20703125,
+          "peak_rss_mib": 122.15625,
+          "server_cpu_s": 33.32000000000001,
+          "server_cpu_percent": 101.9446875338434
+        },
+        {
+          "stage": "map-browser-session",
+          "wall_s": 19.616399736999938,
+          "cpu_s": 0.012864999999999988,
+          "cpu_percent": 11.527941061145237,
+          "child_cpu_s": 2.248502000000002,
+          "child_peak_rss_mib": 426.65234375,
+          "peak_rss_mib": 122.28125,
+          "server_cpu_s": 24.14,
+          "server_cpu_percent": 123.0602981365014
+        },
+        {
+          "stage": "scene-browser-session",
+          "wall_s": 33.64413775000003,
+          "cpu_s": 0.02129600000000005,
+          "cpu_percent": 7.925972185154333,
+          "child_cpu_s": 2.645329000000011,
+          "child_peak_rss_mib": 426.65234375,
+          "peak_rss_mib": 122.28125,
+          "server_cpu_s": 34.63,
+          "server_cpu_percent": 102.93026457484403
+        },
+        {
+          "stage": "map-browser-session",
+          "wall_s": 19.713022442000238,
+          "cpu_s": 0.012930999999999956,
+          "cpu_percent": 11.699266344293648,
+          "child_cpu_s": 2.2933479999999875,
+          "child_peak_rss_mib": 426.65234375,
+          "peak_rss_mib": 122.28125,
+          "server_cpu_s": 24.89,
+          "server_cpu_percent": 126.26171391643008
+        },
+        {
+          "stage": "scene-browser-session",
+          "wall_s": 33.90817201699974,
+          "cpu_s": 0.02143699999999997,
+          "cpu_percent": 7.827711852674667,
+          "child_cpu_s": 2.6327970000000036,
+          "child_peak_rss_mib": 426.65234375,
+          "peak_rss_mib": 122.28125,
+          "server_cpu_s": 34.129999999999995,
+          "server_cpu_percent": 100.65420212829238
+        }
+      ],
+      "server_peak_rss_mib": 426.65234375
+    },
+    "after-browser-validated": {
+      "records": [
+        {
+          "stage": "map-browser-session",
+          "wall_s": 10.747130835999997,
+          "cpu_s": 0.007891000000000016,
+          "cpu_percent": 22.463418719284313,
+          "child_cpu_s": 2.406282,
+          "child_peak_rss_mib": 206.83984375,
+          "peak_rss_mib": 122.03125,
+          "server_cpu_s": 10.09,
+          "server_cpu_percent": 93.8855230663166
+        },
+        {
+          "stage": "scene-browser-session",
+          "wall_s": 14.634327437999673,
+          "cpu_s": 0.009976000000000033,
+          "cpu_percent": 20.606912157571664,
+          "child_cpu_s": 3.005707,
+          "child_peak_rss_mib": 206.83984375,
+          "peak_rss_mib": 122.03125,
+          "server_cpu_s": 9.03,
+          "server_cpu_percent": 61.70423641439504
+        },
+        {
+          "stage": "map-browser-session",
+          "wall_s": 10.750164958000369,
+          "cpu_s": 0.007897000000000029,
+          "cpu_percent": 22.134525463529332,
+          "child_cpu_s": 2.371600999999999,
+          "child_peak_rss_mib": 361.92578125,
+          "peak_rss_mib": 122.03125,
+          "server_cpu_s": 10.290000000000001,
+          "server_cpu_percent": 95.7194614240974
+        },
+        {
+          "stage": "scene-browser-session",
+          "wall_s": 15.032935312000063,
+          "cpu_s": 0.009464000000000049,
+          "cpu_percent": 19.82235630071066,
+          "child_cpu_s": 2.9704180000000022,
+          "child_peak_rss_mib": 361.92578125,
+          "peak_rss_mib": 122.03125,
+          "server_cpu_s": 9.419999999999998,
+          "server_cpu_percent": 62.66241292530853
+        },
+        {
+          "stage": "map-browser-session",
+          "wall_s": 10.703748041999916,
+          "cpu_s": 0.007743000000000028,
+          "cpu_percent": 21.89509684648847,
+          "child_cpu_s": 2.335852999999995,
+          "child_peak_rss_mib": 430.703125,
+          "peak_rss_mib": 122.03125,
+          "server_cpu_s": 10.1,
+          "server_cpu_percent": 94.35947072342418
+        },
+        {
+          "stage": "scene-browser-session",
+          "wall_s": 16.14149412500001,
+          "cpu_s": 0.010541999999999982,
+          "cpu_percent": 18.169879301678304,
+          "child_cpu_s": 2.922347999999996,
+          "child_peak_rss_mib": 430.703125,
+          "peak_rss_mib": 122.03125,
+          "server_cpu_s": 9.33,
+          "server_cpu_percent": 57.8013406178407
+        }
+      ],
+      "server_peak_rss_mib": 432.05859375
+    },
+    "browser-cpu-profile": {
+      "records": [
+        {
+          "stage": "map-browser-session",
+          "wall_s": 10.62951993300021,
+          "cpu_s": 0.09454599999999999,
+          "cpu_percent": 22.667947519619748,
+          "child_cpu_s": 2.314948000000008,
+          "child_peak_rss_mib": 430.703125,
+          "peak_rss_mib": 123.03515625,
+          "browser_sampled_cpu_s": 74.08,
+          "browser_sampled_peak_rss_sum_mib": 1356.765625,
+          "browser_sampled_processes": 11,
+          "browser_sampled_cpu_percent": 696.9270528390714,
+          "server_cpu_s": 10.07,
+          "server_cpu_percent": 94.73616930466318
+        },
+        {
+          "stage": "scene-browser-session",
+          "wall_s": 15.186784287999672,
+          "cpu_s": 0.131954,
+          "cpu_percent": 20.795745433057558,
+          "child_cpu_s": 3.026250999999995,
+          "child_peak_rss_mib": 430.703125,
+          "peak_rss_mib": 123.03515625,
+          "browser_sampled_cpu_s": 128.6,
+          "browser_sampled_peak_rss_sum_mib": 1769.7890625,
+          "browser_sampled_processes": 11,
+          "browser_sampled_cpu_percent": 846.7888761784642,
+          "server_cpu_s": 9.010000000000002,
+          "server_cpu_percent": 59.32789871203704
+        }
+      ],
+      "server_peak_rss_mib": 395.71875
+    }
+  },
+  "preservation": {
+    "protected_files": 11821,
+    "owner_files": 500,
+    "changed": [],
+    "owner_changed": [],
+    "preservation_manifest_changed": []
+  },
+  "correctness": {
+    "repeats_exact": 3,
+    "candidate_bytes": true,
+    "search_scores_masks_patches_rankings": true,
+    "full_approach_outputs": true,
+    "lidar_points_and_provenance": true,
+    "full_scene_asset_hashes": true,
+    "catalog_summaries_candidates_and_hashes_repeats": 4,
+    "browser_scene_triangles": 2708326,
+    "browser_additional_geometry_requests_on_move": 0,
+    "browser_idle_draws": 0
+  },
+  "search_budget_details": {
+    "150": {
+      "initial_pool": 120,
+      "nearby": 30,
+      "scored_total": 150
+    },
+    "600": {
+      "initial_pool": 480,
+      "nearby": 120,
+      "scored_total": 600
+    },
+    "note": "The unchanged search reserves 20% of the requested total for nearby refinement."
+  },
+  "verification": {
+    "full_suite": "/tmp/huntmaps-check-ii5t7xud",
+    "full_suite_backend_tests": 160,
+    "full_suite_browser_journeys": 20,
+    "final_backend_suite": "/tmp/huntmaps-check-8ijfh6an",
+    "final_backend_tests": 160,
+    "changed_protected_files": 0,
+    "initial_failed_regressions": "Coincident ctime ticks exposed manifest cache identity; corrected with exact manifest bytes. Sparse cache fixture initially below actual budget; corrected to exceed configured budget."
+  }
+}

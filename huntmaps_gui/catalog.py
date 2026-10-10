@@ -27,7 +27,7 @@ def safe_path(value, source_root=None):
 
 
 @lru_cache(maxsize=4096)
-def check_hash(path, mtime, size, expected):
+def check_hash(path, mtime, size, expected, identity=()):
     h = hashlib.sha256()
     with Path(path).open("rb") as f:
         for block in iter(lambda: f.read(1048576), b""):
@@ -78,7 +78,7 @@ def runs():
 
 
 @lru_cache(maxsize=128)
-def static_json(path, mtime, size):
+def static_json(path, mtime, size, identity=()):
     return json.loads(Path(path).read_text())
 
 
@@ -87,7 +87,84 @@ def frozen_read(path, default=None):
     if not p.exists():
         return default
     st = p.stat()
-    return static_json(str(p.resolve()), st.st_mtime_ns, st.st_size)
+    return static_json(
+        str(p.resolve()),
+        st.st_mtime_ns,
+        st.st_size,
+        (st.st_dev, st.st_ino, st.st_ctime_ns),
+    )
+
+
+@lru_cache(maxsize=128)
+def _manifest_paths(path, identity, content, source_root, allowed_roots):
+    roots = [Path(root) for root in allowed_roots]
+    entries = []
+    directories, names = set(), []
+    for name, expected in json.loads(content.decode()).items():
+        lexical = Path(source_root) / name
+        names.append(lexical)
+        directories.update(lexical.parents)
+        target = lexical.resolve()
+        if not any(target.is_relative_to(root) for root in roots):
+            raise ValueError("Source must be inside this project")
+        entries.append((str(target), expected))
+    # Parent metadata detects introduced/replaced symlinks and renamed folders.
+    # An existing symlink uses the original uncached resolution path each time;
+    # arbitrary intermediate link chains cannot safely use this shortcut.
+    cacheable = not any(p.is_symlink() for p in [*names, *directories])
+    dependencies = tuple((p, directory_identity(p)) for p in sorted(directories))
+    leaves = tuple((p, path_identity(p)) for p in names)
+    return tuple(entries), dependencies, leaves, cacheable
+
+
+def path_identity(path):
+    try:
+        st = path.lstat()
+        return st.st_dev, st.st_ino, st.st_mode
+    except FileNotFoundError:
+        return None
+
+
+def directory_identity(path):
+    try:
+        st = path.lstat()
+        return st.st_dev, st.st_ino, st.st_mode, st.st_mtime_ns, st.st_ctime_ns
+    except FileNotFoundError:
+        return None
+
+
+def manifest_hashes(path, source_root):
+    """Reuse immutable path resolution, never a mutable Run or verified source."""
+    path = Path(path)
+    if not path.exists():
+        return {}
+    st = path.stat()
+    identity = (st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns)
+    arguments = (
+        str(path.resolve()),
+        identity,
+        path.read_bytes(),  # Small manifests: content identity is exact even within a ctime tick.
+        str(Path(source_root).resolve()),
+        (str(ROOT.resolve()), str(WORKSPACE.resolve())),
+    )
+    entries, dependencies, leaves, cacheable = _manifest_paths(*arguments)
+    if not cacheable:
+        entries, _, _, _ = _manifest_paths.__wrapped__(*arguments)
+    elif any(directory_identity(p) != value for p, value in dependencies) or any(
+        path_identity(p) != value for p, value in leaves
+    ):
+        _manifest_paths.cache_clear()
+        entries, _, _, _ = _manifest_paths(*arguments)
+    after = path.stat()
+    if identity != (
+        after.st_dev,
+        after.st_ino,
+        after.st_size,
+        after.st_mtime_ns,
+        after.st_ctime_ns,
+    ):
+        raise ValueError("Saved manifest changed while reading: " + str(path))
+    return dict(entries)
 
 
 class Run:
@@ -116,8 +193,7 @@ class Run:
         if self.base.name == "soap-creek-v1":
             manifests.append(ROOT / "results/soap-creek-v1-review-v2/manifest.json")
         for manifest in manifests:
-            for path, h in frozen_read(manifest, {}).items():
-                self.hashes[str(self.path(path))] = h
+            self.hashes.update(manifest_hashes(manifest, self.source_root))
         self.validate(self.base / "scouting.json")
         self.config = frozen_read(self.base / "scouting.json")
         self.analysis = self.path(self.config["work"])
@@ -196,7 +272,13 @@ class Run:
         if not expected:
             raise ValueError("Saved source has no integrity record: " + str(path))
         stat = path.stat()
-        check_hash(str(path), stat.st_mtime_ns, stat.st_size, expected)
+        check_hash(
+            str(path),
+            stat.st_mtime_ns,
+            stat.st_size,
+            expected,
+            (stat.st_dev, stat.st_ino, stat.st_ctime_ns),
+        )
 
     def visibility_path(self, ident):
         if ident not in self.points:

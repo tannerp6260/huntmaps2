@@ -25,6 +25,32 @@ import numpy as np
 
 
 class ApproachServiceTests(unittest.TestCase):
+    def test_readonly_preflight_blocks_invalid_boundary_before_job(self):
+        url = f"/api/runs/{self.run}/approach-preflight"
+        before = list(self.client.app.state.jobs.list())
+        response = self.client.post(url, json=self.body, headers=self.headers)
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertTrue(response.json()["ready"])
+        self.assertGreater(response.json()["points"][0]["departures"], 0)
+        x, y = self.target
+        ll = project(self.r.config["epsg"], 4326)
+        outside = dict(
+            self.body,
+            travel_area=mapping(transform(ll, box(x + 500, y + 500, x + 700, y + 700))),
+        )
+        response = self.client.post(url, json=outside, headers=self.headers)
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertFalse(response.json()["ready"])
+        self.assertIn("outside", response.json()["points"][0]["message"])
+        response = self.client.post(
+            f"/api/runs/{self.run}/approaches",
+            json=dict(outside, preflight_required=True),
+            headers=self.headers,
+        )
+        self.assertEqual(response.status_code, 400, response.text)
+        self.assertEqual(self.client.app.state.jobs.list(), before)
+        self.assertFalse((self.config.state_dir / "approaches").exists())
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix="huntmaps-approach-test-")
         self.addCleanup(self.temp.cleanup)
@@ -66,6 +92,72 @@ class ApproachServiceTests(unittest.TestCase):
             self.config.state_dir / "annotations" / f"{self.run}.json",
             {"A0075": dict(status="keep", notes="Synthetic approach test only")},
         )
+
+    def test_preflight_exclusions_network_start_and_departure_limit(self):
+        from huntmaps_gui.approach_preflight import check
+
+        x, y = self.target
+        ll = project(self.r.config["epsg"], 4326)
+        polygon = lambda bounds: mapping(transform(ll, box(*bounds)))
+        cases = [
+            (
+                dict(self.body, exclusions=[polygon((x - 10, y - 10, x + 10, y + 10))]),
+                "outside",
+            ),
+            (dict(self.body, network_ids=[]), "No selected mapped"),
+            (dict(self.body, start=list(ll(x + 20, y))), "network start"),
+            (
+                dict(
+                    self.body,
+                    travel_area=polygon((x - 20000, y - 20000, x + 20000, y + 20000)),
+                ),
+                "million",
+            ),
+        ]
+        for body, message in cases:
+            with self.subTest(message=message):
+                result = check(self.run, body)
+                self.assertFalse(result["ready"])
+                self.assertIn(message, result["points"][0]["message"])
+        far = save_network(
+            json.dumps(
+                mapping(
+                    transform(
+                        ll, LineString([(x + 2000, y - 100), (x + 2000, y + 100)])
+                    )
+                )
+            ).encode(),
+            ".geojson",
+            "trails",
+            "Far synthetic departure",
+        )
+        result = check(
+            self.run,
+            dict(
+                self.body,
+                travel_area=polygon((x - 200, y - 200, x + 2200, y + 200)),
+                network_ids=[far["id"]],
+            ),
+        )
+        self.assertFalse(result["ready"])
+        self.assertIn("within one mile", result["points"][0]["message"])
+
+    def test_preflight_keeps_exact_paths_and_costs(self):
+        from huntmaps_gui.approach_preflight import check
+
+        legacy = service.create(self.run, self.body, self.client.app.state.jobs)
+        service.compute(legacy["id"])
+        self.assertTrue(check(self.run, self.body)["ready"])
+        reviewed = service.create(self.run, self.body, self.client.app.state.jobs)
+        service.compute(reviewed["id"])
+        a = service.status(legacy["id"], self.client.app.state.jobs)["results"][
+            "results"
+        ]
+        b = service.status(reviewed["id"], self.client.app.state.jobs)["results"][
+            "results"
+        ]
+        self.assertTrue(a[0]["alternatives"])
+        self.assertEqual(a, b)
 
     def test_actual_worker_exports_stale_and_storage(self):
         body = dict(
@@ -159,7 +251,9 @@ class ApproachServiceTests(unittest.TestCase):
             json=dict(status="reject", notes="Changed"),
             headers=self.headers,
         )
-        self.assertIn("A0075", self.client.get("/api/approaches/" + ident).json()["point_stale"])
+        self.assertIn(
+            "A0075", self.client.get("/api/approaches/" + ident).json()["point_stale"]
+        )
         self.assertEqual(
             self.client.get(f"/api/approaches/{ident}/export/gpx").status_code, 400
         )

@@ -277,7 +277,7 @@ const descriptions = {
   approach:
     'Compare ways from mapped roads or trails to each shortlisted spot. Distance always matters; preferences add penalties for climbing, steepness and vegetation. These are provisional desktop comparisons, not certified routes or walking times.',
   searchArea:
-    'The area where we are allowed to search for approaches. Include your shortlisted spots and the roads or trails you might leave from. It is separate from where you want to stand, and does not establish permission.',
+    'The area where we are allowed to search for approaches. For this setup, include its exact location and the roads or trails you might leave from. Each new setup needs a separately confirmed boundary. It is separate from where you want to stand, and does not establish permission.',
   avoidance:
     'Places the calculation must avoid, such as an area you do not want to cross. Draw or import them yourself; HuntMaps does not infer ownership restrictions.',
   weights:

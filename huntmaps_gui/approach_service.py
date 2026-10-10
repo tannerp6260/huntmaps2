@@ -13,7 +13,7 @@ from glassing.transfer import project
 from .config import STATE
 from .storage import write, read_json, locked
 from .scouting_network import load_networks, checked_id
-from .approach_search import Grid, solve, VERSION
+from .approach_search import Grid, solve, VERSION, implementation
 
 NOTICE = "Provisional approach on a 20 m ground grid. Fences, deadfall, cliffs below grid scale, water crossings, snow, permissions and parking unmodeled. No walking time or safe/legal access certification."
 
@@ -134,6 +134,7 @@ def create(run, body, jobs):
         id=uuid.uuid4().hex,
         run_id=run,
         algorithm=VERSION,
+        implementation=implementation(),
         created=time.time(),
         points=[points[i] for i in ids],
         travel_area=mapping(area),
@@ -226,6 +227,10 @@ def compute(ident):
     from .catalog import Run
 
     s = read_json(STATE / "approaches" / checked_id(ident) / "scenario.json")
+    if s.get("implementation") is not None and s["implementation"] != implementation():
+        raise ValueError(
+            "Approach implementation changed; retain this scenario and create a new comparison"
+        )
     current_status = status(ident)
     if current_status["stale"] or current_status["point_stale"]:
         raise ValueError(
@@ -328,6 +333,7 @@ def compute(ident):
     output = dict(
         version=1,
         algorithm=VERSION,
+        implementation=implementation(),
         results=results,
         notice=NOTICE,
         scenario_sha256=digest(s),

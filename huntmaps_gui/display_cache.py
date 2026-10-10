@@ -13,6 +13,36 @@ from .jobs import ACTIVE
 
 _pins = {}
 _pin_lock = threading.RLock()
+_checked = {}
+_dirty = set()
+
+
+def generation():
+    marker = STATE / "display-cache.generation"
+    try:
+        stat = marker.stat()
+        return stat.st_ino, stat.st_mtime_ns, stat.st_ctime_ns
+    except FileNotFoundError:
+        return None
+
+
+def changed():
+    """Call under maintenance lock before creating/replacing display assets."""
+    _dirty.add(STATE.resolve())
+    # Other processes must also notice growth, including a writer that exits
+    # while eviction is paused for an active job. A stat replaces a full scan.
+    marker = STATE / "display-cache.generation"
+    marker.touch()
+    now = time.time_ns()
+    os.utime(marker, ns=(now, now))
+
+
+def maybe_evict():
+    """Hits cannot grow the cache. Scan on writes, first use or a budget change."""
+    key = (STATE.resolve(), current().display_budget_bytes)
+    if key not in _checked or _checked[key] != generation() or key[0] in _dirty:
+        return evict()
+    return 0
 
 
 @contextmanager
@@ -44,16 +74,30 @@ def remember(folder, run, cid, viewed):
     value = dict(run=run, cid=cid, viewed=bool(viewed or old.get("viewed")))
     if old != value:
         folder.mkdir(parents=True, exist_ok=True)
+        changed()
         write(marker, value)
 
 
 def evict():
+    with locked(STATE / "maintenance"):
+        return _evict()
+
+
+def _evict():
+    state = STATE.resolve()
     if any(read_json(p)["status"] in ACTIVE for p in (STATE / "jobs").glob("*.json")):
+        _dirty.add(state)  # Retry once the job is idle, including on a cached hit.
         return 0
     files = [
         p for p in (STATE / "cache").rglob("*") if p.is_file() and not p.is_symlink()
     ]
     total = sum(p.stat().st_size for p in files)
+    _dirty.discard(state)
+    if len(_checked) > 128:
+        _checked.clear()
+    _checked[(state, current().display_budget_bytes)] = generation()
+    if total <= current().display_budget_bytes:
+        return 0  # Ownership/decision reads and sorting are only for eviction.
     reclaimed = 0
     owners, decisions = {}, {}
 
@@ -86,6 +130,8 @@ def evict():
             path.unlink()
         total -= size
         reclaimed += size
+    if total > current().display_budget_bytes:
+        _dirty.add(state)  # Pinned files can outlive this request.
     return reclaimed
 
 
@@ -94,7 +140,7 @@ def bounded(function):
     def wrapped(*args, **kwargs):
         with locked(STATE / "maintenance"):
             result = function(*args, **kwargs)
-            evict()
+            maybe_evict()
             return result
 
     return wrapped

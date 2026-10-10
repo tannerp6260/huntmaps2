@@ -46,6 +46,15 @@ def summarize(lines):
             "review",
             "Review the named source; retain evidence and supply a verified replacement in a new run.",
         )
+    elif any(
+        word in text
+        for word in ["service returned", "approved source acquisition failed"]
+    ):
+        code, action, hint = (
+            "provider_failed",
+            "retry",
+            "Retry when the source service is available; rejected responses are retained for diagnosis and reacquired. Verified sources are reused.",
+        )
     else:
         code, action, hint = (
             "processing_failed",

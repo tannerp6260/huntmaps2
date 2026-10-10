@@ -41,10 +41,10 @@ def locked(path):
                 fcntl.flock(handle, fcntl.LOCK_UN)
 
 
-def atomic_write(path, value):
+def atomic_write(path, value, *, compact=False):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    content = json.dumps(value, indent=2, allow_nan=False) + "\n"
+    content = json.dumps(value, indent=None if compact else 2, allow_nan=False) + "\n"
     descriptor, temporary = tempfile.mkstemp(
         prefix="." + path.name + "-", suffix=".tmp", dir=path.parent
     )

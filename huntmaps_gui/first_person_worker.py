@@ -878,14 +878,18 @@ def enrich_clusters(folder, meta, points, ground_grid):
     )
 
 
-def publish_clusters(run, cid, key, prior, target, started, sources):
+def publish_clusters(run, cid, key, prior, target, started, sources, crops=None):
     meta = read(prior / "scene.json")
     for name, h in meta["hashes"].items():
         fp.verify_file(fp.asset_path(prior, meta, name), h)
     for image in run.images:
         run.validate(image["path"])
     with preparation_stage(cid, "reading nearby measured returns"):
-        points, _, _ = crop_points(run, cid, sources, radius=122)
+        points, _, _ = (
+            crop_points(run, cid, sources, radius=122)
+            if crops is None
+            else crops.get(cid, radius=122)
+        )
     path = fp.asset_path(prior, meta, "fine.npz")
     with np.load(path) as grid:
         ground_grid = grid["heights"]
@@ -917,16 +921,15 @@ def publish_clusters(run, cid, key, prior, target, started, sources):
     )
     if size > 800_000_000:
         raise ValueError("800 MB derived-asset cap exceeded; prior scene retained.")
+    if crops is not None:
+        crops.verify()
     target.parent.mkdir(parents=True, exist_ok=True)
     folder.replace(target)
     write(fp.ready_path(run.id, cid), dict(key=key))
     fp.stage(cid + " connected foliage ready")
 
 
-def publish(run, cid, sources):
-    signal.alarm(900) if __name__ == "__main__" else None
-    started = time.monotonic()
-    fp.stage("Building fine terrain, support masks and scene for " + cid)
+def scene_signature(run, cid, sources, optimized=False):
     p = run.candidate(cid)
     signature = dict(
         run_id=run.id,
@@ -943,9 +946,37 @@ def publish(run, cid, sources):
     from .foliage_clusters import IDENTIFIER
 
     signature["foliage_geometry"] = IDENTIFIER
+    if optimized:
+        from . import lidar_batch
+
+        signature["crop_implementation"] = digest(lidar_batch.__file__)
     key = hashlib.sha256(json.dumps(signature, sort_keys=True).encode()).hexdigest()[
         :32
     ]
+    return signature, key
+
+
+def existing_bundle(run, cid, sources, optimized):
+    signature, key = scene_signature(run, cid, sources, optimized)
+    if optimized and not (fp.HOME / "bundles" / key).exists():
+        old_signature, old_key = scene_signature(run, cid, sources, False)
+        meta = read(fp.HOME / "bundles" / old_key / "scene.json", {})
+        if (
+            meta.get("version") == fp.VERSION
+            and meta.get("scene_signature") == old_signature
+        ):
+            # Reuse a numerically identical, immutable pre-optimization bundle.
+            # It keeps its original implementation identity and is verified below.
+            return old_signature, old_key
+    return signature, key
+
+
+def publish(run, cid, sources, crops=None, optimized=False):
+    signal.alarm(900) if __name__ == "__main__" else None
+    started = time.monotonic()
+    fp.stage("Building fine terrain, support masks and scene for " + cid)
+    p = run.candidate(cid)
+    signature, key = existing_bundle(run, cid, sources, optimized)
     target = fp.HOME / "bundles" / key
     if target.exists():
         # Verify before reuse; stale/corrupt immutable assets are never overwritten.
@@ -963,11 +994,13 @@ def publish(run, cid, sources):
     ).hexdigest()[:32]
     prior = fp.HOME / "bundles" / previous_key
     if (prior / "scene.json").exists():
-        publish_clusters(run, cid, key, prior, target, started, sources)
+        publish_clusters(run, cid, key, prior, target, started, sources, crops)
         return
     if any(cid in source[0]["candidates"] for source in sources):
         with preparation_stage(cid, "reading measured returns"):
-            points, vref, hist = crop_points(run, cid, sources)
+            points, vref, hist = (
+                crop_points(run, cid, sources) if crops is None else crops.get(cid)
+            )
     else:
         points = np.empty((0, 4))
         vref, hist = "Terrain DEM only", {}
@@ -1168,6 +1201,8 @@ def publish(run, cid, sources):
     )
     if size > 800_000_000:
         raise ValueError("800 MB derived-asset cap exceeded")
+    if crops is not None:
+        crops.verify()
     target.parent.mkdir(parents=True, exist_ok=True)
     folder.replace(target)
     write(fp.ready_path(run.id, cid), dict(key=key))
@@ -1219,23 +1254,37 @@ def prepare(ident, allow, review_signature=None):
     failures = {}
     flush_download()
     emit("processing", "Preparing scenes", 0, len(p["candidates"]), force=True)
-    for index, cid in enumerate(p["candidates"]):
-        check_space(fp.HOME, 800_000_000)
-        try:
-            publish(run, cid, sources)
-        except (ValueError, RuntimeError, MemoryError) as e:
-            # Keep the original allocation/source traceback before reducing the
-            # per-setup failure to the summary returned to the GUI.
-            traceback.print_exc()
-            failures[cid] = str(e)
-            fp.stage(cid + " could not prepare: " + str(e))
-        emit(
-            "processing",
-            "Preparing scenes",
-            index + 1,
-            len(p["candidates"]),
-            force=True,
-        )
+    from .lidar_batch import crop_batch
+
+    optimized = bool(sources and len(p["candidates"]) > 1)
+    pending = [
+        cid
+        for cid in p["candidates"]
+        if not (
+            fp.HOME
+            / "bundles"
+            / existing_bundle(run, cid, sources, optimized)[1]
+            / "scene.json"
+        ).exists()
+    ]
+    with crop_batch(run, pending, sources) as crops:
+        for index, cid in enumerate(p["candidates"]):
+            check_space(fp.HOME, 800_000_000)
+            try:
+                publish(run, cid, sources, crops, optimized)
+            except (ValueError, RuntimeError, MemoryError) as e:
+                # Keep the original allocation/source traceback before reducing the
+                # per-setup failure to the summary returned to the GUI.
+                traceback.print_exc()
+                failures[cid] = str(e)
+                fp.stage(cid + " could not prepare: " + str(e))
+            emit(
+                "processing",
+                "Preparing scenes",
+                index + 1,
+                len(p["candidates"]),
+                force=True,
+            )
     p.update(failures=failures, completed=True, finished=time.time())
     write(fp.HOME / "plans" / (ident + ".json"), p)
     if failures:

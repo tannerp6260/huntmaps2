@@ -327,6 +327,9 @@ def cleanup(body: Cleanup):
                 shutil.rmtree(path)
             else:
                 path.unlink()
+        from .display_cache import changed
+
+        changed()
         from . import tiles, terrain, first_person, vegetation_screen, foliage_clusters
 
         for module in (

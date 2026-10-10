@@ -119,6 +119,9 @@ def main():
                 Path(c["model_lock"]),
                 Path(__file__),
                 Path(search.__file__),
+                Path(search.__file__).with_name("sampling.py"),
+                Path(search.__file__).with_name("evaluation.py"),
+                Path(search.__file__).with_name("storage.py"),
                 Path(search.target_filters.__file__),
                 Path(__file__).with_name("manual_packet.py"),
             ]

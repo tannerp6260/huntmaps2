@@ -22,7 +22,9 @@ await page.getByLabel('Import travel area',{exact:true}).setInputFiles({name:'sy
 
 await page.locator('.approach-settings').waitFor();if (await page.locator('.approach-settings').getAttribute('open') === null) await page.locator('.approach-settings > summary').click();await page.getByText('More options · pinned departure and preferences',{exact:true}).click();await page.getByLabel('Maximum approach slope',{exact:true}).fill('60');
 await page.getByRole('button',{name:'Confirm approach search boundary',exact:true}).click();
-await page.getByText('Travel boundary saved',{exact:false}).waitFor();
+await page.getByText('Boundary confirmed for this setup',{exact:false}).waitFor();
+await page.locator('.approach-boundary-check[data-ready="true"]').waitFor();
+await page.getByRole('button',{name:'Calculate approaches for A0075',exact:true}).click();
 await page.getByRole('link',{name:'Provisional approach GeoJSON',exact:true}).first().waitFor({timeout:60000});
 const href=await page.getByRole('link',{name:'Provisional approach GeoJSON',exact:true}).first().getAttribute('href');
 const data=await (await page.request.get(base+href)).json();
@@ -43,7 +45,10 @@ const preferences=page.getByText('More options · pinned departure and preferenc
 if(await preferences.locator('..').getAttribute('open')===null) await preferences.click();
 await page.getByLabel('Approach tree weight',{exact:true}).fill('4');
 assert.equal(await page.getByRole('link',{name:'Provisional approach GeoJSON',exact:true}).count(),0);
-await page.getByText('Observer access and visible-terrain filters',{exact:true}).click();
+await page.getByRole('navigation',{name:'Scouting workflow'}).getByRole('button',{name:/Find/}).click();
+await page.getByRole('button',{name:/Terrain & access filters/}).click();
+const filters=page.getByText('Observer access and visible-terrain filters',{exact:true});
+if(await filters.locator('..').getAttribute('open')===null)await filters.click();
 await page.getByLabel('Elevation range (feet)',{exact:true}).check();
 await page.getByLabel('Minimum Elevation range (feet)',{exact:true}).fill('10000');await page.getByLabel('Maximum Elevation range (feet)',{exact:true}).fill('10500');
 await page.getByRole('button',{name:'Apply review filters',exact:true}).click();await page.getByText('Applied matching-area order',{exact:false}).waitFor();

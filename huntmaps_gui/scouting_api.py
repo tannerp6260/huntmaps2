@@ -242,6 +242,19 @@ def router(jobs):
         path.write_bytes(data)
         return [dict(name=name, geometry=mapping(g)) for name, g in choices(path)]
 
+    @r.post("/runs/{ident}/approach-preflight")
+    def preflight(ident, body: dict = Body(...)):
+        from .approach_preflight import check
+
+        with locked(STATE / "maintenance"):
+            if body.get("points") is not None and body["points"] != [
+                workflow.point(ident, cid, jobs) for cid in body.get("ids", [])
+            ]:
+                raise ValueError(
+                    "Waypoint changed; reload before checking the boundary"
+                )
+            return check(ident, body, jobs)
+
     @r.post("/runs/{ident}/approaches")
     def submit(ident, body: dict = Body(...)):
         with locked(STATE / "maintenance"):
@@ -254,6 +267,14 @@ def router(jobs):
                 if body["points"] != expected:
                     raise ValueError(
                         "Waypoint changed; reload before calculating approaches"
+                    )
+            if body.get("preflight_required"):
+                from .approach_preflight import check
+
+                result = check(ident, body, jobs)
+                if not result["ready"]:
+                    raise ValueError(
+                        next(p["message"] for p in result["points"] if not p["ready"])
                     )
             scenario = approaches.create(ident, body, jobs)
             job = jobs.start(

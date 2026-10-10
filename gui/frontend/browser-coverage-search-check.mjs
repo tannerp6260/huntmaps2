@@ -20,9 +20,12 @@ try {
  const coverageStarted=Date.now();
  await page.getByLabel('Run selector').selectOption('search-fixture');
  await page.locator('.coverage-status').filter({hasText:'Loading additional coverage'}).waitFor();
+ await page.locator('.coverage-loading[data-phase="loading"]').waitFor();
+ assert.equal(await page.locator('.map-pane').getAttribute('aria-busy'),'true');
  await page.screenshot({path:out+'/01-loading-desktop.png',fullPage:true});
  await page.locator('.coverage-status').filter({hasText:'Coverage ready'}).waitFor({timeout:60000});
  const initialCoverageMs=Date.now()-coverageStarted;
+ await page.locator('.coverage-loading').waitFor({state:'hidden'});
  const run=await (await page.request.get(base+'/api/runs/search-fixture')).json();
  assert.equal(run.recommendation_ids.length,5);
  assert.equal(await page.getByLabel('Saved neighborhood').inputValue(),'recommended');
@@ -38,6 +41,7 @@ try {
  slow=false; fail=true;
  await page.getByLabel('Select '+failedPoint,{exact:true}).click();
  await page.locator('.coverage-status').filter({hasText:'Coverage incomplete'}).waitFor({timeout:30000});
+ await page.locator('.coverage-loading[data-phase="error"]').waitFor();
  await page.screenshot({path:out+'/02-incomplete-desktop.png',fullPage:true});
  assert.ok(requests.some(v=>v.includes('/filtered-tiles/')&&v.includes('/'+failedPoint+'/')),'Failure must reach the active filtered overlay');
  fail=false;

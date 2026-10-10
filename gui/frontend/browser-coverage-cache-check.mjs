@@ -29,9 +29,13 @@ try {
  const ready=id=>page.locator('.coverage-status').filter({hasText:'Coverage ready · '+id}).waitFor({timeout:60000});
  await ready(first);
  const firstMs=Date.now()-began;
- await page.locator('.coverage-preparation[title^="Preparing saved coverage"]').waitFor({timeout:60000});
+ assert.equal(await page.getByLabel('Coverage batch size').inputValue(),'10');
+ await page.getByRole('button',{name:'Prepare coverage',exact:true}).click();
+ const batchStarted=Date.now();
+ await page.locator('.coverage-preparation[data-phase="preparing"]').waitFor({timeout:60000});
  await page.screenshot({path:out+'/coverage-preparation-desktop.png',fullPage:false});
- await page.locator('.coverage-preparation[title^="Coverage saved ahead for"]').waitFor({timeout:60000});
+ await page.locator('.coverage-preparation[data-phase="ready"]').waitFor({timeout:120000});
+ const batchMs=Date.now()-batchStarted;
  const warmed=requests.filter(r=>r.background);
  assert.ok(warmed.length>0);
  assert.ok(new Set(warmed.map(r=>r.url.split('/visible/')[1].split('/')[0])).size<=run.candidates.length);
@@ -91,6 +95,6 @@ try {
  await page.screenshot({path:out+'/coverage-cache-900.png',fullPage:true});
  const heap=await cdp.send('Runtime.getHeapUsage');
  assert.deepEqual(errors,[]);
- fs.writeFileSync(out+'/results.json',JSON.stringify({firstMs,prefetchedMs,returnMs,returnAdditionalTileRequests:after-before,httpCoverageCacheHits:coverageHits(),prefetchRequests:warmed.length,retainedSources:(await cache()).length,workflowFirst,restoredReviewFocus:review.active_point,heap,errors},null,2));
+ fs.writeFileSync(out+'/results.json',JSON.stringify({firstMs,batchMs,prefetchedMs,returnMs,returnAdditionalTileRequests:after-before,httpCoverageCacheHits:coverageHits(),prefetchRequests:warmed.length,retainedSources:(await cache()).length,workflowFirst,restoredReviewFocus:review.active_point,heap,errors},null,2));
  console.log('Real coverage prefetch, source retention, reload HTTP cache and dismiss/restore verified:',out);
 } finally {await browser.close()}

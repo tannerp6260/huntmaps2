@@ -9,11 +9,31 @@ from osgeo import gdal
 from glassing import core, transfer
 from .progress import emit
 from .downloads import check_space
-from .storage import write
+from .storage import atomic_write
 from . import target_filters
+from .sampling import TerrainSampler
+from .evaluation import Evaluation
 
 VERSION = 1
 SAMPLING_VERSION = 2
+
+
+def implementation():
+    """Separate identity for optimized normal jobs; never alter historical hashes."""
+    import hashlib
+
+    return hashlib.sha256(
+        "".join(
+            core.digest(Path(__file__).with_name(name))
+            for name in [
+                "search.py",
+                "sampling.py",
+                "evaluation.py",
+                "target_filters.py",
+                "storage.py",
+            ]
+        ).encode()
+    ).hexdigest()
 
 
 def validate(c):
@@ -205,6 +225,7 @@ def candidates(c):
     meta["observer_sha256"] = core.digest(sampling / "observer.tif")
     auto = []
     spacing = None
+    sampler = None
     if bc["candidate_count"]:
         for spacing in sorted(
             set([150, 100, 75, 50, 30, 20, abs(gt[1])]), reverse=True
@@ -215,7 +236,9 @@ def candidates(c):
             meta["config"] = dict(bc)
             transfer.dump(sampling / "prepared.json", meta)
             try:
-                core.generate(bc)
+                if sampler is None:
+                    sampler = TerrainSampler(bc)
+                sampler.generate(bc)
             except ValueError as error:
                 if not str(error).startswith(
                     "Only "
@@ -230,7 +253,7 @@ def candidates(c):
             bc["spacing_m"] = abs(gt[1]) * (1 - 1e-9)
             meta["config"] = dict(bc)
             transfer.dump(sampling / "prepared.json", meta)
-            core.generate(bc)
+            sampler.generate(bc)
             auto = transfer.read(sampling / "candidates.json")
             spacing = abs(gt[1])
     transfer.dump(
@@ -282,7 +305,7 @@ def guard_checkpoint(root, identity=None):
             old == identity
             if identity is not None
             else (
-                old.get("algorithm") == core.digest(Path(__file__))
+                old.get("algorithm") == implementation()
                 and old.get("sampling_version") == SAMPLING_VERSION
             )
         )
@@ -315,7 +338,7 @@ def score(c):
         version=VERSION,
         sampling_version=SAMPLING_VERSION,
         prepared=core.digest(root / "input_identity.json"),
-        algorithm=core.digest(Path(__file__)),
+        algorithm=implementation(),
         search_options=options,
         filters_algorithm=core.digest(Path(target_filters.__file__)),
         pool=core.digest(root / "pool.json"),
@@ -331,9 +354,10 @@ def score(c):
     start = time.monotonic()
     initial = len(rows)
     total = c["candidate_count"] + sum(p["group"] == "manual" for p in pool)
+    evaluator = None
 
     def evaluate(points):
-        nonlocal rows, patches
+        nonlocal rows, patches, evaluator
         for offset in range(0, len(points), 20):
             batch = [p for p in points[offset : offset + 20] if p["id"] not in done]
             if not batch:
@@ -350,7 +374,9 @@ def score(c):
             import signal
 
             signal.alarm(c["runtime_s"])
-            scored, ps = transfer.evaluate(c, batch)
+            if evaluator is None:
+                evaluator = Evaluation(c)
+            scored, ps = evaluator.evaluate(batch)
             signal.alarm(0)
             for p in scored:
                 p.update(
@@ -387,7 +413,11 @@ def score(c):
             rows.extend(scored)
             patches.update(ps)
             done.update(p["id"] for p in scored)
-            write(checkpoint, dict(identity=identity, rows=rows, patches=patches))
+            atomic_write(
+                checkpoint,
+                dict(identity=identity, rows=rows, patches=patches),
+                compact=True,
+            )
             elapsed = time.monotonic() - start
             measured = len(rows) - initial
             remaining = (
@@ -402,7 +432,12 @@ def score(c):
                 remaining_s=remaining,
             )
 
-    write(checkpoint, dict(identity=identity, rows=rows, patches=patches))
+    if not saved:
+        atomic_write(
+            checkpoint,
+            dict(identity=identity, rows=rows, patches=patches),
+            compact=True,
+        )
     emit("processing", "Searching observation setups", len(rows), total, force=True)
     evaluate(pool)
     leaders = rank(
@@ -424,6 +459,8 @@ def score(c):
     total = len(pool) + len(extras)
     emit("processing", "Searching observation setups", len(rows), total, force=True)
     evaluate(extras)
+    if evaluator is not None:
+        evaluator.verify(full=True)
     recommended = spread_recommendations(
         rows,
         options["recommendation_count"],

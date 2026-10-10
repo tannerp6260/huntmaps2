@@ -12,6 +12,23 @@ MAX_CELLS = 3_000_000
 MAX_DEPARTURES = 10000
 
 
+def implementation():
+    from glassing.acquire import digest
+    from pathlib import Path
+    import hashlib
+
+    return hashlib.sha256(
+        "".join(
+            digest(Path(__file__).with_name(name))
+            for name in [
+                "approach_search.py",
+                "approach_native.py",
+                "approach_dijkstra.cpp",
+            ]
+        ).encode()
+    ).hexdigest()
+
+
 def terrain_properties(dem, resolution):
     dy, dx = np.gradient(dem, resolution)
     slope = np.degrees(np.arctan(np.hypot(dx, dy)))
@@ -182,6 +199,16 @@ class Grid:
             yield n
 
     def search(self, target, weights):
+        end = self.cell(target)
+        connector = self.segment(self.xy(end), target, weights)
+        if connector is None:
+            return {}, {}
+        from .approach_native import search
+
+        result = search(self, end, connector["cost"], weights)
+        return self.search_reference(target, weights) if result is None else result
+
+    def search_reference(self, target, weights):
         """One reverse directed Dijkstra for all network departures."""
         end = self.cell(target)
         connector = self.segment(self.xy(end), target, weights)
