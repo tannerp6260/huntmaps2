@@ -1,0 +1,679 @@
+{
+  "artifacts": "/tmp/huntmaps-complementary-performance-xgj1x87c",
+  "cold_definition": "New process, empty application display/packed caches; OS page cache unchanged",
+  "results": [
+    {
+      "run": "soap-creek-v1",
+      "repeats": [
+        {
+          "run": "soap-creek-v1",
+          "grid": [
+            1155,
+            1056
+          ],
+          "samples": [
+            {
+              "label": "cold",
+              "count": 5,
+              "wall_s": 1.003900774000158,
+              "compute_s": 0.9973178889999872,
+              "cached": false,
+              "combined_cells": 163826,
+              "evaluated_count": 150,
+              "eligible_count": 150,
+              "packed_cache_bytes": 1472509,
+              "ids": [
+                "A0138",
+                "A0118",
+                "A0107",
+                "A0143",
+                "A0083"
+              ]
+            },
+            {
+              "label": "warm",
+              "count": 5,
+              "wall_s": 0.0959276260000479,
+              "compute_s": 0.09519699700013007,
+              "cached": true,
+              "combined_cells": 163826,
+              "evaluated_count": 150,
+              "eligible_count": 150,
+              "packed_cache_bytes": 1472509,
+              "ids": [
+                "A0138",
+                "A0118",
+                "A0107",
+                "A0143",
+                "A0083"
+              ]
+            },
+            {
+              "label": "resize-3",
+              "count": 3,
+              "wall_s": 0.24848931199994695,
+              "compute_s": 0.23331718700001147,
+              "cached": false,
+              "combined_cells": 114221,
+              "evaluated_count": 150,
+              "eligible_count": 150,
+              "packed_cache_bytes": 1472509,
+              "ids": [
+                "A0138",
+                "A0118",
+                "A0107"
+              ]
+            },
+            {
+              "label": "resize-4",
+              "count": 4,
+              "wall_s": 0.3029988260000209,
+              "compute_s": 0.2857268849998036,
+              "cached": false,
+              "combined_cells": 140339,
+              "evaluated_count": 150,
+              "eligible_count": 150,
+              "packed_cache_bytes": 1472509,
+              "ids": [
+                "A0138",
+                "A0118",
+                "A0107",
+                "A0143"
+              ]
+            },
+            {
+              "label": "warm-return",
+              "count": 5,
+              "wall_s": 0.09793991199967422,
+              "compute_s": 0.09781110799985981,
+              "cached": true,
+              "combined_cells": 163826,
+              "evaluated_count": 150,
+              "eligible_count": 150,
+              "packed_cache_bytes": 1472509,
+              "ids": [
+                "A0138",
+                "A0118",
+                "A0107",
+                "A0143",
+                "A0083"
+              ]
+            }
+          ],
+          "peak_rss_mib": 236.515625,
+          "verified_exact_union": true,
+          "network_bytes": 0
+        },
+        {
+          "run": "soap-creek-v1",
+          "grid": [
+            1155,
+            1056
+          ],
+          "samples": [
+            {
+              "label": "cold",
+              "count": 5,
+              "wall_s": 1.0052910539998265,
+              "compute_s": 0.992860501999985,
+              "cached": false,
+              "combined_cells": 163826,
+              "evaluated_count": 150,
+              "eligible_count": 150,
+              "packed_cache_bytes": 1472509,
+              "ids": [
+                "A0138",
+                "A0118",
+                "A0107",
+                "A0143",
+                "A0083"
+              ]
+            },
+            {
+              "label": "warm",
+              "count": 5,
+              "wall_s": 0.09575666599994292,
+              "compute_s": 0.09493776399995113,
+              "cached": true,
+              "combined_cells": 163826,
+              "evaluated_count": 150,
+              "eligible_count": 150,
+              "packed_cache_bytes": 1472509,
+              "ids": [
+                "A0138",
+                "A0118",
+                "A0107",
+                "A0143",
+                "A0083"
+              ]
+            },
+            {
+              "label": "resize-3",
+              "count": 3,
+              "wall_s": 0.3252726040000198,
+              "compute_s": 0.31211156299968934,
+              "cached": false,
+              "combined_cells": 114221,
+              "evaluated_count": 150,
+              "eligible_count": 150,
+              "packed_cache_bytes": 1472509,
+              "ids": [
+                "A0138",
+                "A0118",
+                "A0107"
+              ]
+            },
+            {
+              "label": "resize-4",
+              "count": 4,
+              "wall_s": 0.29253646000006484,
+              "compute_s": 0.27992895399984263,
+              "cached": false,
+              "combined_cells": 140339,
+              "evaluated_count": 150,
+              "eligible_count": 150,
+              "packed_cache_bytes": 1472509,
+              "ids": [
+                "A0138",
+                "A0118",
+                "A0107",
+                "A0143"
+              ]
+            },
+            {
+              "label": "warm-return",
+              "count": 5,
+              "wall_s": 0.09212757000022975,
+              "compute_s": 0.09203115699983755,
+              "cached": true,
+              "combined_cells": 163826,
+              "evaluated_count": 150,
+              "eligible_count": 150,
+              "packed_cache_bytes": 1472509,
+              "ids": [
+                "A0138",
+                "A0118",
+                "A0107",
+                "A0143",
+                "A0083"
+              ]
+            }
+          ],
+          "peak_rss_mib": 236.27734375,
+          "verified_exact_union": true,
+          "network_bytes": 0
+        },
+        {
+          "run": "soap-creek-v1",
+          "grid": [
+            1155,
+            1056
+          ],
+          "samples": [
+            {
+              "label": "cold",
+              "count": 5,
+              "wall_s": 1.0268759519999549,
+              "compute_s": 1.0138713349997488,
+              "cached": false,
+              "combined_cells": 163826,
+              "evaluated_count": 150,
+              "eligible_count": 150,
+              "packed_cache_bytes": 1472509,
+              "ids": [
+                "A0138",
+                "A0118",
+                "A0107",
+                "A0143",
+                "A0083"
+              ]
+            },
+            {
+              "label": "warm",
+              "count": 5,
+              "wall_s": 0.09676977600020109,
+              "compute_s": 0.09598761600000216,
+              "cached": true,
+              "combined_cells": 163826,
+              "evaluated_count": 150,
+              "eligible_count": 150,
+              "packed_cache_bytes": 1472509,
+              "ids": [
+                "A0138",
+                "A0118",
+                "A0107",
+                "A0143",
+                "A0083"
+              ]
+            },
+            {
+              "label": "resize-3",
+              "count": 3,
+              "wall_s": 0.25818548300003386,
+              "compute_s": 0.24546562300020014,
+              "cached": false,
+              "combined_cells": 114221,
+              "evaluated_count": 150,
+              "eligible_count": 150,
+              "packed_cache_bytes": 1472509,
+              "ids": [
+                "A0138",
+                "A0118",
+                "A0107"
+              ]
+            },
+            {
+              "label": "resize-4",
+              "count": 4,
+              "wall_s": 0.31823507099989,
+              "compute_s": 0.30458926600022096,
+              "cached": false,
+              "combined_cells": 140339,
+              "evaluated_count": 150,
+              "eligible_count": 150,
+              "packed_cache_bytes": 1472509,
+              "ids": [
+                "A0138",
+                "A0118",
+                "A0107",
+                "A0143"
+              ]
+            },
+            {
+              "label": "warm-return",
+              "count": 5,
+              "wall_s": 0.09772819399995569,
+              "compute_s": 0.09762770099996487,
+              "cached": true,
+              "combined_cells": 163826,
+              "evaluated_count": 150,
+              "eligible_count": 150,
+              "packed_cache_bytes": 1472509,
+              "ids": [
+                "A0138",
+                "A0118",
+                "A0107",
+                "A0143",
+                "A0083"
+              ]
+            }
+          ],
+          "peak_rss_mib": 236.921875,
+          "verified_exact_union": true,
+          "network_bytes": 0
+        }
+      ],
+      "median_wall_s": {
+        "cold": 1.0052910539998265,
+        "warm": 0.0959276260000479,
+        "resize-3": 0.25818548300003386,
+        "resize-4": 0.3029988260000209,
+        "warm-return": 0.09772819399995569
+      }
+    },
+    {
+      "run": "scouting-2026-10-10v4",
+      "repeats": [
+        {
+          "run": "scouting-2026-10-10v4",
+          "grid": [
+            665,
+            726
+          ],
+          "samples": [
+            {
+              "label": "cold",
+              "count": 5,
+              "wall_s": 1.8944991509997635,
+              "compute_s": 1.8763034129997322,
+              "cached": false,
+              "combined_cells": 56226,
+              "evaluated_count": 608,
+              "eligible_count": 608,
+              "packed_cache_bytes": 1701335,
+              "ids": [
+                "A0070",
+                "A0001",
+                "R0010",
+                "A0248",
+                "A0464"
+              ]
+            },
+            {
+              "label": "warm",
+              "count": 5,
+              "wall_s": 0.2076496730001054,
+              "compute_s": 0.20724665200032177,
+              "cached": true,
+              "combined_cells": 56226,
+              "evaluated_count": 608,
+              "eligible_count": 608,
+              "packed_cache_bytes": 1701335,
+              "ids": [
+                "A0070",
+                "A0001",
+                "R0010",
+                "A0248",
+                "A0464"
+              ]
+            },
+            {
+              "label": "resize-3",
+              "count": 3,
+              "wall_s": 0.2933742299996993,
+              "compute_s": 0.27869007699973736,
+              "cached": false,
+              "combined_cells": 35546,
+              "evaluated_count": 608,
+              "eligible_count": 608,
+              "packed_cache_bytes": 1701335,
+              "ids": [
+                "A0070",
+                "A0001",
+                "R0010"
+              ]
+            },
+            {
+              "label": "resize-4",
+              "count": 4,
+              "wall_s": 0.3107607160000043,
+              "compute_s": 0.30170157299971834,
+              "cached": false,
+              "combined_cells": 46140,
+              "evaluated_count": 608,
+              "eligible_count": 608,
+              "packed_cache_bytes": 1701335,
+              "ids": [
+                "A0070",
+                "A0001",
+                "R0010",
+                "A0248"
+              ]
+            },
+            {
+              "label": "warm-return",
+              "count": 5,
+              "wall_s": 0.23554561499986448,
+              "compute_s": 0.2351492140001028,
+              "cached": true,
+              "combined_cells": 56226,
+              "evaluated_count": 608,
+              "eligible_count": 608,
+              "packed_cache_bytes": 1701335,
+              "ids": [
+                "A0070",
+                "A0001",
+                "R0010",
+                "A0248",
+                "A0464"
+              ]
+            }
+          ],
+          "peak_rss_mib": 214.4921875,
+          "verified_exact_union": true,
+          "network_bytes": 0
+        },
+        {
+          "run": "scouting-2026-10-10v4",
+          "grid": [
+            665,
+            726
+          ],
+          "samples": [
+            {
+              "label": "cold",
+              "count": 5,
+              "wall_s": 1.8291074190001382,
+              "compute_s": 1.8164446890000363,
+              "cached": false,
+              "combined_cells": 56226,
+              "evaluated_count": 608,
+              "eligible_count": 608,
+              "packed_cache_bytes": 1701335,
+              "ids": [
+                "A0070",
+                "A0001",
+                "R0010",
+                "A0248",
+                "A0464"
+              ]
+            },
+            {
+              "label": "warm",
+              "count": 5,
+              "wall_s": 0.2545841660003134,
+              "compute_s": 0.2541633850000835,
+              "cached": true,
+              "combined_cells": 56226,
+              "evaluated_count": 608,
+              "eligible_count": 608,
+              "packed_cache_bytes": 1701335,
+              "ids": [
+                "A0070",
+                "A0001",
+                "R0010",
+                "A0248",
+                "A0464"
+              ]
+            },
+            {
+              "label": "resize-3",
+              "count": 3,
+              "wall_s": 0.31741462400032106,
+              "compute_s": 0.3014862559998619,
+              "cached": false,
+              "combined_cells": 35546,
+              "evaluated_count": 608,
+              "eligible_count": 608,
+              "packed_cache_bytes": 1701335,
+              "ids": [
+                "A0070",
+                "A0001",
+                "R0010"
+              ]
+            },
+            {
+              "label": "resize-4",
+              "count": 4,
+              "wall_s": 0.33403908099990076,
+              "compute_s": 0.3180503620001218,
+              "cached": false,
+              "combined_cells": 46140,
+              "evaluated_count": 608,
+              "eligible_count": 608,
+              "packed_cache_bytes": 1701335,
+              "ids": [
+                "A0070",
+                "A0001",
+                "R0010",
+                "A0248"
+              ]
+            },
+            {
+              "label": "warm-return",
+              "count": 5,
+              "wall_s": 0.24841282299985323,
+              "compute_s": 0.2479891919997499,
+              "cached": true,
+              "combined_cells": 56226,
+              "evaluated_count": 608,
+              "eligible_count": 608,
+              "packed_cache_bytes": 1701335,
+              "ids": [
+                "A0070",
+                "A0001",
+                "R0010",
+                "A0248",
+                "A0464"
+              ]
+            }
+          ],
+          "peak_rss_mib": 214.13671875,
+          "verified_exact_union": true,
+          "network_bytes": 0
+        },
+        {
+          "run": "scouting-2026-10-10v4",
+          "grid": [
+            665,
+            726
+          ],
+          "samples": [
+            {
+              "label": "cold",
+              "count": 5,
+              "wall_s": 1.71845006500007,
+              "compute_s": 1.7010387860000264,
+              "cached": false,
+              "combined_cells": 56226,
+              "evaluated_count": 608,
+              "eligible_count": 608,
+              "packed_cache_bytes": 1701335,
+              "ids": [
+                "A0070",
+                "A0001",
+                "R0010",
+                "A0248",
+                "A0464"
+              ]
+            },
+            {
+              "label": "warm",
+              "count": 5,
+              "wall_s": 0.2037209499999335,
+              "compute_s": 0.20334821000005832,
+              "cached": true,
+              "combined_cells": 56226,
+              "evaluated_count": 608,
+              "eligible_count": 608,
+              "packed_cache_bytes": 1701335,
+              "ids": [
+                "A0070",
+                "A0001",
+                "R0010",
+                "A0248",
+                "A0464"
+              ]
+            },
+            {
+              "label": "resize-3",
+              "count": 3,
+              "wall_s": 0.291763372999867,
+              "compute_s": 0.2793088879998322,
+              "cached": false,
+              "combined_cells": 35546,
+              "evaluated_count": 608,
+              "eligible_count": 608,
+              "packed_cache_bytes": 1701335,
+              "ids": [
+                "A0070",
+                "A0001",
+                "R0010"
+              ]
+            },
+            {
+              "label": "resize-4",
+              "count": 4,
+              "wall_s": 0.304371861999698,
+              "compute_s": 0.2948439159999907,
+              "cached": false,
+              "combined_cells": 46140,
+              "evaluated_count": 608,
+              "eligible_count": 608,
+              "packed_cache_bytes": 1701335,
+              "ids": [
+                "A0070",
+                "A0001",
+                "R0010",
+                "A0248"
+              ]
+            },
+            {
+              "label": "warm-return",
+              "count": 5,
+              "wall_s": 0.23383868400014762,
+              "compute_s": 0.23332697000023472,
+              "cached": true,
+              "combined_cells": 56226,
+              "evaluated_count": 608,
+              "eligible_count": 608,
+              "packed_cache_bytes": 1701335,
+              "ids": [
+                "A0070",
+                "A0001",
+                "R0010",
+                "A0248",
+                "A0464"
+              ]
+            }
+          ],
+          "peak_rss_mib": 214.18359375,
+          "verified_exact_union": true,
+          "network_bytes": 0
+        }
+      ],
+      "median_wall_s": {
+        "cold": 1.8291074190001382,
+        "warm": 0.2076496730001054,
+        "resize-3": 0.2933742299996993,
+        "resize-4": 0.3107607160000043,
+        "warm-return": 0.23554561499986448
+      }
+    }
+  ],
+  "browser": {
+    "responses": [
+      {
+        "count": 5,
+        "run": "collection-fixture",
+        "ms": 1226,
+        "serverSeconds": 0.3511891069997546
+      },
+      {
+        "count": 3,
+        "run": "collection-fixture",
+        "ms": 200,
+        "serverSeconds": 0.12661643599994932
+      },
+      {
+        "count": 5,
+        "run": "collection-fixture",
+        "ms": 501,
+        "serverSeconds": 0.3941546309997648
+      }
+    ],
+    "preparationMs": 16869,
+    "reviewExtraRequests": 19,
+    "cacheHits": 3,
+    "tiles": 767,
+    "pixels": {
+      "pink": 9843,
+      "cyan": 9110
+    },
+    "errors": [],
+    "realInteraction": {
+      "run": "scouting-2026-10-10v4",
+      "evaluated": 608,
+      "serverSeconds": 3.390027449000172,
+      "responseMs": 11277,
+      "zoomClickMs": 82,
+      "renderedFrames": 662,
+      "maximumFrameGapMs": 50.10000000000582
+    },
+    "actualBackend": true
+  },
+  "verification": {
+    "command": "./gui/check",
+    "exit_code": 0,
+    "backend_tests": 201,
+    "mandatory_browser_journeys": 22,
+    "diagnostics": "/tmp/huntmaps-check-ug6ylh9q",
+    "preservation": {
+      "files": 8065,
+      "changed": []
+    },
+    "full_suite_server_peak_rss_kib": 1253076,
+    "head": "b801235c80857c6b23567b9d29edfcdd60b6f46e",
+    "scope": "Ubuntu project and disposable /tmp state; no push or commit"
+  }
+}

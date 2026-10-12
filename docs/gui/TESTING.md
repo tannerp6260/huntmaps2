@@ -44,3 +44,25 @@ browser journey also checks the local-source review dates/links at desktop and 9
 Approval version 2 identifies source requests, boundary/settings and allowance independently of estimates and cached byte totals. Older failed plans need one explicit **Refresh plan / recover partial preparation** and review. Verified files are retained. Legacy interrupted bytes that were never recorded cannot be reconstructed; the migration notice discloses that limitation. New plans retain a durable cumulative transfer ledger across retries and allowance reviews.
 
 Checkpoint identity includes sampling version, implementation checksum, prepared inputs and candidate pool. An incompatible checkpoint stops intact instead of being silently reset. An implementation mismatch is checked before preparation rewrites intermediate files; changed inputs require a new run.
+
+## Complementary collection checks
+
+`test_gui_complementary.py` verifies the exact A10/B9/C8-disjoint answer (A+C,
+18 cells); identical/zero-gain views; retained and unknown manual positions; rank
+and ID ties; eligibility and spacing; partial-byte packed windows; and the byte
+cache budget. Disposable real-owner outputs exercise API calculations, exact unions
+and incremental areas, explicit atomic additions, retained decisions, dismissal and
+restoration, empty filters, pending and published working revisions, missing moved
+masks, source corruption with preserved mtime, and stale additions. No historical
+analysis is regenerated.
+
+`browser-complementary-check.mjs` is mandatory in `./gui/check`. It uses an actual
+analysis worker and live backend in an independent synthetic run, checks coverage
+and contribution pixels, collection preparation, reviewing/changing size, explicit
+additions, dismissal/restoration, unchanged individual ranking, and 1500/900 px
+layouts. Controlled delayed responses are fetched from the actual backend, then held
+to check obsolete size, filter and run responses. These delays are correctness
+fixtures, separate from timing measurements. The real-area benchmark command is
+`.venv/bin/python -m gui.complementary_performance`; it uses new processes and
+disposable caches, verifies the resulting analytical union independently, forbids
+source downloads, and reports three-repeat cold/warm/resize medians and peak RSS.

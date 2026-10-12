@@ -26,6 +26,7 @@ BROWSER_CHECKS = (
     "browser-coverage-cache-check",
     "browser-coverage-batch-check",
     "browser-coverage-render-check",
+    "browser-complementary-check",
     "browser-check",
     "browser-training-check",
     "browser-first-person-check",
@@ -245,6 +246,22 @@ def main():
                     "search-fixture",
                 ],
                 "search-owner",
+                work / "workspace",
+            )
+            run(
+                [
+                    sys.executable,
+                    "-m",
+                    "huntmaps_gui.owner_worker",
+                    "run",
+                    "--area",
+                    "workflow-fixture/observer.geojson",
+                    "--source-config",
+                    "search-fixture.json",
+                    "--name",
+                    "collection-fixture",
+                ],
+                "collection-owner",
                 work / "workspace",
             )
             with socket.socket() as sock:

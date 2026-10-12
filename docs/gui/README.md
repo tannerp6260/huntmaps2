@@ -375,3 +375,32 @@ See [source acquisition recovery](ACQUISITION_RECOVERY_2026-10-10.md).
 Use Locations to test for the calculation budget and Top spots to recommend for the initial collection. Set Terrain I want to see before reviewing downloads. Recommendations maximize matching visible area while preserving total visibility and all evaluated locations. Avoid standing in dense vegetation is optional and off by default. Generation progress is shown directly in Step 1; saved approaches can be previewed while their selection requirements are unmet. See [WORKFLOW.md](WORKFLOW.md) for details.
 
 Implementation and verification evidence: [filter-first search report](FILTER_FIRST_SEARCH_2026-10-04.md).
+
+## Complementary glassing views
+
+In **Find**, choose **Recommendation mode → Complementary views**. The collection
+size defaults to five and can be three, four or five, including positions already
+shortlisted. Each suggestion shows its total matching terrain, the additional area
+beyond retained positions and earlier suggestions, and overlap as a percentage of
+that position's total matching area. The collection total counts each aligned
+analytical raster cell once. Blue shows the combined coverage; pink highlights the
+selected suggestion's additional contribution. Click a suggestion to review it;
+**Whole area** gives an overview.
+
+**Prepare coverage** prepares the collection and contribution tiles through the
+same bounded, cancellable preparation queue. Changing the size reuses saved
+viewsheds; it starts no visibility calculation or source download. Other zooms and
+cache eviction can still require loading display tiles. Individual-view rankings,
+scores and the separate three-setup comparison remain available.
+
+Computing suggestions makes no shortlist decisions. Click **Add suggestions to
+shortlist** to add the reviewed suggestions explicitly. Existing retained positions,
+manual coordinates, approach choices and confirmations are preserved. An uncalculated
+manual position remains retained with unknown contribution, excluded from the measured
+area. Existing retained positions count toward the requested size and are never
+removed if they already exceed it.
+
+This is a deterministic greedy terrain-coverage recommendation over eligible saved
+positions, not a proven global optimum, visiting order or itinerary. Terrain coverage
+does not establish deer presence, vegetation clearance or legal access. Detailed
+engineering evidence is in [the complementary coverage report](COMPLEMENTARY_VIEWS_2026-10-10.md).

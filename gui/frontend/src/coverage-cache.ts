@@ -1,7 +1,12 @@
 import { MercatorCoordinate, type Map } from 'maplibre-gl';
 export const COVERAGE_DISPLAY_VERSION = 2;
 export const COVERAGE_REVIEW_ZOOM = 13.8;
-export type CoveragePoint = { id: string; longitude: number; latitude: number };
+export type CoveragePoint = {
+  id: string;
+  longitude: number;
+  latitude: number;
+  additional?: boolean;
+};
 export type Preparation = {
   phase: 'preparing' | 'paused' | 'ready' | 'cancelled' | 'error';
   completed: number;
@@ -93,6 +98,7 @@ export function prepareCoverage(
   wholeArea?: number[][],
   paused: () => boolean = () => false,
   finished = new Set<string>(),
+  collection?: string,
 ) {
   const controller = new AbortController();
   let stopped = false;
@@ -123,7 +129,13 @@ export function prepareCoverage(
           Math.abs((padding.top ?? 0) - (padding.bottom ?? 0)),
         ],
       );
-      state.totalTiles = groups.reduce((n, g) => n + g.tiles.length, 0);
+      state.totalTiles = groups.reduce(
+        (n, g) =>
+          n +
+          g.tiles.length *
+            (collection && points.find((p) => p.id === g.id)?.additional !== false ? 2 : 1),
+        0,
+      );
       for (const group of groups) {
         state.current = group.id;
         for (const [z, x, y] of group.tiles) {
@@ -133,29 +145,43 @@ export function prepareCoverage(
             : working[group.id]
               ? 'working-tiles'
               : 'tiles';
-          const url = `/api/runs/${run}/${route}/visible/${group.id}/${z}/${x}/${y}.png?color=0&revision=${working[group.id]?.revision || 'original'}&display=${COVERAGE_DISPLAY_VERSION}`;
-          while (!stopped && (paused() || map.isMoving())) {
-            emit('paused', 'Preparation pauses during map movement, 3D views or other jobs.');
-            await new Promise((resolve) => window.setTimeout(resolve, 300));
-          }
-          if (stopped) return;
-          emit('preparing');
-          if (!finished.has(url)) {
-            const response = await fetch(url, {
-              signal: controller.signal,
-              headers: { 'X-Huntmaps-Prefetch': 'true' },
-            });
-            if (!response.ok) {
-              const detail = await response
-                .json()
-                .catch(() => ({ detail: 'Coverage tile could not load.' }));
-              throw Error(detail.detail || 'Coverage tile could not load.');
+          const urls = collection
+            ? [
+                'combined',
+                ...(points.find((p) => p.id === group.id)?.additional === false
+                  ? []
+                  : ['additional-' + group.id]),
+              ].map(
+                (layer) =>
+                  `/api/runs/${run}/collection-tiles/${collection}/${layer}/${z}/${x}/${y}.png`,
+              )
+            : [
+                `/api/runs/${run}/${route}/visible/${group.id}/${z}/${x}/${y}.png?color=0&revision=${working[group.id]?.revision || 'original'}&display=${COVERAGE_DISPLAY_VERSION}`,
+              ];
+          for (const url of urls) {
+            while (!stopped && (paused() || map.isMoving())) {
+              emit('paused', 'Preparation pauses during map movement, 3D views or other jobs.');
+              await new Promise((resolve) => window.setTimeout(resolve, 300));
             }
-            await response.arrayBuffer();
             if (stopped) return;
-            finished.add(url);
+            emit('preparing');
+            if (!finished.has(url)) {
+              const response = await fetch(url, {
+                signal: controller.signal,
+                headers: { 'X-Huntmaps-Prefetch': 'true' },
+              });
+              if (!response.ok) {
+                const detail = await response
+                  .json()
+                  .catch(() => ({ detail: 'Coverage tile could not load.' }));
+                throw Error(detail.detail || 'Coverage tile could not load.');
+              }
+              await response.arrayBuffer();
+              if (stopped) return;
+              finished.add(url);
+            }
+            state.tiles++;
           }
-          state.tiles++;
           await new Promise((resolve) => window.setTimeout(resolve, 20));
         }
         state.completed++;

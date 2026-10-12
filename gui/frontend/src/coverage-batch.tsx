@@ -10,6 +10,7 @@ export default function CoverageBatch({
   filter,
   wholeArea,
   paused,
+  collection,
 }: {
   map: Map;
   run: string;
@@ -19,6 +20,7 @@ export default function CoverageBatch({
   filter?: string;
   wholeArea: number[][];
   paused: boolean;
+  collection?: string;
 }) {
   const [count, setCount] = useState(10);
   const [terrainView, setTerrainView] = useState(map.getPitch() > 0);
@@ -39,7 +41,8 @@ export default function CoverageBatch({
   const signature = JSON.stringify([
     run,
     filter,
-    points.map((p) => [p.id, p.longitude, p.latitude, working[p.id]?.revision]),
+    collection,
+    points.map((p) => [p.id, p.longitude, p.latitude, working[p.id]?.revision, p.additional]),
   ]);
   useEffect(() => {
     generation.current++;
@@ -58,11 +61,13 @@ export default function CoverageBatch({
     const token = ++generation.current;
     cancel.current?.();
     if (!retry) {
-      const index = Math.max(
-        0,
-        points.findIndex((p) => p.id === selected),
-      );
-      batch.current = points.slice(index, index + count);
+      const index = collection
+        ? 0
+        : Math.max(
+            0,
+            points.findIndex((p) => p.id === selected),
+          );
+      batch.current = collection ? points : points.slice(index, index + count);
       finished.current.clear();
     }
     cancel.current = prepareCoverage(
@@ -77,6 +82,7 @@ export default function CoverageBatch({
       wholeArea,
       () => pausedRef.current,
       finished.current,
+      collection,
     );
   }
   const active = state?.phase === 'preparing' || state?.phase === 'paused';
@@ -84,19 +90,21 @@ export default function CoverageBatch({
     <section className="coverage-batch" aria-label="Prepare coverage batch">
       <div className="row">
         <label>
-          Prepare next{' '}
-          <select
-            aria-label="Coverage batch size"
-            value={count}
-            disabled={active}
-            onChange={(e) => setCount(+e.target.value)}
-          >
-            {[5, 10, 20].map((n) => (
-              <option key={n} value={n}>
-                {n} setups
-              </option>
-            ))}
-          </select>
+          {collection ? 'Prepare collection' : 'Prepare next'}{' '}
+          {!collection && (
+            <select
+              aria-label="Coverage batch size"
+              value={count}
+              disabled={active}
+              onChange={(e) => setCount(+e.target.value)}
+            >
+              {[5, 10, 20].map((n) => (
+                <option key={n} value={n}>
+                  {n} setups
+                </option>
+              ))}
+            </select>
+          )}
         </label>
         <button
           disabled={active || paused || terrainView || !points.length}
@@ -106,7 +114,9 @@ export default function CoverageBatch({
         </button>
       </div>
       <small>
-        Includes this setup, then follows the displayed order. Review one view at a time.
+        {collection
+          ? 'Prepares combined coverage and each suggested contribution using the same bounded tile queue.'
+          : 'Includes this setup, then follows the displayed order. Review one view at a time.'}
       </small>
       {state && (
         <div

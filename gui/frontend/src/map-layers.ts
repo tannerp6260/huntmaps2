@@ -14,6 +14,7 @@ const displayed = new WeakMap<Map, string>();
 type LayerState = {
   run: Run;
   filterId?: string;
+  collection?: { id: string; selected: string };
   working: Record<string, { revision: string }>;
   imagery: boolean;
   imageOpacity: number;
@@ -33,6 +34,7 @@ export function updateMapLayers(
   {
     run,
     filterId,
+    collection,
     working,
     imagery,
     imageOpacity,
@@ -60,7 +62,7 @@ export function updateMapLayers(
   retained.set(m, recent);
   const coverage: { key: string; alpha: number }[] = [];
   const addRaster = (layer: string, id: string, alpha: number, color = 0) => {
-    const key = `raster-${layer}-${id}-${run.id}-${['visible', 'classes'].includes(layer) ? filterId || 'base' : 'base'}-${working[id]?.revision || 'original'}-${color}-${layer === 'visible' ? retry : 0}-${COVERAGE_DISPLAY_VERSION}`;
+    const key = `raster-${layer}-${id}-${run.id}-${collection && layer === 'visible' ? collection.id : ''}-${['visible', 'classes'].includes(layer) ? filterId || 'base' : 'base'}-${working[id]?.revision || 'original'}-${color}-${layer === 'visible' ? retry : 0}-${COVERAGE_DISPLAY_VERSION}`;
     wanted.add(key);
     if (layer === 'visible') recent.set(key, Date.now());
     if (layer === 'visible') coverage.push({ key, alpha });
@@ -73,7 +75,9 @@ export function updateMapLayers(
     m.addSource(key, {
       type: 'raster',
       tiles: [
-        `${location.origin}/api/runs/${run.id}/${filterId && ['visible', 'classes'].includes(layer) ? `filtered-tiles/${filterId}` : useWorking ? 'working-tiles' : 'tiles'}/${layer}/${id}/{z}/{x}/{y}.png?color=${color}&revision=${working[id]?.revision || 'original'}&display=${COVERAGE_DISPLAY_VERSION}`,
+        collection && layer === 'visible'
+          ? `${location.origin}/api/runs/${run.id}/collection-tiles/${collection.id}/${id}/{z}/{x}/{y}.png`
+          : `${location.origin}/api/runs/${run.id}/${filterId && ['visible', 'classes'].includes(layer) ? `filtered-tiles/${filterId}` : useWorking ? 'working-tiles' : 'tiles'}/${layer}/${id}/{z}/{x}/{y}.png?color=${color}&revision=${working[id]?.revision || 'original'}&display=${COVERAGE_DISPLAY_VERSION}`,
       ],
       tileSize: 256,
       maxzoom: 20,
@@ -106,8 +110,13 @@ export function updateMapLayers(
         : selected
           ? [selected]
           : [];
+  if (collection && visibility && !newRun) {
+    addRaster('visible', 'combined', opacity);
+    if (collection.selected)
+      addRaster('visible', 'additional-' + collection.selected, Math.min(1, opacity * 1.6));
+  }
   ids.forEach((id, i) => {
-    if (visibility && (!compare.length || !hiddenViews.includes(id)))
+    if (!collection && visibility && (!compare.length || !hiddenViews.includes(id)))
       addRaster('visible', id, opacity, i);
     const sectorKey = `sector-${run.id}-${id}`;
     if (sectors && !working[id] && (!compare.length || !hiddenViews.includes(id))) {
@@ -134,7 +143,8 @@ export function updateMapLayers(
           });
     }
   });
-  if (classes && selected && !newRun && !activeManual) addRaster('classes', selected, opacity);
+  if (!collection && classes && selected && !newRun && !activeManual)
+    addRaster('classes', selected, opacity);
   // Keep only eight coverage sources, and never retain another run or dismissed setup.
   const activeCoverage = new Set(coverage.map(({ key }) => key));
   const keep = new Set(
@@ -177,7 +187,12 @@ export function updateMapLayers(
   let awaitingRender = false;
   const signature = coverage.map(({ key }) => key).join('|');
   let initial = displayed.get(m) !== signature;
-  const report = (phase: CoverageDisplay['phase']) => setCoverage({ phase, ids, initial });
+  const report = (phase: CoverageDisplay['phase']) =>
+    setCoverage({
+      phase,
+      ids: collection ? ['collection', collection.selected].filter(Boolean) : ids,
+      initial,
+    });
   const pending = () => {
     revealed = false;
     if (!coverage.length) {

@@ -1946,3 +1946,36 @@ pre {
   font-size: 11px;
   color: var(--muted);
 }
+
+.complementary-views {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0;
+}
+.collection-total {
+  padding: 12px;
+  background: var(--surface, #182c34);
+  border: 1px solid #286b7b;
+  border-radius: 8px;
+}
+.collection-total small,
+.complementary-views > small {
+  display: block;
+  margin-top: 5px;
+}
+.collection-suggestions {
+  display: grid;
+  gap: 8px;
+}
+.collection-suggestion {
+  text-align: left;
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+}
+.collection-suggestion strong {
+  color: #a52e4b;
+}
+.collection-suggestion[aria-pressed='true'] {
+  border-color: #a52e4b;
+}

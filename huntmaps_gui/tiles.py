@@ -82,6 +82,9 @@ def rgba_file(path, rgba, ds):
 
 
 def sources(run, layer, ident, color):
+    if getattr(run, "collection_preview", False):
+        paths = [run.visibility_path(ident)]
+        return paths, fingerprint(paths)
     if layer == "imagery":
         return [run.path(i["path"]) for i in run.images], None
     ds = run.dem

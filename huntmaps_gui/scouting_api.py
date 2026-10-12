@@ -23,6 +23,44 @@ def router(jobs):
 
     from . import workflow
 
+    from . import complementary
+
+    @r.post("/runs/{ident}/complementary")
+    def complementary_calculate(ident, body: dict = Body(...)):
+        return complementary.public_result(
+            complementary.calculate(
+                ident, body.get("count", 5), body.get("profile", ""), jobs
+            )
+        )
+
+    @r.post("/runs/{ident}/complementary/{token}/add")
+    def complementary_add(ident, token):
+        return complementary.add(ident, token, jobs)
+
+    @r.get("/runs/{ident}/collection-tiles/{token}/{layer}/{z}/{x}/{y}.png")
+    def collection_tile(
+        ident,
+        token,
+        layer,
+        z: int,
+        x: int,
+        y: int,
+        x_huntmaps_prefetch: bool = Header(False),
+    ):
+        return Response(
+            tile(
+                complementary.CollectionRun(ident, token),
+                "visible",
+                layer,
+                z,
+                x,
+                y,
+                background=x_huntmaps_prefetch,
+            ),
+            media_type="image/png",
+            headers={"Cache-Control": "private, max-age=3600"},
+        )
+
     @r.get("/runs/{ident}/workflow")
     def workflow_get(ident):
         return workflow.get(ident, jobs)

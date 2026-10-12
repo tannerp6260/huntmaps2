@@ -14,6 +14,7 @@ import AccessSampling, { type Sampling } from './access-sampling';
 import ScoutingTools, { type AppliedFilter } from './scouting-tools';
 import { updateMapLayers, type CoverageDisplay } from './map-layers';
 import CoverageBatch from './coverage-batch';
+import ComplementaryViews, { type Collection } from './complementary-views';
 import { COVERAGE_REVIEW_ZOOM } from './coverage-cache';
 import AreaSettings from './area-creation';
 import StoragePanel from './storage-panel';
@@ -138,6 +139,11 @@ function App() {
     return () => clearTimeout(timer);
   }, [coverageDisplay.phase, coverageDisplay.initial, coverageDisplay.ids.join(',')]);
   const [coverageRetry, setCoverageRetry] = useState(0);
+  const [complementaryMode, setComplementaryMode] = useState(false);
+  const [collectionResult, setCollectionResult] = useState<{
+    value: Collection;
+    signature: string;
+  } | null>(null);
   const [sortMode, setSortMode] = useState('coverage');
   const [planningApproaches, setPlanningApproaches] = useState(false);
   const filterId = appliedFilter?.profile.id || '';
@@ -202,6 +208,25 @@ function App() {
         }
       : p;
   };
+  const collectionSignature = JSON.stringify([
+    runId,
+    filterId,
+    workingGeometryStamp,
+    manualPoints.map((p) => [p.id, p.longitude, p.latitude, p.status]),
+    Object.values(working).map((p) => [p.id, p.revision, p.status]),
+    annotations,
+    workflow?.revision,
+    Object.values(workflow?.points || {}).map((p) => [p.point, p.shortlisted, p.dismissed]),
+  ]);
+  const collection =
+    complementaryMode &&
+    !planningApproaches &&
+    !inspectStage &&
+    !savedStage &&
+    !training.active &&
+    collectionResult?.signature === collectionSignature
+      ? collectionResult.value
+      : null;
   const shownCandidates = run?.candidates.map(effective) || [];
   const shownManual = manualPoints.map((p) => (working[p.id] ? { ...p, ...working[p.id] } : p));
   const mapCompare = planningApproaches || inspectStage || savedStage ? [] : compare;
@@ -495,6 +520,8 @@ function App() {
     let alive = true;
     localStorage.setItem('huntmaps-last-area', runId);
     setLoading(true);
+    setComplementaryMode(false);
+    setCollectionResult(null);
     setPlanningApproaches(recovery?.kind === 'approach');
     setInspectStage(false);
     setSavedStage(false);
@@ -754,7 +781,13 @@ function App() {
       );
     });
     m.on('error', (e) => {
-      if (['local-elevation', onlineSource].includes('sourceId' in e ? String(e.sourceId) : ''))
+      const source = 'sourceId' in e ? String(e.sourceId) : '';
+      // Coverage has scoped loading/error/retry feedback. Retained or disposed
+      // sources must not leave a global error on a later collection/run.
+      if (
+        source.startsWith('raster-visible-') ||
+        ['local-elevation', onlineSource].includes(source)
+      )
         return;
       console.error(e.error);
       setError('Map layer could not load: ' + e.error.message);
@@ -925,6 +958,15 @@ function App() {
         run,
         working,
         filterId,
+        collection: collection
+          ? {
+              id: collection.id,
+              selected:
+                !activeManual && collection.suggestions.some((p) => p.id === selected)
+                  ? selected
+                  : '',
+            }
+          : undefined,
         imagery,
         imageOpacity,
         newRun,
@@ -961,6 +1003,7 @@ function App() {
     activeManual?.id,
     workingGeometryStamp,
     coverageRetry,
+    collection?.id,
     savedStage,
     planningApproaches,
     inspectStage,
@@ -993,6 +1036,7 @@ function App() {
     return () => clearTimeout(timer);
   }, [ready, newRun, drawing, training.active, run?.id]);
   const toggleCompare = (id: string) => {
+    setComplementaryMode(false);
     setActiveManual(null);
     setInitialObserver(null);
     setHiddenViews([]);
@@ -1787,6 +1831,55 @@ function App() {
                   <Icon name="tune" /> Terrain & access filters{appliedFilter ? ' •' : ''}
                 </button>
               </div>
+              {stage === 'find' && !training.active && run && workingLoaded && workflow && (
+                <>
+                  <label>
+                    Recommendation mode{' '}
+                    <select
+                      aria-label="Recommendation mode"
+                      value={complementaryMode ? 'complementary' : 'individual'}
+                      onChange={(e) => {
+                        setComplementaryMode(e.target.value === 'complementary');
+                        setCompare([]);
+                      }}
+                    >
+                      <option value="individual">Individual views</option>
+                      <option value="complementary">Complementary views</option>
+                    </select>
+                  </label>
+                  {complementaryMode && (
+                    <ComplementaryViews
+                      run={run.id}
+                      selected={activeManual ? '' : selected}
+                      profile={filterId}
+                      signature={collectionSignature}
+                      paused={jobs.some((j) =>
+                        ['queued', 'running', 'cancelling'].includes(j.status),
+                      )}
+                      api={api}
+                      onResult={(value, signature) => {
+                        setCollectionResult(value ? { value, signature } : null);
+                        if (
+                          value &&
+                          value.suggestions.length &&
+                          !value.suggestions.some((p) => p.id === selected)
+                        ) {
+                          setSelected(value.suggestions[0].id);
+                          setActiveManual(null);
+                        }
+                      }}
+                      onSelect={(id) => {
+                        setSelected(id);
+                        setActiveManual(null);
+                      }}
+                      onAdded={(value) => {
+                        setWorkflow(value);
+                        setDecisionFeedback('Suggested positions added to your shortlist.');
+                      }}
+                    />
+                  )}
+                </>
+              )}
               <div className="result-controls">
                 <input
                   aria-label="Find a setup"
@@ -1845,10 +1938,25 @@ function App() {
                   <CoverageBatch
                     map={map.current!}
                     run={run.id}
-                    points={sorted.filter(
-                      (p) =>
-                        !workflow?.points[p.id]?.dismissed && typeof p.metrics.raw_km2 === 'number',
-                    )}
+                    collection={collection?.id}
+                    points={
+                      collection
+                        ? [
+                            ...collection.kept
+                              .filter((p) => p.total_km2 !== null)
+                              .map((p) => ({ id: p.id, ...p.point, additional: false })),
+                            ...collection.suggestions.map((p) => ({
+                              id: p.id,
+                              ...p.point,
+                              additional: true,
+                            })),
+                          ].slice(0, 20)
+                        : sorted.filter(
+                            (p) =>
+                              !workflow?.points[p.id]?.dismissed &&
+                              typeof p.metrics.raw_km2 === 'number',
+                          )
+                    }
                     selected={selected}
                     working={working}
                     filter={filterId}
@@ -2173,7 +2281,7 @@ function App() {
               <span className="layer-count">
                 {Number(imagery) +
                   Number(visibility && !newRun) +
-                  Number(classes && !newRun) +
+                  Number(classes && !newRun && !collection) +
                   Number(sectors && !newRun)}
               </span>
             </summary>
@@ -2210,8 +2318,13 @@ function App() {
             <label>
               <input
                 type="checkbox"
-                disabled={newRun}
-                checked={classes}
+                disabled={newRun || !!collection}
+                title={
+                  collection
+                    ? 'Choose Individual views to review the active setup’s tree classes.'
+                    : undefined
+                }
+                checked={classes && !collection}
                 onChange={(e) => setClasses(e.target.checked)}
               />
               Tree-cover classes for active setup
@@ -2261,7 +2374,20 @@ function App() {
               />
             )}
             <div className="legend">
-              {(newRun || !collectionSelectionVisible
+              {collection && (
+                <>
+                  <span>
+                    <i style={{ background: colors[0] }} />
+                    Combined matching terrain
+                  </span>
+                  <span>
+                    <i style={{ background: colors[1] }} />
+                    Selected additional terrain
+                  </span>
+                </>
+              )}
+
+              {(newRun || !collectionSelectionVisible || collection
                 ? []
                 : mapCompare.length
                   ? mapCompare
@@ -2279,7 +2405,7 @@ function App() {
                     {mapCompare.length > 0 && hiddenViews.includes(id) ? '(hidden)' : ''}
                   </span>
                 ))}
-              {classes && !newRun && (
+              {classes && !newRun && !collection && (
                 <>
                   <span>Tree classes: {selected}</span>
                   <span>
@@ -2340,10 +2466,20 @@ function App() {
               {visibility && (
                 <span>
                   <i className="key-visible" />
-                  {appliedFilter ? 'Matching visible terrain' : 'Terrain-visible area'}
+                  {collection
+                    ? 'Combined matching terrain'
+                    : appliedFilter
+                      ? 'Matching visible terrain'
+                      : 'Terrain-visible area'}
                 </span>
               )}
-              {classes && (
+              {visibility && collection && collection.suggestions.length > 0 && (
+                <span>
+                  <i style={{ background: '#ff6782' }} />
+                  Selected additional terrain
+                </span>
+              )}
+              {classes && !collection && (
                 <span>
                   <i className="key-cover" />
                   Tree cover · see layers
