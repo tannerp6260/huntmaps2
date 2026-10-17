@@ -97,9 +97,19 @@ class Jobs:
         ), self.lock:
             return self._list(include_logs)
 
-    def _list(self, include_logs=True):
+    def get(self, ident):
+        if not __import__("re").fullmatch(r"[a-f0-9]{32}", ident):
+            raise ValueError("Unknown job")
+        if not (self.folder / (ident + ".json")).exists():
+            raise ValueError("Unknown job")
+        with configured(self.config), self.lock:
+            return self._list(False, ident)[0]
+
+    def _list(self, include_logs=True, ident=None):
         result = []
-        for p in self.folder.glob("*.json"):
+        for p in (
+            [self.folder / (ident + ".json")] if ident else self.folder.glob("*.json")
+        ):
             if p.name.endswith(".progress"):
                 continue
             try:

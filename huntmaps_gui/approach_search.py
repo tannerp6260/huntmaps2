@@ -426,7 +426,10 @@ def solve(grid, lines, target, weights, start=None, pinned=None):
     objectives = [
         ("Recommended", weights),
         ("Shortest distance", dict(slope=0, tree=0, shrub=0, gain=0)),
-        ("Brush avoidance", dict(weights, tree=3, shrub=3)),
+        (
+            "Brush avoidance",
+            dict(weights, tree=max(3, weights["tree"]), shrub=max(3, weights["shrub"])),
+        ),
     ]
     if pinned is not None:
         objectives.append(("Pinned departure", weights))

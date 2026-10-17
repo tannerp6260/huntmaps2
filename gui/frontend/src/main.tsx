@@ -1,7 +1,10 @@
+import DecimalField from './decimal-field';
 import { YardScale } from './yard-scale';
 import { area as areaText, yards } from './units';
 import DownloadReview from './download-review';
 import JobProgress from './job-progress';
+import { AboutFind, GenerationDialog, JobFailure, StartupChooser } from './scouting-dialogs';
+import { generateSetups, type GenerationIntent } from './generation-flow';
 import { inputSignature } from './approach-inputs';
 import {
   defaultCriteria,
@@ -61,7 +64,7 @@ import type {
   ImportedArea,
   BaselinePlan,
 } from './types';
-import { useJobs, subscribePolling, refreshPolling } from './polling';
+import { useJobs, subscribePolling, refreshPolling, trackJob } from './polling';
 import WorkflowPanel, { type Workflow } from './workflow';
 const colors = ['#00c0e8', '#ff6782', '#aa6fff'];
 const empty: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
@@ -90,7 +93,9 @@ async function api(path: string, options: RequestInit = {}) {
   const value = await r.json();
   if (path.split('?')[0] === '/networks/import')
     window.dispatchEvent(new Event('huntmaps-networks-changed'));
-  if (options.method && options.method !== 'GET') void refreshPolling();
+  if (value?.job?.id) trackJob(value.job);
+  else if (value?.id && value?.status && value?.kind) trackJob(value);
+  else if (options.method && options.method !== 'GET') void refreshPolling();
   return value;
 }
 const num = (v: unknown, d = 3) => (typeof v === 'number' ? v.toFixed(d) : 'Not saved');
@@ -111,7 +116,11 @@ function App() {
   const [filterReset, setFilterReset] = useState(0);
   const [appliedFilter, setAppliedFilter] = useState<AppliedFilter | null>(null);
   const [inspectStage, setInspectStage] = useState(false);
-  const [workflow, setWorkflow] = useState<Workflow | null>(null);
+  const [savedWorkflow, setWorkflow] = useState<Workflow | null>(null);
+  const [pendingDismissals, setPendingDismissals] = useState<
+    { run: string; cid: string; token: number }[]
+  >([]);
+  const dismissalToken = useRef(0);
   const [listOpen, setListOpen] = useState(false);
   const [recommendationCount, setRecommendationCount] = useState(20);
   const [nearbyRadius, setNearbyRadius] = useState(30);
@@ -123,10 +132,6 @@ function App() {
     ids: [],
     initial: false,
   });
-  const coverageStatus =
-    coverageDisplay.phase === 'idle'
-      ? ''
-      : `${coverageDisplay.phase === 'ready' ? 'Coverage ready' : coverageDisplay.phase === 'error' ? 'Coverage incomplete' : 'Loading additional coverage'} · ${coverageDisplay.ids.join(', ')}`;
   const [coverageOverlay, setCoverageOverlay] = useState(false);
   useEffect(() => {
     setCoverageOverlay(false);
@@ -146,6 +151,10 @@ function App() {
   } | null>(null);
   const [sortMode, setSortMode] = useState('coverage');
   const [planningApproaches, setPlanningApproaches] = useState(false);
+  const coverageStatus =
+    planningApproaches || coverageDisplay.phase === 'idle'
+      ? ''
+      : `${coverageDisplay.phase === 'ready' ? 'Coverage ready' : coverageDisplay.phase === 'error' ? 'Coverage incomplete' : 'Loading additional coverage'} · ${coverageDisplay.ids.join(', ')}`;
   const filterId = appliedFilter?.profile.id || '';
   const [samplingValid, setSamplingValid] = useState(true);
   const [spacingValid, setSpacingValid] = useState(true);
@@ -176,7 +185,32 @@ function App() {
     [saved, setSaved] = useState(''),
     [error, setError] = useState(''),
     [loading, setLoading] = useState(false);
+  // Keep server revisions authoritative while pending dismissals immediately leave
+  // the queue and map. Polling cannot briefly restore a pending dismissal.
+  const dismissingIds = pendingDismissals.filter((p) => p.run === runId).map((p) => p.cid);
+  const workflow: Workflow | null =
+    savedWorkflow && dismissingIds.length
+      ? {
+          ...savedWorkflow,
+          points: Object.fromEntries(
+            Object.entries(savedWorkflow.points).map(([id, p]) => [
+              id,
+              dismissingIds.includes(id)
+                ? { ...p, dismissed: true, shortlisted: false, approach: null, confirmed: false }
+                : p,
+            ]),
+          ),
+        }
+      : savedWorkflow;
+  const workflowStamp = JSON.stringify([workflow?.revision, dismissingIds]);
+  const dismissing = dismissingIds.length > 0;
   const training = useTraining();
+  const [startupOpen, setStartupOpen] = useState(true);
+  const [aboutFindOpen, setAboutFindOpen] = useState(false);
+  const [generationOpen, setGenerationOpen] = useState(false);
+  const [generationMessage, setGenerationMessage] = useState('');
+  const [generationJob, setGenerationJob] = useState<Job | undefined>();
+  const generationIntent = useRef<GenerationIntent | null>(null);
   const [firstPerson, setFirstPerson] = useState(false);
   const [manualPoints, setManualPoints] = useState<ManualWaypointRecord[]>([]),
     [activeManual, setActiveManual] = useState<ManualWaypointRecord | WorkingWaypointRecord | null>(
@@ -215,7 +249,7 @@ function App() {
     manualPoints.map((p) => [p.id, p.longitude, p.latitude, p.status]),
     Object.values(working).map((p) => [p.id, p.revision, p.status]),
     annotations,
-    workflow?.revision,
+    workflowStamp,
     Object.values(workflow?.points || {}).map((p) => [p.point, p.shortlisted, p.dismissed]),
   ]);
   const collection =
@@ -328,7 +362,7 @@ function App() {
       training.active && training.progress?.lesson === 'area' && training.draft ? '1' : '',
     ),
     [name, setName] = useState('scouting-' + new Date().toISOString().slice(0, 10)),
-    [radius, setRadius] = useState(2000),
+    [radius, setRadius] = useState(2000 * 0.9144),
     [minutes, setMinutes] = useState(30),
     [count, setCount] = useState(150),
     [budget, setBudget] = useState(600),
@@ -382,22 +416,11 @@ function App() {
       separation !== (plan.settings?.search?.recommendation_separation_m ?? 150) ||
       budget !== plan.max_download_mb ||
       (!!preparedOptions && preparedOptions !== JSON.stringify({ sampling, includeNetwork })));
-  const planJob = jobs.find((j) => j.plan === planId);
-  const restoredGeneration = useRef(false);
-  useEffect(() => {
-    if (restoredGeneration.current || training.active || !jobs.length) return;
-    const saved = sessionStorage.getItem('huntmaps-generation-plan');
-    if (!saved) {
-      restoredGeneration.current = true;
-      return;
-    }
-    const job = jobs.find((j) => j.plan === saved && j.kind === 'baseline');
-    if (!job) return;
-    restoredGeneration.current = true;
-    setPlanId(saved);
-    setNewRun(true);
-    void jobAction(job, 'review');
-  }, [jobs]);
+  const polledPlanJob = jobs.find((j) => j.plan === planId);
+  const planJob =
+    generationJob?.plan === planId && !jobs.some((j) => j.id === generationJob.id)
+      ? generationJob
+      : polledPlanJob;
   const planFailed = planJob && ['failed', 'cancelled', 'interrupted'].includes(planJob.status);
   const planComplete = planJob?.kind === 'baseline' && planJob.status === 'complete';
   useEffect(() => {
@@ -407,6 +430,39 @@ function App() {
     [drawing, setDrawing] = useState(false),
     [goLat, setGoLat] = useState(''),
     [goLon, setGoLon] = useState('');
+  const generationInputs = inputSignature({
+    name,
+    radius,
+    minutes,
+    count,
+    recommendationCount,
+    nearbyRadius,
+    treeThreshold,
+    budget,
+    separation,
+    targets,
+    avoidDense,
+    sampling,
+    includeNetwork,
+    importId: imported?.id,
+    polygon,
+    newRun,
+    areaMode,
+    drawing,
+    runId,
+    trainingActive: training.active,
+    samplingValid,
+    spacingValid,
+  });
+  useEffect(() => {
+    if (generationIntent.current) generationIntent.current.cancelled = true;
+  }, [generationInputs]);
+  useEffect(
+    () => () => {
+      if (generationIntent.current) generationIntent.current.cancelled = true;
+    },
+    [],
+  );
   const areaBackup = useRef<ImportedArea | null>(null),
     intakeSession = useRef(0);
   useEffect(() => {
@@ -477,16 +533,6 @@ function App() {
       .then((r) => {
         setRunList(r);
         setRunsLoaded(true);
-        if (currentRunRef.current) return;
-        setRunId(
-          training.active &&
-            training.active &&
-            r.some((v: RunSummary) => v.id === 'soap-creek-decision-review-v2')
-            ? 'soap-creek-decision-review-v2'
-            : r.find((v: RunSummary) => v.id === localStorage.getItem('huntmaps-last-area'))?.id ||
-                r[0]?.id ||
-                '',
-        );
       })
       .catch((e) => setError(e instanceof Error ? e.message : String(e)));
   }, []);
@@ -852,7 +898,7 @@ function App() {
     newRun,
     activeManual?.id,
     workingGeometryStamp,
-    workflow?.revision,
+    workflowStamp,
     planningApproaches,
     inspectStage,
     savedStage,
@@ -887,7 +933,7 @@ function App() {
     activeManual?.id,
     newRun,
     workingGeometryStamp,
-    workflow?.revision,
+    workflowStamp,
     group,
     planningApproaches,
     inspectStage,
@@ -962,7 +1008,8 @@ function App() {
           ? {
               id: collection.id,
               selected:
-                !activeManual && collection.suggestions.some((p) => p.id === selected)
+                !activeManual &&
+                [...collection.kept, ...collection.suggestions].some((p) => p.id === selected)
                   ? selected
                   : '',
             }
@@ -973,11 +1020,12 @@ function App() {
         compare: mapCompare,
         activeManual: collectionSelectionVisible ? activeManual : null,
         selected: collectionSelectionVisible ? selected : '',
-        visibility,
+        visibility: visibility && !planningApproaches && (!complementaryMode || !!collection),
+        retainCoverage: !planningApproaches,
         hiddenViews,
         opacity,
-        sectors,
-        classes,
+        sectors: sectors && !planningApproaches,
+        classes: classes && !planningApproaches,
         dismissed: Object.values(workflow?.points || {})
           .filter((p) => p.dismissed)
           .map((p) => p.point.id),
@@ -1009,7 +1057,7 @@ function App() {
     inspectStage,
     collectionSelectionVisible,
     filterId,
-    workflow?.revision,
+    workflowStamp,
   ]);
   useEffect(() => {
     if (
@@ -1130,15 +1178,20 @@ function App() {
     setPlan(null);
     if (training.active) training.setDraft(feature.geometry);
   }
-  async function prepare() {
-    if (training.active || !settingsValid) return;
-    const session = intakeSession.current;
+  async function generate(existingPlan?: string) {
+    if (training.active || !settingsValid || busy || running || (existingPlan && planDirty)) return;
+    const intent: GenerationIntent = { cancelled: false };
+    if (generationIntent.current && !generationIntent.current.cancelled) return;
+    generationIntent.current = intent;
+    setBusy(true);
+    setError('');
+    setGenerationMessage('Preparing sources and checking limits…');
+    setGenerationJob(undefined);
+    setGenerationOpen(true);
     try {
-      setBusy(true);
-      setError('');
-      const j = await api('/plans', {
-        method: 'POST',
-        body: JSON.stringify({
+      await generateSetups(api, intent, {
+        existingPlan,
+        inputs: {
           name,
           import_id: imported?.id,
           polygon,
@@ -1152,41 +1205,110 @@ function App() {
           nearby_radius_m: nearbyRadius,
           tree_threshold_percent: treeThreshold,
           max_download_mb: budget,
+          estimate_first: false,
           ...(sampling ? { access_sampling: sampling } : {}),
           ...(includeNetwork ? { include_network: true } : {}),
-        }),
+        },
+        onPlan: (id, p) => {
+          setPlanId(id);
+          setPlan(p || null);
+          setPreparedOptions(JSON.stringify({ sampling, includeNetwork }));
+        },
+        onJob: (job) => setGenerationJob(job),
+        onStarted: (id) => {
+          sessionStorage.setItem('huntmaps-generation-plan', id);
+          setGenerationMessage('');
+        },
       });
-      if (session !== intakeSession.current) return;
-      setPlanId(j.plan);
-      setPreparedOptions(JSON.stringify({ sampling, includeNetwork }));
-      setPlan(null);
-      setDownload(false);
+      if (intent.cancelled)
+        setGenerationMessage('Automatic generation stopped. Prepared files are retained.');
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
+      if (!intent.cancelled) {
+        const message = e instanceof Error ? e.message : String(e);
+        setGenerationMessage(message);
+        setError(message);
+      }
     } finally {
-      setBusy(false);
+      if (generationIntent.current === intent) {
+        generationIntent.current = null;
+        setBusy(false);
+      }
     }
   }
-  async function startPlan() {
-    if (training.active || planDirty || !settingsValid || busy || running) return;
-    try {
-      setBusy(true);
-      setError('');
-      await api(`/plans/${planId}/start`, {
-        method: 'POST',
-        body: JSON.stringify({ download: true, review_signature: plan?.review_signature }),
-      });
-      sessionStorage.setItem('huntmaps-generation-plan', planId);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
+  async function cancelGeneration() {
+    if (generationIntent.current) generationIntent.current.cancelled = true;
+    setGenerationMessage('Cancelling…');
+    const id = generationIntent.current?.jobId || planJob?.id;
+    if (id) {
+      try {
+        await api(`/jobs/${id}/cancel`, { method: 'POST' });
+      } catch (e) {
+        setGenerationMessage(e instanceof Error ? e.message : String(e));
+      }
+    }
+  }
+  function openGeneratedResults() {
+    if (!planComplete || !plan) return;
+    sessionStorage.removeItem('huntmaps-generation-plan');
+    setGenerationOpen(false);
+    void refreshRuns();
+    setRunId(plan.name);
+    setNewRun(false);
+  }
+  function beginNewArea() {
+    setGenerationOpen(false);
+    setGenerationMessage('');
+    setGenerationJob(undefined);
+    if (generationIntent.current) generationIntent.current.cancelled = true;
+    sessionStorage.removeItem('huntmaps-generation-plan');
+    setSavedStage(false);
+    setPanelCollapsed(false);
+    setMinutes(30);
+    setIncludeNetwork(true);
+    setTargets(defaultCriteria());
+    setAvoidDense(false);
+    setSampling({
+      network_ids: [],
+      kinds: ['roads', 'trails'],
+      distance_m: 804.672,
+      height_m: null,
+    });
+    setName('scouting-' + new Date().toISOString().slice(0, 10));
+    setPlan(null);
+    setPlanId('');
+    setImported(null);
+    setPolygon('');
+    setPlanningApproaches(false);
+    setInspectStage(false);
+    setRecovery(null);
+    setNewRun(true);
+  }
+  async function chooseStartup(choice: 'new' | 'training' | 'existing') {
+    setStartupOpen(false);
+    if (choice === 'new') beginNewArea();
+    else if (choice === 'training') training.setOpen(true);
+    else {
+      const saved = sessionStorage.getItem('huntmaps-generation-plan');
+      const currentJobs: Job[] = saved ? await api('/jobs').catch(() => jobs) : jobs;
+      const job = currentJobs.find((j) => j.plan === saved && j.kind === 'baseline');
+      if (job) {
+        void jobAction(job, 'review');
+        setGenerationOpen(true);
+      } else
+        setRunId(
+          runList.find((r) => r.id === localStorage.getItem('huntmaps-last-area'))?.id ||
+            runList[0]?.id ||
+            '',
+        );
     }
   }
   async function jobAction(j: Job, action: string) {
     if (training.active && action !== 'cancel') return;
     try {
       setError('');
+      if (action === 'cancel') {
+        if (generationIntent.current) generationIntent.current.cancelled = true;
+      }
       if (action === 'cancel') await api(`/jobs/${j.id}/cancel`, { method: 'POST' });
       else {
         setUtility(false);
@@ -1351,15 +1473,63 @@ function App() {
     return value;
   };
   const [decisionBusy, setDecisionBusy] = useState(false);
+  const [decisionError, setDecisionError] = useState('');
   const [decisionFeedback, setDecisionFeedback] = useState('');
+  const [toastHovered, setToastHovered] = useState(false);
+  const [toastFocused, setToastFocused] = useState(false);
+  const toastPaused = toastHovered || toastFocused;
+  const toastRemaining = useRef(8000);
+  useEffect(() => {
+    toastRemaining.current = 8000;
+    if (!decisionFeedback) {
+      setToastHovered(false);
+      setToastFocused(false);
+    }
+  }, [decisionFeedback]);
+  useEffect(() => {
+    if (!decisionFeedback || toastPaused) return;
+    const started = performance.now();
+    const timer = setTimeout(() => {
+      setDecisionFeedback('');
+      setUndoDecision(null);
+    }, toastRemaining.current);
+    return () => {
+      clearTimeout(timer);
+      toastRemaining.current = Math.max(0, toastRemaining.current - (performance.now() - started));
+    };
+  }, [decisionFeedback, toastPaused]);
   const [undoDecision, setUndoDecision] = useState<{ cid: string; revision: number } | null>(null);
   useEffect(() => {
     setDecisionFeedback('');
+    setDecisionError('');
     setUndoDecision(null);
   }, [runId]);
-  const decisionQueue = useRef<Promise<boolean>>(Promise.resolve(true));
+  const decisionQueue = useRef<Promise<unknown>>(Promise.resolve());
+  function serializeWorkflow<T>(task: () => Promise<T>): Promise<T> {
+    const result = decisionQueue.current.catch(() => {}).then(task);
+    decisionQueue.current = result;
+    return result;
+  }
   const decide = (cid: string, action: string, extra: Record<string, unknown> = {}) => {
     const ident = runId;
+    setDecisionError('');
+    const token = action === 'dismiss' ? ++dismissalToken.current : null;
+    const priorFocus = activeManual?.id || selected;
+    const nextFind =
+      token !== null && !planningApproaches && priorFocus === cid
+        ? collection?.suggestions.find((p) => p.id !== cid && !workflow?.points[p.id]?.dismissed)
+            ?.id ||
+          visibleCandidates.find((p) => p.id !== cid)?.id ||
+          ''
+        : null;
+    if (nextFind !== null) {
+      setSelected(nextFind);
+      setActiveManual(null);
+    }
+
+    if (token !== null) {
+      setPendingDismissals((old) => [...old, { run: ident, cid, token }]);
+    }
     const displayed =
       shownManual.find((p) => p.id === cid) || shownCandidates.find((p) => p.id === cid);
     const expectedPoint = workflow?.points[cid]?.point;
@@ -1392,14 +1562,21 @@ function App() {
         }
         return currentRunRef.current === ident;
       } catch (e) {
-        if (currentRunRef.current === ident) setError(String(e));
+        if (currentRunRef.current === ident && nextFind !== null) {
+          setSelected((old) => (old === nextFind ? selected : old));
+          if (activeManual) setActiveManual(activeManual);
+        }
+        if (currentRunRef.current === ident)
+          setDecisionError(
+            action === 'dismiss' ? `Could not dismiss ${cid}. ${String(e)}` : String(e),
+          );
         return false;
       } finally {
+        if (token !== null) setPendingDismissals((old) => old.filter((p) => p.token !== token));
         setDecisionBusy(false);
       }
     };
-    decisionQueue.current = decisionQueue.current.catch(() => false).then(submit);
-    return decisionQueue.current;
+    return serializeWorkflow(submit);
   };
   useEffect(() => {
     setWorkflow(null);
@@ -1431,7 +1608,24 @@ function App() {
     : Object.values(workflow?.points || {}).filter((p) => p.shortlisted);
   const approached = shortlisted.filter((p) => p.approach);
   const confirmed = approached.filter((p) => p.confirmed);
-  const running = jobs.some((j) => ['running', 'cancelling'].includes(j.status));
+  async function confirmSetup(cid: string): Promise<boolean> {
+    if (!(await decide(cid, 'confirm'))) return false;
+    const next = approached.find((p) => p.point.id !== cid && !p.confirmed);
+    if (next) {
+      const manual = shownManual.find((p) => p.id === next.point.id);
+      if (manual) chooseManual(manual);
+      else chooseOriginal(next.point.id);
+      setFirstPerson(true);
+    } else {
+      setFirstPerson(false);
+      changeStage('save');
+    }
+    return true;
+  }
+
+  const running =
+    jobs.some((j) => ['running', 'cancelling'].includes(j.status)) ||
+    (!!planJob && ['running', 'cancelling'].includes(planJob.status));
   const renderCandidate = (p: Candidate) => (
     <CandidateCard
       key={p.id}
@@ -1552,6 +1746,7 @@ function App() {
     else if (item.bottom > container.bottom) list.scrollBy(0, item.bottom - container.bottom);
   }, [selected, activeManual?.id]);
   const changeStage = (next: Stage) => {
+    if (generationIntent.current) generationIntent.current.cancelled = true;
     setSavedStage(next === 'save');
     setPlanningApproaches(next === 'approach');
     setInspectStage(next === 'inspect');
@@ -1595,6 +1790,27 @@ function App() {
         (newRun ? ' is-new-area' : '')
       }
     >
+      <StartupChooser
+        open={startupOpen}
+        loaded={runsLoaded}
+        hasWork={runList.length > 0 || jobs.length > 0}
+        onChoose={chooseStartup}
+      />
+      <AboutFind open={aboutFindOpen} minutes={minutes} onClose={() => setAboutFindOpen(false)} />
+      <GenerationDialog
+        open={generationOpen && !startupOpen}
+        job={planJob || generationJob}
+        message={generationMessage}
+        active={busy || (!!planJob && ['running', 'cancelling'].includes(planJob.status))}
+        onClose={() => setGenerationOpen(false)}
+        onCancel={() => void cancelGeneration()}
+        onRetry={
+          !busy && !running && planFailed && !!plan && !planDirty
+            ? () => void generate(planId)
+            : undefined
+        }
+        onResults={planComplete ? openGeneratedResults : undefined}
+      />
       <header>
         <div className="brand">
           <span className="brand-icon">
@@ -1610,6 +1826,8 @@ function App() {
           value={runId}
           disabled={training.active}
           onChange={(value) => {
+            if (generationIntent.current) generationIntent.current.cancelled = true;
+            setGenerationOpen(false);
             sessionStorage.removeItem('huntmaps-generation-plan');
             setRecovery(null);
             setPlanningApproaches(false);
@@ -1631,97 +1849,91 @@ function App() {
         <button onClick={refreshRuns} title="Refresh saved areas" aria-label="Refresh saved areas">
           ↻
         </button>
-        <button onClick={() => training.setOpen(true)}>Learn</button>
+        <button
+          onClick={() => {
+            if (generationIntent.current) generationIntent.current.cancelled = true;
+            training.setOpen(true);
+          }}
+        >
+          Learn
+        </button>
         <button
           className="primary"
           disabled={training.active}
           onClick={() => {
-            setSavedStage(false);
-            setPanelCollapsed(false);
-            if (!newRun) {
-              setMinutes(30);
-              setIncludeNetwork(true);
-              setTargets(defaultCriteria());
-              setAvoidDense(false);
-              setSampling({
-                network_ids: [],
-                kinds: ['roads', 'trails'],
-                distance_m: 804.672,
-                height_m: null,
-              });
-              setName('scouting-' + new Date().toISOString().slice(0, 10));
-              setPlan(null);
-              setPlanId('');
-              setImported(null);
-              setPolygon('');
-              setPlanningApproaches(false);
-              setInspectStage(false);
-            }
-            setNewRun(!newRun);
+            if (newRun) {
+              if (generationIntent.current) generationIntent.current.cancelled = true;
+              setNewRun(false);
+            } else beginNewArea();
           }}
         >
           {newRun ? 'Back to review' : '+ New area'}
         </button>
       </header>
-      <Learning
-        exampleAvailable={runList.some((r) => r.id === 'soap-creek-decision-review-v2')}
-        training={training}
-        selected={selected}
-        compare={compare}
-        hiddenViews={hiddenViews}
-        exportIds={exportIds}
-        status={status}
-        note={note}
-        saved={saved}
-        geometry={imported?.choices?.length === 1 ? imported.choices[0].geometry : null}
-        onStart={(lesson) => {
-          const sample = runList.find((r) => r.id === 'soap-creek-decision-review-v2');
-          if (!sample) {
-            setError('The saved Soap Creek example is unavailable.');
-            return false;
-          }
-          setRunId(sample.id);
-          setSearch('');
-          setGroup('review');
-          setCompare([]);
-          setHiddenViews([]);
-          setExportIds([]);
-          setVisibility(true);
-          setClasses(false);
-          setSectors(false);
-          setPlan(null);
-          setPlanId('');
-          setAreaMode('draw');
-          if (lesson === 'review') {
+      {!startupOpen && (
+        <Learning
+          exampleAvailable={runList.some((r) => r.id === 'soap-creek-decision-review-v2')}
+          training={training}
+          selected={selected}
+          compare={compare}
+          hiddenViews={hiddenViews}
+          exportIds={exportIds}
+          status={status}
+          note={note}
+          saved={saved}
+          geometry={imported?.choices?.length === 1 ? imported.choices[0].geometry : null}
+          onStart={(lesson) => {
+            const sample = runList.find((r) => r.id === 'soap-creek-decision-review-v2');
+            if (!sample) {
+              setError('The saved Soap Creek example is unavailable.');
+              return false;
+            }
+            setRunId(sample.id);
+            setSearch('');
+            setGroup('review');
+            setCompare([]);
+            setHiddenViews([]);
+            setExportIds([]);
+            setVisibility(true);
+            setClasses(false);
+            setSectors(false);
+            setPlan(null);
+            setPlanId('');
+            setAreaMode('draw');
+            if (lesson === 'review') {
+              setNewRun(false);
+              setImported(null);
+            } else {
+              setNewRun(true);
+              setImported(practiceArea(training.draft));
+              setPolygon(training.draft ? '1' : '');
+              if (!training.draft && run && run.id === sample.id)
+                map.current?.fitBounds(run.bounds, { padding: 60, duration: 0 });
+            }
+            return true;
+          }}
+          onExit={() => {
             setNewRun(false);
             setImported(null);
-          } else {
-            setNewRun(true);
-            setImported(practiceArea(training.draft));
-            setPolygon(training.draft ? '1' : '');
-            if (!training.draft && run && run.id === sample.id)
-              map.current?.fitBounds(run.bounds, { padding: 60, duration: 0 });
-          }
-          return true;
-        }}
-        onExit={() => {
-          setNewRun(false);
-          setImported(null);
-          setPolygon('');
-          setSaved('');
-        }}
-      />
+            setPolygon('');
+            setSaved('');
+          }}
+        />
+      )}
       <div className="workflow-bar">
         <WorkflowNavigation
           stage={stage}
           shortlisted={shortlisted.length}
           approached={approached.length}
           confirmed={confirmed.length}
-          reviewReady={!workflow?.approach_review?.active || workflow.approach_review.ready}
+          reviewReady={
+            !dismissing && (!workflow?.approach_review?.active || workflow.approach_review.ready)
+          }
           disabled={training.active || !runId}
           onStage={changeStage}
         />
         <div className="workspace-tools">
+          {stage === 'find' && <button onClick={() => setAboutFindOpen(true)}>About Find</button>}
           <button
             title="Expand map or show scouting panel"
             aria-label={panelCollapsed ? 'Show scouting panel' : 'Expand map'}
@@ -1736,16 +1948,31 @@ function App() {
           </button>
         </div>
       </div>
-      {error && (
+      {(decisionError || error) && (
         <div className="error" role="alert">
-          {error}
-          <button aria-label="Dismiss error" onClick={() => setError('')}>
+          {decisionError || error}
+          <button
+            aria-label="Dismiss error"
+            onClick={() => {
+              setError('');
+              setDecisionError('');
+            }}
+          >
             ×
           </button>
         </div>
       )}
       {decisionFeedback && (
-        <p className="decision-toast" role="status">
+        <p
+          className="decision-toast"
+          role="status"
+          onMouseEnter={() => setToastHovered(true)}
+          onMouseLeave={() => setToastHovered(false)}
+          onFocus={() => setToastFocused(true)}
+          onBlur={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget)) setToastFocused(false);
+          }}
+        >
           {decisionFeedback}{' '}
           <button aria-label="Dismiss update" onClick={() => setDecisionFeedback('')}>
             ×
@@ -1853,10 +2080,12 @@ function App() {
                       selected={activeManual ? '' : selected}
                       profile={filterId}
                       signature={collectionSignature}
-                      paused={jobs.some((j) =>
-                        ['queued', 'running', 'cancelling'].includes(j.status),
-                      )}
+                      paused={
+                        dismissing ||
+                        jobs.some((j) => ['queued', 'running', 'cancelling'].includes(j.status))
+                      }
                       api={api}
+                      onDecision={decide}
                       onResult={(value, signature) => {
                         setCollectionResult(value ? { value, signature } : null);
                         if (
@@ -1880,6 +2109,16 @@ function App() {
                   )}
                 </>
               )}
+              <div className="find-next-action">
+                <button
+                  className="primary wide"
+                  disabled={!shortlisted.length}
+                  onClick={() => changeStage('approach')}
+                >
+                  Plan approaches ({shortlisted.length} shortlisted)
+                </button>
+                {!shortlisted.length && <small>Shortlist a setup to plan its approach.</small>}
+              </div>
               <div className="result-controls">
                 <input
                   aria-label="Find a setup"
@@ -2165,7 +2404,7 @@ function App() {
         <main
           className="map-pane"
           aria-label="Scouting map"
-          aria-busy={coverageDisplay.phase === 'loading'}
+          aria-busy={!planningApproaches && coverageDisplay.phase === 'loading'}
         >
           {!newRun && (loading || (runId && run?.id !== runId)) && (
             <div className="run-opening" role="status">
@@ -2190,6 +2429,7 @@ function App() {
             </div>
           )}
           {coverageOverlay &&
+            !planningApproaches &&
             ['loading', 'error'].includes(coverageDisplay.phase) &&
             !newRun &&
             visibility && (
@@ -2239,39 +2479,41 @@ function App() {
             <span>
               {newRun
                 ? 'Orange boundary = where you would stand to glass'
-                : activeManual
-                  ? workingSelected
-                    ? 'Updated terrain-only view'
-                    : 'Nearby waypoint · no calculated view'
-                  : mapCompare.length
-                    ? mapCompare.map((id, i) => (
-                        <span className="pill" style={{ borderColor: colors[i] }} key={id}>
-                          <label>
-                            <input
-                              type="checkbox"
-                              aria-label={`Show ${id} view`}
-                              checked={!hiddenViews.includes(id)}
-                              onChange={() =>
-                                setHiddenViews((a) =>
-                                  a.includes(id) ? a.filter((v) => v !== id) : [...a, id],
-                                )
-                              }
-                            />
-                            {id}
-                          </label>
-                          <button
-                            aria-label={`Remove ${id} from comparison`}
-                            onClick={() => toggleCompare(id)}
-                          >
-                            ×
-                          </button>
-                        </span>
-                      ))
-                    : workingSelected
+                : planningApproaches
+                  ? 'Mapped roads, trails and approach alternatives'
+                  : activeManual
+                    ? workingSelected
                       ? 'Updated terrain-only view'
-                      : detail?.parent
-                        ? `Alternative to ${detail.parent}`
-                        : 'Saved terrain visibility'}
+                      : 'Nearby waypoint · no calculated view'
+                    : mapCompare.length
+                      ? mapCompare.map((id, i) => (
+                          <span className="pill" style={{ borderColor: colors[i] }} key={id}>
+                            <label>
+                              <input
+                                type="checkbox"
+                                aria-label={`Show ${id} view`}
+                                checked={!hiddenViews.includes(id)}
+                                onChange={() =>
+                                  setHiddenViews((a) =>
+                                    a.includes(id) ? a.filter((v) => v !== id) : [...a, id],
+                                  )
+                                }
+                              />
+                              {id}
+                            </label>
+                            <button
+                              aria-label={`Remove ${id} from comparison`}
+                              onClick={() => toggleCompare(id)}
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))
+                      : workingSelected
+                        ? 'Updated terrain-only view'
+                        : detail?.parent
+                          ? `Alternative to ${detail.parent}`
+                          : 'Saved terrain visibility'}
             </span>
             {mapCompare.length > 0 && <button onClick={() => setCompare([])}>Exit compare</button>}
           </div>
@@ -2280,9 +2522,9 @@ function App() {
               <Icon name="layers" /> Map layers{' '}
               <span className="layer-count">
                 {Number(imagery) +
-                  Number(visibility && !newRun) +
-                  Number(classes && !newRun && !collection) +
-                  Number(sectors && !newRun)}
+                  Number(visibility && !newRun && !planningApproaches) +
+                  Number(classes && !newRun && !collection && !planningApproaches) +
+                  Number(sectors && !newRun && !planningApproaches)}
               </span>
             </summary>
             <h4 className="layer-group-title">Base map</h4>
@@ -2306,11 +2548,14 @@ function App() {
               onChange={(e) => setImageOpacity(+e.target.value)}
             />
             <h4 className="layer-group-title">Analysis overlays</h4>
+            {planningApproaches && (
+              <small>Visible-terrain overlays are paused while planning approaches.</small>
+            )}
             <label>
               <input
                 type="checkbox"
-                disabled={newRun}
-                checked={visibility}
+                disabled={newRun || planningApproaches}
+                checked={visibility && !planningApproaches}
                 onChange={(e) => setVisibility(e.target.checked)}
               />
               Terrain-visible target cells
@@ -2318,13 +2563,13 @@ function App() {
             <label>
               <input
                 type="checkbox"
-                disabled={newRun || !!collection}
+                disabled={newRun || !!collection || planningApproaches}
                 title={
                   collection
                     ? 'Choose Individual views to review the active setup’s tree classes.'
                     : undefined
                 }
-                checked={classes && !collection}
+                checked={classes && !collection && !planningApproaches}
                 onChange={(e) => setClasses(e.target.checked)}
               />
               Tree-cover classes for active setup
@@ -2332,8 +2577,8 @@ function App() {
             <label>
               <input
                 type="checkbox"
-                disabled={newRun}
-                checked={sectors}
+                disabled={newRun || planningApproaches}
+                checked={sectors && !planningApproaches}
                 onChange={(e) => setSectors(e.target.checked)}
               />
               Saved inspection sectors
@@ -2381,8 +2626,12 @@ function App() {
                     Combined matching terrain
                   </span>
                   <span>
+                    <i style={{ background: '#aa6fff' }} />
+                    Covered by two or more setups
+                  </span>
+                  <span>
                     <i style={{ background: colors[1] }} />
-                    Selected additional terrain
+                    Focused member’s unique terrain
                   </span>
                 </>
               )}
@@ -2463,7 +2712,7 @@ function App() {
                 <i className="key-boundary" />
                 Observer area
               </span>
-              {visibility && (
+              {visibility && !planningApproaches && (
                 <span>
                   <i className="key-visible" />
                   {collection
@@ -2473,19 +2722,28 @@ function App() {
                       : 'Terrain-visible area'}
                 </span>
               )}
-              {visibility && collection && collection.suggestions.length > 0 && (
+              {visibility && !planningApproaches && collection && (
                 <span>
-                  <i style={{ background: '#ff6782' }} />
-                  Selected additional terrain
+                  <i style={{ background: '#aa6fff' }} />
+                  Covered by two or more setups
                 </span>
               )}
-              {classes && !collection && (
+              {visibility &&
+                !planningApproaches &&
+                collection &&
+                collection.suggestions.length > 0 && (
+                  <span>
+                    <i style={{ background: '#ff6782' }} />
+                    Focused member’s unique terrain
+                  </span>
+                )}
+              {classes && !collection && !planningApproaches && (
                 <span>
                   <i className="key-cover" />
                   Tree cover · see layers
                 </span>
               )}
-              {sectors && (
+              {sectors && !planningApproaches && (
                 <span>
                   <i className="key-sector" />
                   Inspection sectors
@@ -2549,6 +2807,9 @@ function App() {
                   Latitude
                   <input
                     aria-label="Go to latitude"
+                    autoComplete="off"
+                    inputMode="decimal"
+                    name="terrain-latitude"
                     value={goLat}
                     onChange={(e) => setGoLat(e.target.value)}
                   />
@@ -2557,6 +2818,9 @@ function App() {
                   Longitude
                   <input
                     aria-label="Go to longitude"
+                    autoComplete="off"
+                    inputMode="decimal"
+                    name="terrain-longitude"
                     value={goLon}
                     onChange={(e) => setGoLon(e.target.value)}
                   />
@@ -2592,33 +2856,18 @@ function App() {
               {planJob && (
                 <div className="generation-status" data-testid="generation-status">
                   <JobProgress job={planJob} />
-                  {planFailed && (
-                    <p role="alert">
-                      {planJob.error || 'Files retained. Review or refresh this plan to recover.'}
-                    </p>
-                  )}
+                  {planFailed && <JobFailure job={planJob} />}
+                  <button onClick={() => setGenerationOpen(true)}>Show generation progress</button>
                   {['running', 'cancelling'].includes(planJob.status) && (
                     <button
                       disabled={planJob.status === 'cancelling'}
-                      onClick={() =>
-                        api(`/jobs/${planJob.id}/cancel`, { method: 'POST' }).catch((e) =>
-                          setError(String(e)),
-                        )
-                      }
+                      onClick={() => void cancelGeneration()}
                     >
                       Cancel current job
                     </button>
                   )}
                   {planComplete && (
-                    <button
-                      className="primary wide"
-                      onClick={() => {
-                        sessionStorage.removeItem('huntmaps-generation-plan');
-                        refreshRuns();
-                        setRunId(plan!.name);
-                        setNewRun(false);
-                      }}
-                    >
+                    <button className="primary wide" onClick={openGeneratedResults}>
                       Open results
                     </button>
                   )}
@@ -2728,7 +2977,6 @@ function App() {
                 name={name}
                 radius={radius}
                 count={count}
-                minutes={minutes}
                 setName={setName}
                 setRadius={setRadius}
                 setCount={setCount}
@@ -2747,17 +2995,26 @@ function App() {
                   plan to apply expanded search.
                 </p>
               )}
-              <details>
-                <summary>More options · sampling restrictions</summary>
-                <AccessSampling
-                  key={planId || 'new'}
-                  initialSampling={sampling}
-                  onChange={setSampling}
-                  onValidity={setSamplingValid}
-                  includeNetwork={includeNetwork}
-                  onNetwork={setIncludeNetwork}
+              <AccessSampling
+                key={planId || 'new'}
+                initialSampling={sampling}
+                onChange={(v) =>
+                  setSampling((old) => (inputSignature(old) === inputSignature(v) ? old : v))
+                }
+                onValidity={setSamplingValid}
+                includeNetwork={includeNetwork}
+                onNetwork={setIncludeNetwork}
+              />
+              <label>
+                Download cap (MB) <Help topic="budget" />
+                <DecimalField
+                  aria-label="Download cap (MB)"
+                  value={budget}
+                  onChange={setBudget}
+                  min={1}
+                  integer
                 />
-              </details>
+              </label>
               <button
                 className="primary wide"
                 hidden={!!plan?.prepared && !planDirty}
@@ -2770,14 +3027,14 @@ function App() {
                   !polygon ||
                   !settingsValid
                 }
-                onClick={prepare}
+                onClick={() => void generate()}
               >
-                Review downloads
+                Generate setups
               </button>
               <small>
                 {training.active
                   ? 'Practice stops at the boundary preview. Exit the lesson to prepare a real acquisition plan.'
-                  : 'May request bounded catalog metadata; no bulk downloads.'}
+                  : `Downloads required sources within the ${budget} MB cap and reuses verified files.`}
               </small>
               {!settingsValid && (
                 <p className="error">
@@ -2793,7 +3050,7 @@ function App() {
               )}
               {planDirty && (
                 <p className="notice">
-                  Settings are unapplied. Prepare a new plan with a new run name to use changed
+                  Settings are unapplied. Generate a new plan with a new run name to use changed
                   inputs; unchanged partial runs can still resume.
                 </p>
               )}
@@ -2808,13 +3065,7 @@ function App() {
                     criteria rank matching visible area. Nearby vegetation eligibility is separate.
                     Starting this plan uses these saved settings.
                   </p>
-                  {planFailed && (
-                    <p className="error" role="alert">
-                      {planJob.status}:{' '}
-                      {planJob.error ||
-                        'Partial files retained; review or refresh the unchanged plan.'}
-                    </p>
-                  )}
+                  {planFailed && <JobFailure job={planJob} />}
                   {plan.prepared ? (
                     <>
                       <p>
@@ -2829,15 +3080,15 @@ function App() {
                       </p>
                       <details>
                         <summary>Custom transfer limit</summary>
-                        <input
+                        <DecimalField
                           aria-label="Maximum download size (MB)"
-                          type="number"
-                          min="10"
                           value={budget}
-                          onChange={(e) => setBudget(+e.target.value)}
+                          onChange={setBudget}
+                          min={1}
+                          integer
                         />
                         <button
-                          disabled={running || busy}
+                          disabled={running || busy || !Number.isInteger(budget) || budget < 1}
                           onClick={async () => {
                             try {
                               const j = await api(`/plans/${planId}/allowance`, {
@@ -2936,7 +3187,7 @@ function App() {
                         <pre>{JSON.stringify(plan.acquisition, null, 2)}</pre>
                       </details>
                       <p className="hint">
-                        Generate setups approves this displayed source plan within{' '}
+                        Generate setups downloads required sources for this plan within{' '}
                         {plan.max_download_mb} MB.
                       </p>
                       <button
@@ -2958,7 +3209,7 @@ function App() {
                                 setRunId(plan.name);
                                 setNewRun(false);
                               }
-                            : startPlan
+                            : () => void generate(planId)
                         }
                       >
                         {planComplete ? 'Open results' : 'Generate setups'}
@@ -3005,13 +3256,15 @@ function App() {
                       JSON.stringify(annotations) +
                       workingStamp +
                       JSON.stringify(manualPoints) +
-                      workflow?.revision
+                      workflowStamp
                     }
                     analysisPlan={planId}
                     budget={budget}
                     observerBoundary={run?.boundary}
                     recovery={recovery}
                     workflow={workflow}
+                    dismissing={dismissing}
+                    serializeWorkflow={serializeWorkflow}
                     focusedId={activeManual?.id || selected}
                     onFocus={(cid) => {
                       const manual = shownManual.find((p) => p.id === cid);
@@ -3041,7 +3294,9 @@ function App() {
                   cid={activeManual?.id || selected}
                   inspect={inspectStage}
                   pending={decisionBusy}
-                  onDecision={decide}
+                  onDecision={(cid, action, extra) =>
+                    action === 'confirm' ? confirmSetup(cid) : decide(cid, action, extra)
+                  }
                   onInspect={() => setFirstPerson(true)}
                   onApproaches={() => changeStage('approach')}
                   api={api}
@@ -3414,9 +3669,12 @@ function App() {
               confirmed={!!workflow?.points[activeManual?.id || selected]?.confirmed}
               confirmationPending={decisionBusy}
               viewedSceneKey={workflow?.points[activeManual?.id || selected]?.viewed}
-              reviewReady={!workflow?.approach_review?.active || workflow.approach_review.ready}
+              reviewReady={
+                !dismissing &&
+                (!workflow?.approach_review?.active || workflow.approach_review.ready)
+              }
               approachCurrent={!!workflow?.points[activeManual?.id || selected]?.approach}
-              onConfirm={() => decide(activeManual?.id || selected, 'confirm')}
+              onConfirm={() => confirmSetup(activeManual?.id || selected)}
               onViewed={(key) => decide(activeManual?.id || selected, 'viewed', { scene: key })}
               onSelect={chooseOriginal}
               onClose={() => setFirstPerson(false)}

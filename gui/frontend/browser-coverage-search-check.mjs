@@ -1,3 +1,4 @@
+import { openExisting, reloadExisting } from './browser-startup.mjs';
 import {chromium} from 'playwright';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
@@ -16,7 +17,7 @@ await page.route(/\/(?:tiles\/visible|filtered-tiles)\//,async r=>{
  if(fail) await r.fulfill({status:500,contentType:'text/plain',body:'Synthetic tile failure'}); else await r.continue();
 });
 try {
- await page.goto(base);
+ await openExisting(page, base);
  const coverageStarted=Date.now();
  await page.getByLabel('Run selector').selectOption('search-fixture');
  await page.locator('.coverage-status').filter({hasText:'Loading additional coverage'}).waitFor();
@@ -93,7 +94,7 @@ try {
  const touchPage=await browser.newPage({viewport:{width:900,height:900},hasTouch:true});
  await touchPage.addInitScript(()=>localStorage.setItem('huntmaps-online-imagery','off'));
  await touchPage.route('**/*',r=>r.request().url().startsWith(base)||r.request().url().startsWith('blob:')?r.continue():r.abort());
- await touchPage.goto(base);
+ await openExisting(touchPage, base);
  await touchPage.getByRole('button',{name:'+ New area',exact:true}).click();
  await touchPage.getByRole('button',{name:'Help: radius',exact:true}).tap();
  const touchTooltip=touchPage.getByRole('tooltip').filter({hasText:'How far from each observer'});

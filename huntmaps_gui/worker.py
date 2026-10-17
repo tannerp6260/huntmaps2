@@ -58,6 +58,10 @@ def approval_inventory(config, acquisition):
                     "request_padding_m",
                     "catalog_source_id",
                     "acquisition_date",
+                    "component",
+                    "observation_year",
+                    "source_policy_version",
+                    "product_release",
                 ]
                 if k in value
             }
@@ -144,6 +148,20 @@ def main():
     a = ap.parse_args()
     path = STATE / "plans" / (a.plan + ".json")
     p = read(path)
+    from . import rcmap_sources
+
+    needs_refresh = rcmap_sources.refresh_required(p)
+    if needs_refresh:
+        if a.action != "prepare":
+            raise ValueError(
+                "Vegetation source requests need refreshing. Retry to prepare the current annual RCMAP sources first."
+            )
+        if p.get("source_refresh_snapshot_for") != rcmap_sources.POLICY_VERSION:
+            p["source_history"] = rcmap_sources.snapshot(p)
+            p["source_refresh_snapshot_for"] = rcmap_sources.POLICY_VERSION
+        p["recovery_notice"] = (
+            "Vegetation requests refreshed to annual 2023 RCMAP layers. Previous records and rejected responses are retained. Product-release equivalence to older downloads is not assumed."
+        )
     if a.review_signature:
         from .downloads import baseline_review_signature
 
@@ -280,6 +298,7 @@ def main():
             approval_version=2,
             approved_checksums=checksums,
             prepared=True,
+            source_policy_version=rcmap_sources.POLICY_VERSION,
             required_data=(
                 (root / "DATA_REQUIRED.md").read_text()
                 if (root / "DATA_REQUIRED.md").exists()
@@ -388,6 +407,15 @@ def main():
 
         c = read(root / "scouting.json")
         if not p.get("sampling_applied"):
+            print(
+                "STAGE Checking observer proximity to mapped roads and trails",
+                flush=True,
+            )
+            emit(
+                "processing",
+                "Checking observer proximity to mapped roads and trails",
+                force=True,
+            )
             import resource, signal
 
             previous_memory = resource.getrlimit(resource.RLIMIT_AS)

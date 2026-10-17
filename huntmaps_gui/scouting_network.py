@@ -119,29 +119,67 @@ def save_network(data, extension, kind, source, date="unknown", coverage=None):
         return value
 
 
+# File identity includes ctime: preserving mtime/size cannot hide source edits.
+from collections import OrderedDict
+import threading
+
+_NETWORK_CACHE = OrderedDict()
+_NETWORK_LOCK = threading.RLock()
+
+
+def file_identity(path):
+    st = path.stat()
+    return (
+        str(path.resolve()),
+        st.st_dev,
+        st.st_ino,
+        st.st_size,
+        st.st_mtime_ns,
+        st.st_ctime_ns,
+    )
+
+
+def verified_network(ident, epsg):
+    folder = STATE / "networks" / checked_id(ident)
+    metadata = folder / "network.json"
+    original = next(folder.glob("original.*"))
+    key = (file_identity(metadata), file_identity(original), epsg)
+    with _NETWORK_LOCK:
+        if key in _NETWORK_CACHE:
+            _NETWORK_CACHE.move_to_end(key)
+            return _NETWORK_CACHE[key]
+    v = read_json(metadata)
+    if not v:
+        raise ValueError("Network unavailable; import/acquire it again")
+    raw = original.read_bytes()
+    if hashlib.sha256(raw).hexdigest() != v["sha256"]:
+        raise ValueError("Network source changed; prior scenarios preserved")
+    actual = [
+        mapping(g)
+        for g in parse_lines(
+            raw, original.suffix, allow_empty=v.get("coverage") is not None
+        )
+    ]
+    if v.get("version") != 1 or json.dumps(actual, sort_keys=True) != json.dumps(
+        v["lines"], sort_keys=True
+    ):
+        raise ValueError(
+            "Network derived geometry changed; preserve original and re-import"
+        )
+    lines = tuple(transform(project(4326, epsg), shape(g)) for g in v["lines"])
+    if key != (file_identity(metadata), file_identity(original), epsg):
+        raise ValueError("Network changed during validation; retry")
+    with _NETWORK_LOCK:
+        _NETWORK_CACHE[key] = (v, lines)
+        while len(_NETWORK_CACHE) > 16:
+            _NETWORK_CACHE.popitem(last=False)
+    return v, lines
+
+
 def load_networks(ids, epsg, kinds=("roads", "trails")):
     lines, sources = [], []
     for ident in ids:
-        folder = STATE / "networks" / checked_id(ident)
-        v = read_json(folder / "network.json")
-        if not v:
-            raise ValueError("Network unavailable; import/acquire it again")
-        original = next(folder.glob("original.*"))
-        raw = original.read_bytes()
-        if hashlib.sha256(raw).hexdigest() != v["sha256"]:
-            raise ValueError("Network source changed; prior scenarios preserved")
-        actual = [
-            mapping(g)
-            for g in parse_lines(
-                raw, original.suffix, allow_empty=v.get("coverage") is not None
-            )
-        ]
-        if v.get("version") != 1 or json.dumps(actual, sort_keys=True) != json.dumps(
-            v["lines"], sort_keys=True
-        ):
-            raise ValueError(
-                "Network derived geometry changed; preserve original and re-import"
-            )
+        v, projected = verified_network(ident, epsg)
         sources.append(
             {
                 k: v[k]
@@ -149,7 +187,7 @@ def load_networks(ids, epsg, kinds=("roads", "trails")):
             }
         )
         if v["kind"] in kinds:
-            lines.extend(transform(project(4326, epsg), shape(g)) for g in v["lines"])
+            lines.extend(projected)
     return lines, sources
 
 

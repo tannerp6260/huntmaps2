@@ -1,3 +1,4 @@
+import { openExisting, reloadExisting } from './browser-startup.mjs';
 // Offline real-area map timings. Run through gui/performance.py browser.
 import { chromium } from 'playwright';
 import fs from 'node:fs';
@@ -33,7 +34,7 @@ try {
       .filter({ hasText: 'Coverage ready · ' + id })
       .waitFor({ timeout: 60000 });
   const start = performance.now();
-  await page.goto(base);
+  await openExisting(page, base);
   await page.getByLabel('Select A0075', { exact: true }).click();
   await ready('A0075');
   const firstMs = performance.now() - start;

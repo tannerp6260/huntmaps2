@@ -1,3 +1,4 @@
+import { openExisting, reloadExisting } from './browser-startup.mjs';
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
@@ -14,7 +15,7 @@ await page.route('**/*',r=>r.request().url().startsWith(base)||r.request().url()
 await page.route(`**/api/first-person/plans/${id}`,r=>r.fulfill({json:plan}));
 await page.route('**/api/jobs',async r=>{const response=await r.fetch();const jobs=await response.json();await r.fulfill({json:[...(includeJob ? [{id:'c'.repeat(32),plan:id,name:'Synthetic progress',kind:'first-person-prepare',status,stage:progress.label,elapsed_s:40,progress:{...progress,updated:Date.now()/1000-(stalled?30:0)}}] : []),...jobs]})});
 try {
- await page.goto(base);
+ await openExisting(page, base);
  await page.getByLabel('Run selector').selectOption('workflow-fixture');
  await page.getByLabel('Select A0001',{exact:true}).click();
  await page.getByRole('button',{name:'View',exact:true}).click();
@@ -48,7 +49,7 @@ try {
  await page.waitForFunction(()=>document.querySelector('.fp-job progress')?.getAttribute('value')===null);
  plan.storage.blocked=true;
  await section.getByText(/Insufficient storage for this plan/).waitFor({timeout:15000});
- await page.reload();
+ await reloadExisting(page);
  await page.getByLabel('Run selector').selectOption('workflow-fixture');
  await page.getByRole('button',{name:'View',exact:true}).click();
  await section.evaluate(el=>el.open=true);
@@ -62,7 +63,7 @@ try {
  await localPage.route('**/*',r=>r.request().url().startsWith(base)||r.request().url().startsWith('blob:')?r.continue():r.abort());
  await localPage.route('**/api/jobs',r=>r.fulfill({json:[{id:'f'.repeat(32),plan:localId,name:'Local reuse fixture',kind:'baseline',status:'interrupted',stage:'Checking sources',elapsed_s:1}]}));
  await localPage.route(`**/api/plans/${localId}`,r=>r.fulfill({json:{id:localId,name:'Local reuse fixture',prepared:true,sources_ready:true,max_download_mb:30,review_signature:'fixture',settings:{radius_m:1500,observation_minutes:30,candidate_count:620,search:{recommendation_count:5}},acquisition:{estimated_bytes:0,already_cached_bytes:1000000,cached_keys:['dem','tree'],items:[],errors:[],estimate_note:'Offline source-review fixture',reused_sources:[{key:'tree',provider:'USGS RCMAP',acquisition_date:'2023 annual product',retrieved_utc:'2026-10-03T02:38:22Z',url:sourceUrl,sha256:'0'.repeat(64)}]}}}));
- await localPage.goto(base);
+ await openExisting(localPage, base);
  await localPage.getByText('Verified local sources',{exact:true}).click();
  const sources=localPage.locator('details').filter({has:localPage.getByText('Verified local sources',{exact:true})});
  await sources.getByText(/tree: USGS RCMAP · 2023 annual product · retrieved 2026-10-03/).waitFor();

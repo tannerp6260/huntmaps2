@@ -1,3 +1,4 @@
+import { openExisting, reloadExisting } from './browser-startup.mjs';
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
@@ -32,7 +33,7 @@ const result=async(action)=>{
 };
 const ready=()=>page.locator('.coverage-status').filter({hasText:'Coverage ready'}).waitFor({timeout:60000});
 try {
- await page.goto(base);await page.getByLabel('Run selector').selectOption('collection-fixture');
+ await openExisting(page, base);await page.getByLabel('Run selector').selectOption('collection-fixture');
  await page.getByLabel('Recommendation mode').waitFor({timeout:60000});
  const initial=await api('/runs/collection-fixture/workflow');
  const originalRun=await api('/runs/collection-fixture');

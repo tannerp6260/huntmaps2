@@ -5,6 +5,12 @@ export type DownloadReviewInfo = {
     processing_estimate_uncertain: boolean;
     blocked: boolean;
     volumes: { path: string; free_bytes: number }[];
+    scene_assets?: {
+      saved_bytes: number;
+      partial_bytes: number;
+      estimated_output_bytes: number;
+      scene_count: number;
+    };
   };
   download_time?: { basis: string; minimum_s: number | null; maximum_s: number | null };
 };
@@ -38,6 +44,17 @@ export default function DownloadReview({
       </small>
       {plan.storage && (
         <>
+          {plan.storage.scene_assets && (
+            <p>
+              Saved scenes: {(plan.storage.scene_assets.saved_bytes / 1e6).toFixed(1)} MB · retained
+              partial scenes: {(plan.storage.scene_assets.partial_bytes / 1e6).toFixed(1)} MB.
+              Estimated scene assets for this request:{' '}
+              {(plan.storage.scene_assets.estimated_output_bytes / 1e6).toFixed(1)} MB for{' '}
+              {plan.storage.scene_assets.scene_count} setup
+              {plan.storage.scene_assets.scene_count === 1 ? '' : 's'}. Existing scenes are
+              preserved; verified scene reuse can require less space.
+            </p>
+          )}
           <p>
             Available storage:{' '}
             {Math.min(...plan.storage.volumes.map((v) => v.free_bytes / 2 ** 30)).toFixed(1)} GiB ·

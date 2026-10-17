@@ -1,3 +1,4 @@
+import { openExisting, reloadExisting } from './browser-startup.mjs';
 import {chromium} from 'playwright';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
@@ -21,7 +22,7 @@ try {
  const coverageHits=(point='')=>[...cachedRequests].filter(id=>requestUrls.get(id)?.includes('/runs/search-fixture/')&&requestUrls.get(id)?.includes('/visible/'+(point ? point+'/' : ''))).length;
  page.on('pageerror',e=>errors.push(e.message));
  page.on('request',r=>{if(r.url().includes('/visible/'))requests.push({url:r.url(),background:r.headers()['x-huntmaps-prefetch']==='true'})});
- await page.goto(base);
+ await openExisting(page, base);
  const began=Date.now();
  await page.getByLabel('Run selector').selectOption('search-fixture');
  const run=await (await page.request.get(base+'/api/runs/search-fixture')).json();
@@ -55,7 +56,7 @@ try {
  const cache=()=>page.evaluate(()=>JSON.parse(document.querySelector('.map').dataset.coverageCache||'[]'));
  assert.ok((await cache()).length<=8);
  const beforeReload=coverageHits(first);
- await page.reload(); await page.getByLabel('Run selector').selectOption('search-fixture'); await ready(first);
+ await reloadExisting(page); await page.getByLabel('Run selector').selectOption('search-fixture'); await ready(first);
  assert.ok(coverageHits(first)>beforeReload,'Reload must reuse the browser HTTP cache');
  await page.getByLabel('Select '+second,{exact:true}).click(); await ready(second);
  await page.locator('[data-tour="setup-'+second+'"]').getByRole('button',{name:'Dismiss',exact:true}).click();

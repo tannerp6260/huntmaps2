@@ -33,6 +33,10 @@ export function ProfileChart({ profile }: { profile: ProfileResult | null }) {
   return (
     <section className="fp-profile">
       <h3>Inspection target · {yards(profile.distance_m, 1)}</h3>
+      <p>
+        Horizontal: {yards(profile.distance_m, 1)} · Line of sight:{' '}
+        {yards(profile.line_of_sight_distance_m, 1)}
+      </p>
       <b>{profile.result}</b>
       <p className="hint">
         {profile.source_label}

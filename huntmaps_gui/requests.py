@@ -1,7 +1,15 @@
 """Validated mutation payloads; geometry and source checks remain in services."""
 
 from typing import Literal
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictFloat, StrictInt
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictBool,
+    StrictFloat,
+    StrictInt,
+    field_validator,
+)
 
 Decision = Literal["unmarked", "keep", "reject", "needs inspection"]
 
@@ -49,9 +57,10 @@ class Preparation(Payload):
     )
     import_id: str = Field(pattern=r"^[a-f0-9]{32}$")
     polygon: str | int
-    radius_m: Literal[500, 1000, 1500, 2000, 2500, 3000] = 2000
+    radius_m: float = Field(default=1828.8, ge=457.2, le=3000)
     observation_minutes: int = Field(default=30, ge=5, le=120)
     max_download_mb: int = Field(default=600, ge=1)
+    estimate_first: bool = True
     candidate_count: int = Field(default=150, ge=12, le=5000)
     recommendation_count: int = Field(default=20, ge=1, le=200)
     recommendation_separation_m: float = Field(default=150, ge=0, le=2000)
@@ -61,6 +70,16 @@ class Preparation(Payload):
     avoid_dense_vegetation: StrictBool = False
     access_sampling: dict | None = None
     include_network: StrictBool = False
+
+    @field_validator("radius_m")
+    @classmethod
+    def radius_preset(cls, value):
+        choices = [500, 1000, 1500, 2000, 2500, 3000]
+        if not any(
+            abs(value - x) < 1e-7 for x in choices + [x * 0.9144 for x in choices]
+        ):
+            raise ValueError("Choose a yard preset or a recorded legacy metre preset")
+        return int(value) if float(value).is_integer() else value
 
 
 class Start(Payload):

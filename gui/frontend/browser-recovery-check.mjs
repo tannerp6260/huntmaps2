@@ -1,3 +1,4 @@
+import { openExisting, reloadExisting } from './browser-startup.mjs';
 import {chromium} from 'playwright';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
@@ -8,6 +9,7 @@ const browser=await chromium.launch({executablePath:process.env.HUNTMAPS_BROWSER
 const page=await browser.newPage({viewport:{width:1500,height:1050}}), errors=[];
 page.on('pageerror',e=>errors.push(e.message));
 await page.addInitScript(()=>localStorage.setItem('huntmaps-online-imagery','off'));
+await page.route('**/api/browsing/transportation/**',r=>r.abort());
 await page.route('**/*',r=>r.request().url().startsWith(base)||r.request().url().startsWith('blob:')?r.continue():r.abort());
 const jobs=async()=>await (await page.request.get(base+'/api/jobs')).json();
 const waitJob=async status=>{
@@ -15,31 +17,31 @@ const waitJob=async status=>{
   const list=await jobs();
   const found=list.find(j=>j.name==='browser-recovery'&&j.kind==='baseline'&&j.status===status);
   if(found)return found;
+  const stopped=list.find(j=>j.name==='browser-recovery'&&j.status==='cancelled');if(stopped)throw Error('Unexpected cancelled preparation: '+JSON.stringify(errors));
   await page.waitForTimeout(200);
  }
  throw Error('Expected baseline '+status+': '+JSON.stringify(await jobs()));
 };
 try{
- await page.goto(base);
+ await openExisting(page, base);
  await page.getByRole('button',{name:'+ New area',exact:true}).click();
  await page.getByRole('button',{name:'Import file',exact:true}).click();
  await page.getByLabel('Import observer polygon').setInputFiles(process.env.HUNTMAPS_IMPORT_FILE);
  await page.getByLabel('New run name',{exact:true}).fill('browser-recovery');
- await page.getByLabel('View radius',{exact:true}).selectOption('500');
+ await page.getByLabel('View radius',{exact:true}).selectOption('457.2');
  await page.getByLabel('Locations to test',{exact:true}).fill('600');
  await page.getByLabel('Top spots to recommend',{exact:true}).fill('10');
- await page.getByRole('button',{name:'Review downloads',exact:true}).click();
- await page.getByRole('button',{name:'Generate setups',exact:true}).waitFor({timeout:30000});
  await page.getByRole('button',{name:'Generate setups',exact:true}).click();
- await page.locator('[data-testid="generation-status"]').waitFor();
+ await page.getByRole('dialog',{name:'Generating setups',exact:true}).waitFor();
  const failed=await waitJob('failed');
  assert.match(failed.error,/Injected post-download/);
  assert.equal(failed.failed_stage,'score');
  const plan=await (await page.request.get(base+'/api/plans/'+failed.plan)).json();
  assert.equal(plan.acquisition.estimated_bytes,0);
  assert.ok(plan.acquisition.already_cached_bytes>0);
- await page.reload();
+ await reloadExisting(page);
  await page.locator('[data-testid="generation-status"]').waitFor();
+ await page.getByRole('button',{name:'Close Generating setups',exact:true}).click();
  await page.getByRole('button',{name:'Activity',exact:true}).click();
  await page.locator('summary').filter({hasText:'Analysis jobs'}).click();
  const card=page.locator('.job').filter({hasText:'Injected post-download'});
@@ -51,17 +53,17 @@ try{
   page.getByRole('button',{name:'Generate setups',exact:true}).click()
  ]);
  assert.ok(started.ok(),await started.text());
- await page.reload();
+ await reloadExisting(page);
  await waitJob('complete');
  const response=await page.request.get(base+'/api/runs/browser-recovery');
  assert.ok(response.ok(),await response.text());
  const run=await response.json();
  assert.equal(run.recommendation_ids.length,10);
  assert.ok(run.search_summary.sampling.spacing_m<150);
- await page.locator('[data-testid="generation-status"]').getByRole('button',{name:'Open results',exact:true}).click();
+ await page.getByRole('dialog',{name:'Generating setups',exact:true}).getByRole('button',{name:'Open results',exact:true}).click();
  await page.locator('.search-summary > summary').click();await page.getByText(/Evaluated .* locations/).waitFor();
  assert.equal(await page.evaluate(()=>sessionStorage.getItem('huntmaps-generation-plan')),null);
- await page.reload();
+ await reloadExisting(page);
  await page.locator('.search-summary > summary').click();await page.getByText(/Evaluated .* locations/).waitFor();
  assert.equal(await page.getByLabel('Run selector').inputValue(),'browser-recovery');
  assert.equal(await page.locator('[data-testid="generation-status"]').count(),0,'Opening results must end generation recovery on reload');
@@ -72,4 +74,8 @@ try{
  assert.deepEqual(errors,[]);
  fs.writeFileSync(out+'/results.json',JSON.stringify({errors,failedStage:failed.failed_stage,search:run.search_summary},null,2));
  console.log('Actual browser 600-location search, cached recovery and reload verified',out);
+}catch(e){
+ await page.screenshot({path:out+'/failure.png',fullPage:true});
+ fs.writeFileSync(out+'/failure.txt',await page.locator('body').innerText());
+ throw e;
 }finally{await browser.close();}

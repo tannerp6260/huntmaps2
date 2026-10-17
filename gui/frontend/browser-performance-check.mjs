@@ -1,3 +1,4 @@
+import { openExisting, reloadExisting } from './browser-startup.mjs';
 import {chromium} from 'playwright';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
@@ -12,7 +13,7 @@ try {
   page.on('request',request=>{if(new URL(request.url()).pathname.endsWith('.bin'))assets.push(request.url());if(request.method()!=='GET')mutations.push(request.url())});
   await page.addInitScript(()=>localStorage.setItem('huntmaps-online-imagery','off'));
   await page.route('**/*',route=>route.request().url().startsWith(base)||route.request().url().startsWith('blob:')?route.continue():route.abort());
-  await page.goto(base);
+  await openExisting(page, base);
   await page.getByLabel('Select A0075',{exact:true}).click();
   const started=performance.now();
   await page.getByRole('button',{name:'View',exact:true}).click();

@@ -26,6 +26,14 @@ The existing `scout` file is hashed into completed-run manifests. It remains
 byte-identical; the GUI has its own launcher rather than invalidating historical
 verification. Existing CLI commands continue to work.
 
+## Start screen
+
+Each opening starts with **New scouting area**, **Training**, or **Open existing work**.
+No saved area or lesson loads until you choose. Training preserves lesson progress and
+practice notes, and resumes only when requested. Open existing work restores a saved
+generation job when available, or selects your last saved area. Reloading never starts
+a new analysis automatically.
+
 ## First review
 
 1. Open a completed run in the header. The initial Soap Creek neighborhood review
@@ -61,6 +69,10 @@ Each shortlisted setup gets its own approach boundary and decision. The setup
 counter is a review queue. A new setup starts with no boundary; importing or copying
 another boundary is an advanced, explicit choice requiring confirmation for that
 setup. Boundary checks explain missing mapped departures before calculation.
+**Dismiss spot & next** advances immediately while saving in the background. A
+failed save restores the spot and shows an error; successful dismissals offer Undo.
+Visible-terrain shading pauses during Approach and returns with your chosen settings
+when you leave that stage.
 Terrain constraints can still prevent a path. **Terrain I want to see** belongs to
 Find; approach preferences describe climbing, steepness, vegetation and the hard
 slope limit. See [coverage and approach verification](COVERAGE_APPROACH_FLOW_2026-10-10.md).
@@ -78,17 +90,43 @@ run; it is not proof that new-area data are available.
 
 Review the suggested run name, view distance, locations to test and top spots to recommend.
 The explanation above settings introduces these controls. Choose target terrain before calculating; suggestion spacing and surrounding vegetation settings are under Advanced settings. Roads and trails are included by default; proximity sampling starts at 0.5 miles. Inspection minutes are a calculation detail: new GUI runs
-use 30; recovered runs retain saved values. Check metadata before choosing the
-reviewed download allowance.
+use 30; recovered runs retain saved values. Open **About Find** for sampling, calculation and source explanations.
+**Road and trail restrictions** contains proximity and optional height settings.
+Roads/Trails choose feature types; **Advanced source datasets** chooses the inventories
+providing those features. Mapped proximity is not walking distance or permission.
 The existing hunt context is inherited from the transfer template: GMU54 second
 rifle 2026, personal dates unset and light assumptions hypothetical. This small form
 does not introduce new coefficients or permit arbitrary shell commands.
 
-Click **Review downloads**. The unchanged owner CLI checks cached data and
-can request catalog metadata (up to its existing 5 MB response limit). It does not
-perform bulk downloads. Review source items, estimate, cap, errors and required-data
-text in the interface. **Generate setups** approves the displayed plan and allowance; there is no separate checkbox and preparing a plan never starts bulk transfer. The existing streaming cap and validation remain authoritative.
-If the estimate exceeds the cap or source planning fails, analysis remains blocked.
+Click **Generate setups** once. The GUI prepares sources, checks the estimate and
+storage, reuses verified data, then downloads required sources within the displayed
+cap and calculates setups. Source planning, signatures, streaming limits and validation
+remain authoritative. If the estimate exceeds the cap or planning fails, generation
+stops with an explanation; the cap is never raised automatically.
+
+A centered **Generating setups** dialog shows stages, elapsed time and available
+progress estimates. **Cancel current job** stops work; **Continue in background**
+closes the dialog while work continues. Reopen it through **Show generation progress**
+or use Activity for job history and recovery. Completed runs offer **Open results**.
+Changing inputs or navigating away during preparation clears the pending automatic
+start; prepared files remain available. Reloading requires an explicit action to resume.
+
+Provider errors display a short explanation and **Technical diagnostics** with the
+original message. An XML/HTML service error is retained under `downloads/rejected`
+and is never accepted as a raster. **Retry** reuses verified downloads and requests the
+missing data again; it cannot guarantee an external service has recovered.
+
+GUI vegetation downloads use MRLC's year-specific 2023 tree, shrub and herbaceous
+layers. Retrying an older failed acquisition automatically prepares these replacement
+requests before starting; previous records are kept under `plans/source-history` in
+GUI storage. Existing rasters and rejected responses remain preserved. Runs that
+already contain numerical analysis require a new run name to change sources.
+The data record the endpoint, component, observation year, retrieval date and checksum;
+the annual layer's processing-release identity is explicitly unverified, so matching
+years alone do not imply equivalence to historical sources. Download estimates are
+conservative; the existing transfer ceiling and validation still apply.
+See the [annual-source repair verification](RCMAP_ACQUISITION_2026-10-15.md) for
+the live full-area run and recovery checks.
 
 Preparation also checks project-local raw downloads from previous normal runs and
 source caches. Compatible USGS vegetation must match the requested 2023 product,
@@ -209,7 +247,7 @@ Only complete valid local DEM coverage is supported. See [training](TRAINING.md)
 
 ## Clearer settings
 
-**Locations to test** controls the calculation budget across your polygon; **Top spots to recommend** controls the initial suggestions. Open **Advanced settings → How this works** for spatial and terrain sampling details. Small areas use denser broad sampling down to grid resolution; exhausted eligible cells finish with fewer evaluations and an explanation. Nearby diagnostic alternatives can add results. **Calculation details → Assumed inspection time** retains the existing 30-minute assumption; it affects inspection scores and rankings, not raw terrain-visible area or a recommended stop duration. **View radius** is analysis distance, not guaranteed deer identification distance. **Maximum download size (MB)** limits analysis source acquisition, separate from processing limits and online map browsing.
+**Locations to test** controls the calculation budget across your polygon; **Top spots to recommend** controls the initial suggestions. Open **About Find** for spatial and terrain sampling details. Small areas use denser broad sampling down to grid resolution; exhausted eligible cells finish with fewer evaluations and an explanation. Nearby diagnostic alternatives can add results. **About Find → Calculation assumptions** explains the existing 30-minute assumption; it affects inspection scores and rankings, not raw terrain-visible area or a recommended stop duration. **View radius** is analysis distance, not guaranteed deer identification distance. **Maximum download size (MB)** limits analysis source acquisition, separate from processing limits and online map browsing.
 
 Online map regression: with the GUI running, use `cd gui/frontend && npm run test:online`. It verifies live tiles, drawing, settings payload without preparing a real job, offline failure/retry, and 3D within local coverage.
 
@@ -372,7 +410,7 @@ See [source acquisition recovery](ACQUISITION_RECOVERY_2026-10-10.md).
 
 ### Filter-first viewpoint search
 
-Use Locations to test for the calculation budget and Top spots to recommend for the initial collection. Set Terrain I want to see before reviewing downloads. Recommendations maximize matching visible area while preserving total visibility and all evaluated locations. Avoid standing in dense vegetation is optional and off by default. Generation progress is shown directly in Step 1; saved approaches can be previewed while their selection requirements are unmet. See [WORKFLOW.md](WORKFLOW.md) for details.
+Use Locations to test for the calculation budget and Top spots to recommend for the initial collection. Set Terrain I want to see before generating setups. Recommendations maximize matching visible area while preserving total visibility and all evaluated locations. Avoid standing in dense vegetation is optional and off by default. Generation progress opens in a centered dialog, with background monitoring available; saved approaches can be previewed while their selection requirements are unmet. See [WORKFLOW.md](WORKFLOW.md) for details.
 
 Implementation and verification evidence: [filter-first search report](FILTER_FIRST_SEARCH_2026-10-04.md).
 

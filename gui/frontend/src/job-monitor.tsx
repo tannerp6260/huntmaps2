@@ -1,6 +1,7 @@
 import JobProgress from './job-progress';
 import JobLogs from './job-logs';
 import type { Job } from './types';
+import { JobFailure } from './scouting-dialogs';
 export default function JobMonitor({
   jobs,
   running,
@@ -71,7 +72,7 @@ export default function JobMonitor({
               {j.engine_event.wall_s !== undefined ? `· ${j.engine_event.wall_s}s` : ''}
             </p>
           )}
-          {j.error && <p className="error">{j.error}</p>}
+          {j.error && <JobFailure job={j} />}
           {j.failed_stage && <small>Failed during: {j.failed_stage}</small>}
           <JobLogs id={j.id} label="Actual subprocess log" />
         </div>

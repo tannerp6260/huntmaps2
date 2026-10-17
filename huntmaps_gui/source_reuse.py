@@ -25,6 +25,17 @@ def compatible(key, entry, request, bounds, epsg):
     if (old.scheme, old.netloc, old.path) != (new.scheme, new.netloc, new.path):
         return False
     q, expected = parse_qs(old.query), parse_qs(new.query)
+    if request.get("source_policy_version") is not None and any(
+        entry.get(field) != request.get(field)
+        for field in (
+            "catalog_source_id",
+            "component",
+            "observation_year",
+            "source_policy_version",
+            "product_release",
+        )
+    ):
+        return False
     if key in ("summer", "winter"):
         # Older authoritative responses omitted this default-true option.
         q.setdefault("returnGeometry", ["true"])
@@ -199,6 +210,7 @@ def import_source(key, path, entry, manifest, stamp):
 
 def cached(config, inputs, original_cached):
     from glassing.owner_data import grid_bounds, plan
+    from .rcmap_sources import COMPONENTS, filename
 
     # A selected managed file is an input, not an opportunity to fall back to
     # another source if its bytes or recorded provenance have changed.
@@ -253,7 +265,13 @@ def cached(config, inputs, original_cached):
                 (
                     k
                     for k in missing
-                    if name in (k + ".tif", k + "_padded120.tif", k + ".geojson")
+                    if name
+                    in (
+                        k + ".tif",
+                        k + "_padded120.tif",
+                        k + ".geojson",
+                        filename(k) if k in COMPONENTS else "",
+                    )
                 ),
                 None,
             )

@@ -48,6 +48,7 @@ export default function Viewer({
       scene: THREE.Scene;
       markers: THREE.Group;
       ground: number;
+      pick: (x: number, y: number) => Target | null;
       invalidate: () => void;
     } | null>(null),
     [error, setError] = useState(''),
@@ -131,11 +132,34 @@ export default function Viewer({
     const dot = (x: number, n: number, color: string) => {
       ctx.fillStyle = color;
       ctx.beginPath();
-      ctx.arc(200 + (x / range) * 190, 200 - (n / range) * 190, 5, 0, Math.PI * 2);
+      const px = 200 + (x / range) * 190,
+        py = 200 - (n / range) * 190;
+      if (color === '#bd3643') {
+        ctx.moveTo(px, py - 6);
+        ctx.lineTo(px + 6, py + 5);
+        ctx.lineTo(px - 6, py + 5);
+        ctx.closePath();
+      } else if (color === '#8052ad') {
+        ctx.moveTo(px, py - 6);
+        ctx.lineTo(px + 6, py);
+        ctx.lineTo(px, py + 6);
+        ctx.lineTo(px - 6, py);
+        ctx.closePath();
+      } else ctx.arc(px, py, 5, 0, Math.PI * 2);
       ctx.fill();
+    };
+    const label = (p: Target, text: string, color: string) => {
+      ctx.fillStyle = color;
+      ctx.font = '12px sans-serif';
+      ctx.fillText(
+        text,
+        Math.max(4, Math.min(270, 200 + (p.east_m / range) * 190 + 7)),
+        Math.max(14, Math.min(375, 200 - (p.north_m / range) * 190 - 7)),
+      );
     };
     if (s.target) {
       dot(s.target.east_m, s.target.north_m, '#d0783e');
+      label(s.target, 'Selected target', '#9a471b');
       ctx.strokeStyle = '#d0783e';
       ctx.beginPath();
       ctx.moveTo(ox, oy);
@@ -144,11 +168,15 @@ export default function Viewer({
     }
     if (s.foliage && s.profile?.vegetation?.status === 'evaluated') {
       const b = s.profile.vegetation.scenarios[s.scenario].first_intersection;
-      if (b) dot(b.east_m, b.north_m, '#8052ad');
+      if (b) {
+        dot(b.east_m, b.north_m, '#8052ad');
+        label(b, 'Inferred vegetation', '#8052ad');
+      }
     }
     if (s.profile?.first_obstruction) {
       const b = s.profile.first_obstruction;
       dot(b.east_m, b.north_m, '#bd3643');
+      label(b, 'First terrain obstruction', '#bd3643');
     }
     ctx.fillStyle = '#233b31';
     ctx.font = '14px sans-serif';
@@ -237,7 +265,7 @@ export default function Viewer({
         mesh.geometry.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
       };
       uvFor(fine, fv, 300);
-      uvFor(context, cv, 2000);
+      uvFor(context, cv, meta.context_radius_m || 2000);
       const pointColors = new Float32Array(pv.length);
       for (let i = 0; i < cls.length; i++) {
         const k = cls[i],
@@ -538,6 +566,19 @@ export default function Viewer({
         scene,
         markers,
         ground: observerGround,
+        pick: (x, y) => {
+          const bounds = container.current!.getBoundingClientRect();
+          const ray = new THREE.Raycaster();
+          ray.setFromCamera(
+            new THREE.Vector2(
+              ((x - bounds.left) / bounds.width) * 2 - 1,
+              1 - ((y - bounds.top) / bounds.height) * 2,
+            ),
+            camera,
+          );
+          const hit = ray.intersectObjects([fine, context], false)[0];
+          return hit ? { east_m: hit.point.x, north_m: -hit.point.z } : null;
+        },
         invalidate: () => {
           dirty = true;
         },
@@ -590,7 +631,11 @@ export default function Viewer({
     }
     const marker = (x: number, n: number, z: number, color: string) => {
       const o = new THREE.Mesh(
-        new THREE.SphereGeometry(0.8, 10, 8),
+        color === '#bd3643'
+          ? new THREE.ConeGeometry(1.3, 2, 3)
+          : color === '#8052ad'
+            ? new THREE.OctahedronGeometry(1.1)
+            : new THREE.SphereGeometry(0.8, 10, 8),
         new THREE.MeshBasicMaterial({ color }),
       );
       o.position.set(x, z - rt.ground, -n);
@@ -612,7 +657,7 @@ export default function Viewer({
   }, [target, profile, range, heading, loading, foliage, scenario, nearby, observer]);
   const drag = useRef<{ x: number; y: number; heading: number; look: number } | null>(null);
   return (
-    <div className="scene-view">
+    <div className="scene-view" data-selected-target={target ? JSON.stringify(target) : undefined}>
       <p role="status">{imageryStatus}</p>
       <div
         className="fp-scene"
@@ -631,7 +676,14 @@ export default function Viewer({
             );
           }
         }}
-        onPointerUp={() => (drag.current = null)}
+        onPointerUp={(e) => {
+          const start = drag.current;
+          drag.current = null;
+          if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) < 5) {
+            const hit = runtime.current?.pick(e.clientX, e.clientY);
+            if (hit) onTarget(hit);
+          }
+        }}
         onPointerCancel={() => (drag.current = null)}
         onKeyDown={(e) => {
           if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
@@ -679,8 +731,9 @@ export default function Viewer({
           Green ring: unchanged 131 yd foliage patch centred on the saved setup. Dark marker:
           current observer. Orange ring: 328 yd fine-data boundary. Distant terrain: separate coarse
           context with cached photographs where available. Pale gaps mark unknown fine ground and
-          the deliberately unjoined 328–350 yd source boundary. Orange target, red terrain
-          obstruction and purple inferred-vegetation intersection are temporary inspection marks.
+          the deliberately unjoined 328–350 yd source boundary. Orange circle: selected target; red
+          triangle: terrain obstruction; violet diamond: inferred vegetation intersection are
+          temporary inspection marks.
         </small>
       </details>
     </div>

@@ -65,15 +65,15 @@ const areaSteps = [
   {
     id: 'settings',
     title: 'Understand the settings on the right',
-    text: 'Look at the settings in the RIGHT panel. Expand More options for sampling restrictions and technical settings. Hover over, focus or click each question mark for a plain-language explanation. The current defaults are a starting point, not a guarantee of suitable setups.',
+    text: 'Look at the settings in the RIGHT panel. Expand Road and trail restrictions for proximity settings, or open About Find for the explanation and technical limits. Hover over, focus or click each question mark for a plain-language explanation. The current defaults are a starting point, not a guarantee of suitable setups.',
     target: 'run-settings',
     extra:
-      'View radius controls analysis distance. Locations to test controls the calculation budget, while Top spots to recommend controls the initial suggestions; small areas use denser sampling, and exhausted eligible cells leave part of the budget unused. Calculation details show the fixed inspection assumption, which affects inherited scores rather than visible terrain or a stop duration. Inspect source metadata before reviewing the download ceiling; online browsing is separate.',
+      'View radius controls analysis distance. Locations to test controls the calculation budget, while Top spots to recommend controls the initial suggestions; small areas use denser sampling, and exhausted eligible cells leave part of the budget unused. About Find explains the fixed inspection assumption, which affects inherited scores rather than visible terrain or a stop duration. Generate setups prepares sources and downloads within the displayed cap; online browsing is separate.',
   },
   {
     id: 'handoff',
     title: 'What happens for your real area',
-    text: 'Practice stops here. After this lesson, choose New area, draw YOUR area or import its boundary, and give it a new name. Prepare the acquisition plan and review source details, estimated size and the cap before explicitly allowing downloads.',
+    text: 'Practice stops here. After this lesson, choose New area, draw YOUR area or import its boundary, and give it a new name. Choose Generate setups to prepare sources, reuse verified files and download within the displayed cap.',
     target: 'run-settings',
     extra:
       'Analysis jobs show actual stages, elapsed time and logs. You can cancel a running subprocess and review partial runs. New-area runs use the terrain baseline; Soap Creek vegetation experiments do not generalize automatically.',
@@ -111,7 +111,15 @@ function load(): TrainingState {
   }
 }
 export function useTraining() {
-  const [initial] = useState(load),
+  const [initial] = useState(() => {
+      const saved = load();
+      return {
+        ...saved,
+        lessons: Object.fromEntries(
+          Object.entries(saved.lessons || {}).map(([id, p]) => [id, { ...p, paused: true }]),
+        ),
+      };
+    }),
     [lessons, setLessons] = useState<Partial<Record<Lesson, Progress>>>(initial.lessons || {}),
     [current, setCurrent] = useState<Lesson | null>(initial.current || null),
     [notes, setNotes] = useState<Notes>(initial.notes || {}),
@@ -367,13 +375,6 @@ export function Learning({
   }
   return (
     <>
-      {!p && (
-        <div className="learn-welcome">
-          New to HuntMaps2?{' '}
-          <button onClick={() => t.setOpen(true)}>Start with the saved example</button>
-          <span>No prior run needed · no analysis or source acquisition</span>
-        </div>
-      )}
       {p?.paused && !p.complete && (
         <div className="learn-welcome">
           Your lesson is paused.{' '}

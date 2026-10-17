@@ -23,6 +23,7 @@ type LayerState = {
   activeManual: { id: string } | null;
   selected: string;
   visibility: boolean;
+  retainCoverage?: boolean;
   hiddenViews: string[];
   opacity: number;
   dismissed: string[];
@@ -43,6 +44,7 @@ export function updateMapLayers(
     activeManual,
     selected,
     visibility,
+    retainCoverage = true,
     hiddenViews,
     opacity,
     sectors,
@@ -76,7 +78,7 @@ export function updateMapLayers(
       type: 'raster',
       tiles: [
         collection && layer === 'visible'
-          ? `${location.origin}/api/runs/${run.id}/collection-tiles/${collection.id}/${id}/{z}/{x}/{y}.png`
+          ? `${location.origin}/api/runs/${run.id}/collection-tiles/${collection.id}/${id}/{z}/{x}/{y}.png?display=collection-v2`
           : `${location.origin}/api/runs/${run.id}/${filterId && ['visible', 'classes'].includes(layer) ? `filtered-tiles/${filterId}` : useWorking ? 'working-tiles' : 'tiles'}/${layer}/${id}/{z}/{x}/{y}.png?color=${color}&revision=${working[id]?.revision || 'original'}&display=${COVERAGE_DISPLAY_VERSION}`,
       ],
       tileSize: 256,
@@ -99,7 +101,7 @@ export function updateMapLayers(
   };
   addRaster('hillshade', 'base', 1);
   if (imagery && run.imagery.length) addRaster('imagery', 'base', imageOpacity);
-  const ids = newRun
+  const chosenIds = newRun
     ? []
     : compare.length
       ? compare
@@ -110,10 +112,12 @@ export function updateMapLayers(
         : selected
           ? [selected]
           : [];
+  const ids = chosenIds.filter((id) => !dismissed.includes(id));
   if (collection && visibility && !newRun) {
     addRaster('visible', 'combined', opacity);
+    addRaster('visible', 'shared', Math.min(1, opacity * 1.4));
     if (collection.selected)
-      addRaster('visible', 'additional-' + collection.selected, Math.min(1, opacity * 1.6));
+      addRaster('visible', 'unique-' + collection.selected, Math.min(1, opacity * 1.6));
   }
   ids.forEach((id, i) => {
     if (!collection && visibility && (!compare.length || !hiddenViews.includes(id)))
@@ -143,7 +147,14 @@ export function updateMapLayers(
           });
     }
   });
-  if (!collection && classes && selected && !newRun && !activeManual)
+  if (
+    !collection &&
+    classes &&
+    selected &&
+    !dismissed.includes(selected) &&
+    !newRun &&
+    !activeManual
+  )
     addRaster('classes', selected, opacity);
   // Keep only eight coverage sources, and never retain another run or dismissed setup.
   const activeCoverage = new Set(coverage.map(({ key }) => key));
@@ -151,6 +162,7 @@ export function updateMapLayers(
     [...recent.keys()]
       .filter(
         (key) =>
+          retainCoverage &&
           key.includes(`-${run.id}-`) &&
           (!dismissed.some((id) => key.startsWith(`raster-visible-${id}-`)) ||
             activeCoverage.has(key)),

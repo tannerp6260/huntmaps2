@@ -62,6 +62,20 @@ class ApproachSearchTests(unittest.TestCase):
             brush["cost_contributions"]["tree"], 5 * shortest["offtrail_distance_m"]
         )
 
+    def test_brush_avoidance_never_reduces_selected_tree_or_shrub_preferences(self):
+        from unittest.mock import patch
+
+        g = grid()
+        with patch.object(g, "search", wraps=g.search) as search:
+            solve(
+                g,
+                [LineString([(10, 230), (10, 10)])],
+                (210, 130),
+                dict(slope=2, tree=5, shrub=4, gain=1),
+            )
+        brush = search.call_args_list[2].args[1]
+        self.assertEqual(brush, dict(slope=2, tree=5, shrub=4, gain=1))
+
     def test_trail_start_changes_departure(self):
         g = grid()
         lines = [LineString([(10, 230), (10, 10)])]

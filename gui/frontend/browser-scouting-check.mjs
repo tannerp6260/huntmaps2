@@ -1,3 +1,4 @@
+import { openExisting, reloadExisting } from './browser-startup.mjs';
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
@@ -14,7 +15,7 @@ const p=await (await page.request.get(`${base}/api/runs/${rid}/candidates/A0075`
 const lon=p.longitude,lat=p.latitude;
 const area={type:'Polygon',coordinates:[[[lon-.003,lat-.003],[lon+.003,lat-.003],[lon+.003,lat+.003],[lon-.003,lat+.003],[lon-.003,lat-.003]]]};
 const network={type:'Feature',properties:{trail_name:'Synthetic trail',terra_motorized:'N'},geometry:{type:'LineString',coordinates:[[lon-.001,lat-.002],[lon-.001,lat+.002]]}};
-await page.goto(base);await page.getByLabel('Select A0075',{exact:true}).click();await page.getByRole('button',{name:'Setup details',exact:true}).click();await page.getByLabel('Candidate decision',{exact:true}).selectOption('keep');await page.getByRole('button',{name:'Save review',exact:true}).click();
+await openExisting(page, base);await page.getByLabel('Select A0075',{exact:true}).click();await page.getByRole('button',{name:'Setup details',exact:true}).click();await page.getByLabel('Candidate decision',{exact:true}).selectOption('keep');await page.getByRole('button',{name:'Save review',exact:true}).click();
 await page.locator('.workflow-task').getByRole('button',{name:'Shortlist',exact:true}).click();await page.getByRole('button',{name:/Approach.*selected/}).click();
 await page.getByLabel('Focused approach spot').selectOption('A0075');
 await page.getByLabel('Import road trail network',{exact:true}).setInputFiles({name:'synthetic-network.geojson',mimeType:'application/geo+json',buffer:Buffer.from(JSON.stringify(network))});
@@ -52,13 +53,13 @@ if(await filters.locator('..').getAttribute('open')===null)await filters.click()
 await page.getByLabel('Elevation range (feet)',{exact:true}).check();
 await page.getByLabel('Minimum Elevation range (feet)',{exact:true}).fill('10000');await page.getByLabel('Maximum Elevation range (feet)',{exact:true}).fill('10500');
 await page.getByRole('button',{name:'Apply review filters',exact:true}).click();await page.getByText('Applied matching-area order',{exact:false}).waitFor();
-await page.getByRole('button',{name:/Find/}).click();
+await page.getByRole('navigation',{name:'Scouting workflow'}).getByRole('button',{name:/Find/}).click();
 await page.getByRole('button',{name:'+ New area',exact:true}).click();
-await page.getByText('More options · sampling restrictions',{exact:true}).click();await page.getByText('Observer access sampling and network acquisition',{exact:true}).click();
+await page.getByText('Road and trail restrictions',{exact:true}).click();
 await page.getByLabel('Only look near mapped roads or trails',{exact:true}).check();
-await page.getByText('Advanced network sources',{exact:true}).click();
-await page.getByLabel('trails: synthetic-network.geojson',{exact:true}).waitFor();
-assert.equal(await page.getByLabel('trails: synthetic-network.geojson',{exact:true}).isChecked(),false);
+await page.getByText('Advanced source datasets',{exact:true}).click();
+await page.getByLabel('Trail dataset: synthetic-network.geojson',{exact:true}).waitFor();
+assert.equal(await page.getByLabel('Trail dataset: synthetic-network.geojson',{exact:true}).isChecked(),false);
 await page.getByLabel('New run name',{exact:true}).fill('unsubmitted-scouting-check');
 await page.getByRole('button',{name:'Import file',exact:true}).click();
 await page.getByLabel('Import observer polygon',{exact:true}).setInputFiles({name:'synthetic-observer.geojson',mimeType:'application/geo+json',buffer:Buffer.from(JSON.stringify(area))});

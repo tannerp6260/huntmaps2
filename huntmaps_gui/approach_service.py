@@ -88,6 +88,7 @@ def geometry(value, polygon=True):
 
 
 def create(run, body, jobs):
+    submitted = time.perf_counter()
     r, points = point_snapshot(run, jobs)
     ids = body.get("ids", [])
     if (
@@ -107,13 +108,13 @@ def create(run, body, jobs):
         for v in weights.values()
     ):
         raise ValueError("Preference weights must be 0–5")
-    maximum = body.get("maximum_slope_deg", 30)
+    maximum = body.get("maximum_slope_deg", 25)
     if (
         not isinstance(maximum, (int, float))
         or not np.isfinite(maximum)
-        or not 0 < maximum <= 60
+        or not 0 < maximum <= 35
     ):
-        raise ValueError("Maximum modeled slope must be >0–60 degrees")
+        raise ValueError("Maximum modeled slope must be >0–35 degrees")
     lines, sources = load_networks(
         body.get("network_ids", []),
         r.config["epsg"],
@@ -154,6 +155,7 @@ def create(run, body, jobs):
             p = geometry(dict(type="Point", coordinates=value[key]), False)
             if not area.covers(p):
                 raise ValueError(f"{key} must lie in the explicit travel area")
+    value["submission_s"] = time.perf_counter() - submitted
     write(STATE / "approaches" / value["id"] / "scenario.json", value)
     from .workflow import records, path
 
@@ -224,6 +226,7 @@ def status(ident, jobs=None):
 
 
 def compute(ident):
+    started = time.perf_counter()
     from .catalog import Run
 
     s = read_json(STATE / "approaches" / checked_id(ident) / "scenario.json")
@@ -337,6 +340,7 @@ def compute(ident):
         results=results,
         notice=NOTICE,
         scenario_sha256=digest(s),
+        subprocess_s=time.perf_counter() - started,
     )
     output["sha256"] = digest(output)
     with locked(STATE / "maintenance"):

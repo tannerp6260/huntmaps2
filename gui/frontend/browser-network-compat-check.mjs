@@ -1,3 +1,4 @@
+import { openExisting, reloadExisting } from './browser-startup.mjs';
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
@@ -40,7 +41,7 @@ try {
     jobs = [{ id: '11223344556677889900112233445566', kind: 'network-acquisition', plan: planId, status: 'complete', stage: 'Finished', elapsed_s: 1 }];
     return route.fulfill({ json: jobs[0] });
   });
-  await page.goto(base);await page.locator('.layers > summary').click();
+  await openExisting(page, base);await page.locator('.layers > summary').click();
   const controls = page.locator('.network-map-controls');
   await controls.getByText('No road/trail data loaded.', { exact: false }).waitFor();
   await controls.getByRole('button', { name: 'Review road/trail download', exact: true }).click();
@@ -64,7 +65,7 @@ try {
   await controls.getByRole('alert').filter({ hasText: 'display geometry is invalid' }).waitFor();
   assert.ok((await page.locator('#root').innerText()).includes('HuntMaps2'));
   // A full reload also exercises the review panel's network-list consumer.
-  await page.reload();await page.locator('.layers > summary').click();
+  await reloadExisting(page);await page.locator('.layers > summary').click();
   await controls.getByRole('alert').filter({ hasText: 'display geometry is invalid' }).waitFor();
   assert.ok((await page.locator('#root').innerText()).includes('HuntMaps2'));
   await page.getByRole('button', { name: 'View', exact: true }).waitFor();

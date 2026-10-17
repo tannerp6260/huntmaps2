@@ -269,7 +269,7 @@ class AcquisitionValidation(unittest.TestCase):
 original=urllib.request.urlopen
 def routed(request,*args,**kwargs):
  url=request.full_url if hasattr(request,'full_url') else str(request)
- if 'geoserver/mrlc_tree' in url:
+ if 'geoserver/rcmap_tree' in url:
   request='http://127.0.0.1:{http.server_port}/provider.tif'
  elif not url.startswith('http://127.0.0.1:'):
   raise AssertionError('Unexpected external request: '+url)
@@ -349,7 +349,7 @@ urllib.request.urlopen=routed
             result = root / "results/acquisition-recovery"
             downloads = result / "downloads"
             downloads.mkdir()
-            tree = downloads / "tree_padded120.tif"
+            tree = downloads / "tree_rcmap_2023_annual_v1_padded120.tif"
             tree.write_bytes(XML_ERROR)
             url = read_json(result / "download_plan.json")["items"][0]["url"]
             write(

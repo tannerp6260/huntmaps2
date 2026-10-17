@@ -122,13 +122,13 @@ from pathlib import Path
 original = urllib.request.urlopen
 def open_response(request,*args,**kwargs):
  url=request.full_url if hasattr(request,'full_url') else str(request)
- if 'geoserver/mrlc_shrub' in url:
+ if 'geoserver/rcmap_shrub' in url:
   request='http://127.0.0.1:{http.server_port}/shrub.tif'
  elif not url.startswith('http://127.0.0.1:'):
   raise AssertionError('Test attempted an uncontrolled external request: '+url)
  response=original(request,*args,**kwargs)
  marker=Path('injected-transfer-failure')
- if 'geoserver/mrlc_shrub' in url and not marker.exists():
+ if 'geoserver/rcmap_shrub' in url and not marker.exists():
   marker.write_text('controlled interrupted transfer')
   read=response.read
   calls=0
@@ -211,11 +211,15 @@ search.score=fail_once
                 )
                 self.assertTrue(
                     (
-                        root / "results/recovery/downloads/shrub_padded120.tif.partial"
+                        root
+                        / "results/recovery/downloads/shrub_rcmap_2023_annual_v1_padded120.tif.partial"
                     ).exists()
                 )
                 self.assertFalse(
-                    (root / "results/recovery/downloads/shrub_padded120.tif").exists()
+                    (
+                        root
+                        / "results/recovery/downloads/shrub_rcmap_2023_annual_v1_padded120.tif"
+                    ).exists()
                 )
                 self.assertEqual(
                     read_json(config.state_dir / "plans" / (ident + "-transfer.json"))[
@@ -227,7 +231,10 @@ search.score=fail_once
                 self.assertEqual(first["status"], "failed", first.get("logs"))
                 self.assertIn("Injected post-download", first["error"])
                 self.assertEqual(first["failed_stage"], "score")
-                downloaded = root / "results/recovery/downloads/shrub_padded120.tif"
+                downloaded = (
+                    root
+                    / "results/recovery/downloads/shrub_rcmap_2023_annual_v1_padded120.tif"
+                )
                 self.assertTrue(downloaded.exists())
                 ledger = read_json(
                     config.state_dir / "plans" / (ident + "-transfer.json")

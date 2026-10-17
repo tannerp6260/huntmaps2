@@ -1,3 +1,4 @@
+import DecimalField from './decimal-field';
 import { Icon } from './workspace-ui';
 import { yards, feet } from './units';
 import DownloadReview from './download-review';
@@ -17,7 +18,7 @@ import type {
   FirstPersonPlan,
   ProfileResult,
 } from './types';
-import { subscribePolling, jobSnapshot } from './polling';
+import { subscribePolling, jobSnapshot, trackJob } from './polling';
 const pilot = ['A0075', 'V010', 'V008', 'A0031'];
 export default function FirstPerson({
   runId,
@@ -67,7 +68,7 @@ export default function FirstPerson({
     [foliage, setFoliage] = useState(true),
     [target, setTarget] = useState<Target | null>(null),
     [profile, setProfile] = useState<ProfileResult | null>(null),
-    [range, setRange] = useState(300);
+    [range, setRange] = useState(914.4);
   const scenario = 'dense',
     nearby = 120;
   const [observer, setObserver] = useState<ObserverPose | null>(null),
@@ -279,6 +280,10 @@ export default function FirstPerson({
             return;
           }
           setMeta(v);
+          if (v.status === 'ready')
+            setRange(
+              Math.min(914.4, v.context_available ? v.context_radius_m || 2000 : v.radius_m),
+            );
           setHeading(v.initial_bearing_deg || 0);
           if (v.vegetation?.meshes?.['120']?.unavailable)
             setError(
@@ -296,38 +301,61 @@ export default function FirstPerson({
   useEffect(() => {
     if (!planId) return;
     localStorage.setItem('huntmaps-first-person-plan:' + runId, planId);
-    let alive = true;
+    let alive = true,
+      last = '';
     const poll = async () => {
+      const current = jobSnapshot().find((v) => v.plan === planId);
+      const stamp = current ? current.id + ':' + current.status : 'initial';
+      if (stamp === last) {
+        if (current && alive) setJob(current);
+        return;
+      }
+      last = stamp;
       try {
-        const [p, j] = await Promise.all([
-          request('/api/first-person/plans/' + planId),
-          Promise.resolve(jobSnapshot()),
-        ]);
+        const p = await request('/api/first-person/plans/' + planId);
         if (!alive) return;
         setPlan(p);
-
-        const current = j.find((v) => v.plan === planId);
         setJob(current || null);
         if (
-          current &&
+          current?.kind === 'first-person-prepare' &&
           ['complete', 'failed'].includes(current.status) &&
-          current.kind === 'first-person-prepare' &&
           completedJob.current !== current.id
         ) {
           completedJob.current = current.id;
-          setSceneVersion((v) => v + 1);
+          const ready = await request(url);
+          if (alive) {
+            setMeta(ready);
+            setError(current.error || '');
+            if (current.status === 'complete' && ready.status === 'ready') {
+              const details = dialog.current?.querySelector<HTMLDetailsElement>('.fp-preparation');
+              if (details) details.open = false;
+              setRange(
+                Math.min(
+                  914.4,
+                  ready.context_available ? ready.context_radius_m || 2000 : ready.radius_m,
+                ),
+              );
+              setTimeout(
+                () =>
+                  dialog.current
+                    ?.querySelector<HTMLButtonElement>('.workflow-task button')
+                    ?.focus(),
+                0,
+              );
+            }
+          }
         }
-      } catch (e: unknown) {
-        if (alive) setError(e instanceof Error ? e.message : String(e));
+      } catch (e) {
+        if (alive) setError(String(e));
       }
     };
-    poll();
+    void poll();
     const unsubscribe = subscribePolling(poll);
     return () => {
       alive = false;
       unsubscribe();
     };
-  }, [planId, refresh]);
+  }, [planId, refresh, url]);
   useEffect(() => {
     setProfile(null);
     if (!target || meta?.status !== 'ready') return;
@@ -358,12 +386,19 @@ export default function FirstPerson({
     };
   }, [url, target, eye, height, scenario, nearby, meta?.key, observer]);
   const action = async (path: string, body: unknown) => {
+    if (busy) return;
     setBusy(true);
+    setJob(null);
+    if (path === '/api/first-person/plans') {
+      setPlanId('');
+      setPlan(null);
+    }
     setError('');
     try {
       const j = await request(path, body);
       setPlanId(j.plan);
       setJob(j);
+      trackJob(j);
       setRefresh((v) => v + 1);
       setAllow(false);
     } catch (e: unknown) {
@@ -373,6 +408,57 @@ export default function FirstPerson({
     }
   };
   const active = !!job && ['running', 'cancelling'].includes(job.status);
+  const sourceCheckStopped =
+    job?.kind === 'first-person-plan' &&
+    ['failed', 'cancelled', 'interrupted'].includes(job.status);
+  const preparationStopped =
+    job?.kind === 'first-person-prepare' &&
+    ['failed', 'cancelled', 'interrupted'].includes(job.status);
+  const estimateReady =
+    !!plan?.prepared && Number.isFinite(plan.estimated_new_bytes) && plan.estimated_new_bytes >= 0;
+  const autoChecked = useRef('');
+  useEffect(() => {
+    if (
+      meta?.status !== 'unprepared' ||
+      busy ||
+      active ||
+      autoChecked.current === url ||
+      jobSnapshot().some(
+        (j) => j.plan === planId && ['running', 'cancelling'].includes(j.status),
+      ) ||
+      plan?.candidates?.includes(cid)
+    )
+      return;
+    autoChecked.current = url;
+    void action('/api/first-person/plans', { run_id: runId, ids: [cid], fidelity: 'best' });
+  }, [meta?.status, url, busy, active]);
+  function improveDetail() {
+    const details = dialog.current?.querySelector<HTMLDetailsElement>('.fp-preparation');
+    if (details) details.open = true;
+    void action('/api/first-person/plans', { run_id: runId, ids: [cid], fidelity: 'best' });
+  }
+  function selectTarget(value: Target) {
+    setTarget(value);
+    setHeading(
+      ((Math.atan2(
+        value.east_m - (observer?.east_m || 0),
+        value.north_m - (observer?.north_m || 0),
+      ) *
+        180) /
+        Math.PI +
+        360) %
+        360,
+    );
+  }
+  useEffect(() => {
+    if (!profile || !target) return;
+    const first = profile.points?.[0]?.line_m,
+      last = profile.points?.at(-1)?.line_m;
+    if (first != null && last != null)
+      setLook(
+        Math.max(-70, Math.min(70, (Math.atan2(last - first, profile.distance_m) * 180) / Math.PI)),
+      );
+  }, [profile]);
   return (
     <div className="fp-backdrop">
       <section
@@ -421,6 +507,11 @@ export default function FirstPerson({
             )}
           </select>
         </label>
+        {!approachCurrent && (
+          <p className="notice">
+            Early terrain preview. Return to Find to shortlist this setup, then plan its approach.
+          </p>
+        )}
         {error && (
           <div role="alert">
             {error}
@@ -435,24 +526,33 @@ export default function FirstPerson({
           </div>
         )}
         <details open={meta?.status === 'unprepared'} className="fp-preparation">
-          <summary>View preparation & source detail</summary>
+          <summary>
+            {meta?.status === 'ready'
+              ? 'Improve detail · source details'
+              : 'Prepare view · selected sources'}
+          </summary>
           <p>
             Preparation uses exact waypoints from this run. Existing scores and outputs stay
             unchanged. New downloads require a reviewed allowance; storage checks keep 20 GiB free.
             Cached sources are reused.
           </p>
-          <button
-            disabled={busy || active}
-            onClick={() => action('/api/first-person/plans', { run_id: runId, ids: [cid] })}
-          >
-            Check source plan
+          <button disabled={busy || active} onClick={improveDetail}>
+            {busy || (active && job?.kind === 'first-person-plan')
+              ? 'Checking available detail…'
+              : sourceCheckStopped
+                ? 'Retry Improve detail'
+                : 'Improve detail'}
           </button>
           {plan && (
             <>
               <p>
-                {plan.prepared
+                {estimateReady
                   ? (plan.estimated_new_bytes / 1e6).toFixed(1) + ' MB estimated new downloads'
-                  : 'Checking catalog metadata…'}{' '}
+                  : sourceCheckStopped
+                    ? 'Source check did not complete. Retry Improve detail.'
+                    : active || busy
+                      ? 'Checking catalog metadata…'
+                      : 'Source sizes are not available. Check sources before preparation.'}{' '}
                 · {(plan.already_received_bytes || 0) / 1e6} MB previously transferred
               </p>
               {(
@@ -495,7 +595,7 @@ export default function FirstPerson({
               >
                 Review terrain-only scene · no new transfer
               </button>
-              {plan.sources?.map((s) => (
+              {[...(plan.sources || []), ...(plan.imagery_sources || [])].map((s) => (
                 <p key={s.key}>
                   <b>{s.cached ? 'Cached' : 'New source'}</b> · {s.title} ·{' '}
                   {(s.bytes / 1e6).toFixed(1)} MB · {s.acquisition_date} ·{' '}
@@ -508,15 +608,20 @@ export default function FirstPerson({
                 </p>
               ))}
               <p>{plan.source_note}</p>
-              <p>
-                Already cached:{' '}
-                {(plan.sources?.filter((s) => s.cached).reduce((sum, s) => sum + s.bytes, 0) || 0) /
-                  1e6}{' '}
-                MB. Suggested transfer ceiling:{' '}
-                {Math.min(Math.max(10, Math.ceil((plan.estimated_new_bytes * 1.2) / 1e7) * 10))} MB;
-                storage checks keep 20 GiB free.
-              </p>
-              <DownloadReview plan={plan} bytes={plan.estimated_new_bytes ?? null} />
+              {estimateReady && (
+                <p>
+                  Already cached:{' '}
+                  {(plan.sources?.filter((s) => s.cached).reduce((sum, s) => sum + s.bytes, 0) ||
+                    0) / 1e6}{' '}
+                  MB. Suggested transfer ceiling:{' '}
+                  {Math.max(10, Math.ceil((plan.estimated_new_bytes * 1.2) / 1e7) * 10)} MB; storage
+                  checks keep 20 GiB free.
+                </p>
+              )}
+              <DownloadReview
+                plan={estimateReady ? plan : { ...plan, download_time: undefined }}
+                bytes={estimateReady ? plan.estimated_new_bytes : null}
+              />
               {plan.review_required && (
                 <p>
                   Check the source plan again before approving new downloads. Cached preparation
@@ -525,15 +630,22 @@ export default function FirstPerson({
               )}
               <details>
                 <summary>Custom scene transfer ceiling</summary>
-                <input
+                <DecimalField
                   aria-label="Scene download allowance"
-                  type="number"
-                  min="10"
+                  disabled={active || busy || !estimateReady}
                   value={transferLimit}
-                  onChange={(e) => setTransferLimit(+e.target.value)}
+                  onChange={setTransferLimit}
+                  min={10}
+                  integer
                 />
                 <button
-                  disabled={active || busy}
+                  disabled={
+                    active ||
+                    busy ||
+                    !estimateReady ||
+                    !Number.isInteger(transferLimit) ||
+                    transferLimit < 10
+                  }
                   onClick={async () => {
                     try {
                       setPlan(
@@ -560,7 +672,7 @@ export default function FirstPerson({
                 disabled={
                   busy ||
                   active ||
-                  !plan.prepared ||
+                  !estimateReady ||
                   plan.storage?.blocked ||
                   !!plan.errors?.length ||
                   plan.review_required ||
@@ -574,7 +686,13 @@ export default function FirstPerson({
                   })
                 }
               >
-                Prepare views
+                {busy
+                  ? 'Starting preparation…'
+                  : active
+                    ? 'Preparing view…'
+                    : preparationStopped
+                      ? 'Retry preparation'
+                      : 'Prepare views'}
               </button>
             </>
           )}
@@ -604,6 +722,16 @@ export default function FirstPerson({
         </details>
         {meta?.status === 'ready' && meta.candidate === sceneAnchor && (
           <>
+            <p className="fp-detail-status" role="status">
+              {meta.fine_observer_available
+                ? 'Fine ground available. '
+                : 'Fine ground unavailable at this setup. '}
+              {(meta.vegetation.nearby_counts?.[String(nearby)] ?? meta.vegetation.cell_count) > 0
+                ? `Lidar-supported inferred vegetation available within ${yards(nearby)}.`
+                : meta.fine_observer_available
+                  ? `No supported foliage within ${yards(nearby)}; missing returns do not establish an opening.`
+                  : 'Lidar vegetation unavailable. Improve detail to check available sources.'}
+            </p>
             <div className="fp-controls">
               <label>
                 Eye height: {feet(eye, 1)}
@@ -741,7 +869,7 @@ export default function FirstPerson({
                   target={target}
                   profile={profile}
                   range={range}
-                  onTarget={setTarget}
+                  onTarget={selectTarget}
                   onHeading={setHeading}
                   onLook={setLook}
                 />
@@ -788,7 +916,7 @@ export default function FirstPerson({
                   )}
                 </section>
                 <section className="fp-nearby">
-                  <h3>Explore nearby positions</h3>
+                  <h3>Refine standing position</h3>
                   <p>
                     Try another stance within 30 ft of {cid}, using the same cached scene. Click
                     Update waypoint to apply your stance and calculate its terrain shading. The
@@ -798,10 +926,15 @@ export default function FirstPerson({
                     disabled={!meta.fine_observer_available}
                     onClick={() => setExplore((v) => !v)}
                   >
-                    {explore ? 'Hide position controls' : 'Explore nearby positions'}
+                    {explore ? 'Hide position controls' : 'Refine standing position'}
                   </button>
                   {!meta.fine_observer_available && (
-                    <small>Nearby stance movement needs supported fine ground at this setup.</small>
+                    <div>
+                      <small>
+                        Standing-position refinement needs supported fine ground at this setup.
+                      </small>
+                      <button onClick={improveDetail}>Improve detail for standing position</button>
+                    </div>
                   )}
                   {explore && (
                     <>
@@ -936,8 +1069,26 @@ export default function FirstPerson({
                     value={range}
                     onChange={(e) => setRange(+e.target.value)}
                   >
-                    <option value={300}>328 yd — fine ground</option>
-                    <option value={2000}>2,187 yd — separate baseline profile</option>
+                    {[100, 250, 500, 750, 1000]
+                      .filter(
+                        (y) =>
+                          y * 0.9144 <=
+                          (meta.context_available ? meta.context_radius_m : meta.radius_m),
+                      )
+                      .map((y) => (
+                        <option key={y} value={y * 0.9144}>
+                          {y.toLocaleString('en-US')} yd
+                        </option>
+                      ))}
+                    <option value={meta.context_available ? meta.context_radius_m : meta.radius_m}>
+                      Full saved extent ·{' '}
+                      {yards(meta.context_available ? meta.context_radius_m : meta.radius_m)}
+                    </option>
+                    {![100, 250, 500, 750, 1000].some((y) => Math.abs(y * 0.9144 - range) < 1e-7) &&
+                      range !==
+                        (meta.context_available ? meta.context_radius_m : meta.radius_m) && (
+                        <option value={range}>{yards(range)}</option>
+                      )}
                   </select>
                 </label>
                 <label>

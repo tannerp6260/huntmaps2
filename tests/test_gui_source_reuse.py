@@ -54,17 +54,19 @@ class SourceReuse(unittest.TestCase):
             service="WCS",
             version="1.0.0",
             request="GetCoverage",
-            coverage="mrlc_tree_westernconus_year_data:tree_westernconus_year_data",
+            coverage="rcmap_tree:rcmap_tree_2023",
             crs="EPSG:32613",
             response_crs="EPSG:32613",
             bbox="449400,4199400,451320,4201320",
             resx=30,
             resy=30,
             format="GeoTIFF",
-            time="2023-01-01T00:00:00Z",
             interpolation="nearest neighbor",
         )
-        self.donor = self.root / "results/old-run/downloads/tree_padded120.tif"
+        self.donor = (
+            self.root
+            / "results/old-run/downloads/tree_rcmap_2023_annual_v1_padded120.tif"
+        )
         self.donor.parent.mkdir(parents=True)
         from osgeo import gdal
 
@@ -72,14 +74,18 @@ class SourceReuse(unittest.TestCase):
             str(self.donor), str(self.root / "fixture/tree.tif"), xRes=30, yRes=30
         )
         self.entry = dict(
-            url="https://dmsdata.cr.usgs.gov/geoserver/mrlc_tree_westernconus_year_data/wcs?"
-            + urlencode(params),
+            url="https://www.mrlc.gov/geoserver/rcmap_tree/wcs?" + urlencode(params),
             sha256=digest(self.donor),
             bytes=self.donor.stat().st_size,
             provider="USGS RCMAP",
             acquisition_date="2023 annual product",
             license="USGS public domain",
             retrieved_utc="2026-10-03T00:00:00Z",
+            catalog_source_id="rcmap_tree:rcmap_tree_2023",
+            component="tree",
+            observation_year=2023,
+            source_policy_version=1,
+            product_release="Unknown; annual layer does not identify a verified release. Year alone does not establish equivalence to prior sources.",
         )
         write(self.donor.parent / "manifest.json", {self.donor.name: self.entry})
         (self.root / "sitecustomize.py").write_text(
@@ -142,7 +148,14 @@ class SourceReuse(unittest.TestCase):
                 source_dir=self.root, workspace=self.root, state_dir=self.root / "state"
             )
         ):
-            return cached(config, inputs, lambda *_: {}), config
+            from glassing import owner_data
+            from huntmaps_gui.rcmap_sources import plan
+
+            original = owner_data.plan
+            with patch.object(
+                owner_data, "plan", side_effect=lambda c, i: plan(c, i, original)
+            ):
+                return cached(config, inputs, lambda *_: {}), config
 
     def update_entry(self, **values):
         self.entry.update(values)
@@ -151,8 +164,8 @@ class SourceReuse(unittest.TestCase):
     def test_wrong_year_product_or_query_is_not_reused(self):
         original = self.entry["url"]
         for changed in [
-            original.replace("2023-", "2024-"),
-            original.replace("mrlc_tree_", "mrlc_shrub_"),
+            original.replace("_2023", "_2024"),
+            original.replace("rcmap_tree", "rcmap_shrub"),
             original.replace("resx=30", "resx=60"),
             original + "&resultRecordCount=1",
         ]:

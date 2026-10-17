@@ -287,13 +287,13 @@ const descriptions = {
 
   name: 'A name used to identify this scouting analysis later. Use letters, numbers, hyphens or underscores; existing run names cannot be overwritten.',
   radius:
-    'How far from each observer the tool checks terrain visibility within the target area. A larger radius can include more distant terrain and require more data and processing; it does not mean you can identify deer at that distance. Default: 2,187 yards.',
+    'How far from each observer the tool checks terrain visibility within the target area. A larger radius can include more distant terrain and require more data and processing; it does not mean you can identify deer at that distance. Default for new areas: 2,000 yards. Saved areas retain their exact recorded radius.',
   minutes:
     'An existing scoring assumption used to choose portions of a view that could be inspected within a limited time. It can change inspection scores and rankings, but does not change terrain-visible coverage. It is not a recommended stop duration. Default: 30 minutes.',
   count:
     'How many possible standing locations to check before recommending spots. More locations take longer and may find better options. The number of recommendations is separate; all checked locations remain available.',
   budget:
-    'Maximum authorized bulk source downloads for this analysis, in megabytes. Review the acquisition estimate before allowing downloads. This is separate from processing/output limits and online basemap browsing. Default: 600 MB.',
+    'Maximum bulk source downloads for this analysis, in megabytes. Generate setups checks the estimate against this cap before downloading and stops if it exceeds the cap. Processing/output limits and online basemap browsing are separate. Default: 600 MB.',
 };
 export function Help({ topic }: { topic: keyof typeof descriptions }) {
   const [open, setOpen] = useState(false),

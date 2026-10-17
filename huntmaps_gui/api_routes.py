@@ -65,22 +65,13 @@ def api_router(jobs: Jobs):
     @router.get("/api/first-person/plans/{ident}")
     def fp_get_plan(ident):
         p = fp.plan(ident)
-        from .downloads import review_info, provider_estimates
+        from .scene_storage import review
 
         return dict(
             p,
             review_required=bool(p.get("prepared") and not p.get("review_signature")),
             errors=[e for e in p.get("errors", []) if "500 MB pilot budget" not in e],
-            **review_info(
-                [fp.HOME],
-                p.get("estimated_new_bytes", 0),
-                provider_estimates(p.get("sources", []), "remaining_bytes"),
-                800_000_000
-                + max(
-                    (s["bytes"] for s in p.get("sources", []) if not s.get("cached")),
-                    default=0,
-                ),
-            ),
+            **review(p),
         )
 
     @router.put("/api/first-person/plans/{ident}/allowance")
@@ -114,11 +105,13 @@ def api_router(jobs: Jobs):
                         "acquisition",
                         "fidelity",
                         "download_cap_bytes",
+                        "imagery_sources",
+                        "context_version",
                     )
                 }
             )
             write(fp.HOME / "plans" / (ident + ".json"), p)
-            return p
+            return fp_get_plan(ident)
 
     @router.post("/api/first-person/plans/{ident}/start")
     def fp_start(ident, body: Start):
@@ -126,21 +119,9 @@ def api_router(jobs: Jobs):
         p = fp.plan(ident)
         if not p.get("prepared"):
             raise ValueError("Review the source plan first")
-        from .downloads import check_space
+        from .scene_storage import check_plan
 
-        check_space(
-            fp.HOME,
-            3 * (p.get("estimated_new_bytes", 0) if body.get("download") else 0)
-            + (
-                max(
-                    (s["bytes"] for s in p.get("sources", []) if not s.get("cached")),
-                    default=0,
-                )
-                if body.get("download")
-                else 0
-            )
-            + 800_000_000,
-        )
+        check_plan(p, bool(body.get("download")))
         if body.get("download") and (
             not p.get("review_signature")
             or body.get("review_signature") != p["review_signature"]
@@ -531,16 +512,11 @@ def api_router(jobs: Jobs):
         selection = str(body.get("polygon", ""))
         if selection not in [v["number"] for v in imported["choices"]] + ["all"]:
             raise ValueError("Explicitly select a polygon number or all")
-        radius = int(body.get("radius_m", 2000))
+        radius = Preparation.radius_preset(body.get("radius_m", 1828.8))
         minutes = int(body.get("observation_minutes", 30))
         budget = int(body.get("max_download_mb", 600))
         count = int(body.get("candidate_count", 150))
-        if (
-            radius not in [500, 1000, 1500, 2000, 2500, 3000]
-            or not 5 <= minutes <= 120
-            or not budget >= 1
-            or not 12 <= count <= 5000
-        ):
+        if not 5 <= minutes <= 120 or not budget >= 1 or not 12 <= count <= 5000:
             raise ValueError(
                 "Use a supported radius, 5–120 minutes, 12–5000 candidates and positive MB transfer allowance"
             )
@@ -595,7 +571,7 @@ def api_router(jobs: Jobs):
             prepared=False,
             access_sampling=sampling,
             include_network=body.get("include_network", False),
-            estimate_first=True,
+            estimate_first=body.get("estimate_first", True),
         )
         write(folder / (ident + ".json"), p)
         return jobs.start(
@@ -647,9 +623,16 @@ def api_router(jobs: Jobs):
             provider_estimates,
             baseline_review_signature,
         )
+        from . import rcmap_sources
+
+        needs_refresh = rcmap_sources.refresh_required(p)
 
         return dict(
             p,
+            source_refresh_required=needs_refresh,
+            source_refresh_error=(
+                rcmap_sources.refresh_error(p) if needs_refresh else None
+            ),
             review_signature=baseline_review_signature(p),
             transferred_bytes=read(
                 STATE / "plans" / (ident + "-transfer.json"), {}
@@ -674,6 +657,11 @@ def api_router(jobs: Jobs):
     def start(ident, body: Start):
         body = body.model_dump(exclude_unset=True)
         p = plan(ident)
+        if p.get("source_refresh_required"):
+            raise ValueError(
+                p.get("source_refresh_error")
+                or "Vegetation source requests need refreshing. Retry to prepare the current annual RCMAP sources first."
+            )
         if not p.get("prepared"):
             raise ValueError("Prepare and review the acquisition plan first")
         from .downloads import check_space
@@ -718,17 +706,54 @@ def api_router(jobs: Jobs):
 
     @router.post("/api/plans/{ident}/prepare")
     def reprepare(ident):
-        p = plan(ident)
-        p["prepared"] = False
-        write(
-            STATE / "plans" / (ident + ".json"),
-            {k: v for k, v in p.items() if k not in ("boundary", "settings")},
-        )
-        return jobs.start(
-            [sys.executable, "-u", "-m", "huntmaps_gui.worker", "prepare", ident],
-            "prepare",
-            p["name"],
-            ident,
+        from .storage import locked
+        from . import rcmap_sources
+
+        with locked(STATE / "maintenance"):
+            p = plan(ident)
+            if p.get("source_refresh_error"):
+                raise ValueError(p["source_refresh_error"])
+            if any(j["status"] in ("running", "cancelling") for j in jobs.list(False)):
+                raise ValueError(
+                    "Wait for the active job before refreshing source requests"
+                )
+            if p.get("source_refresh_required"):
+                p["source_history"] = rcmap_sources.snapshot(p)
+                p["source_refresh_snapshot_for"] = rcmap_sources.POLICY_VERSION
+            p["prepared"] = False
+            write(
+                STATE / "plans" / (ident + ".json"),
+                {
+                    k: v
+                    for k, v in p.items()
+                    if k
+                    not in (
+                        "boundary",
+                        "settings",
+                        "source_refresh_required",
+                        "source_refresh_error",
+                        "review_signature",
+                        "download_time",
+                        "storage",
+                        "transferred_bytes",
+                    )
+                },
+            )
+            return jobs.start(
+                [sys.executable, "-u", "-m", "huntmaps_gui.worker", "prepare", ident],
+                "prepare",
+                p["name"],
+                ident,
+            )
+
+    @router.get("/api/browsing/transportation/{z}/{x}/{y}.png")
+    def transportation_context(z: int, x: int, y: int):
+        from .browsing import transportation
+
+        return Response(
+            transportation(z, x, y),
+            media_type="image/png",
+            headers={"Cache-Control": "private, max-age=86400"},
         )
 
     @router.get("/api/jobs")
@@ -736,6 +761,10 @@ def api_router(jobs: Jobs):
         if offset < 0 or not 1 <= limit <= 100:
             raise ValueError("Use a nonnegative offset and limit 1–100")
         return jobs.list(include_logs=False)[offset : offset + limit]
+
+    @router.get("/api/jobs/{ident}")
+    def get_job(ident):
+        return jobs.get(ident)
 
     @router.get("/api/jobs/{ident}/logs")
     def job_logs(ident, limit: int = 64000):

@@ -1,3 +1,4 @@
+import DecimalField from './decimal-field';
 import { decimalValue } from './decimal-input';
 import { Help } from './drawing';
 import { networkResponse } from './network-response';
@@ -41,7 +42,7 @@ export default function AccessSampling({
       .then((v) => {
         if (alive) {
           setNetworks(v);
-          if (!initialSampling) setIds(v.map((n) => n.id));
+          // Empty IDs let the reviewed analysis plan resolve covering inventories.
         }
       })
       .catch((e) => {
@@ -54,7 +55,9 @@ export default function AccessSampling({
   useEffect(() => {
     const valid =
       !enabled ||
-      (decimalValue(distance) !== null && (!heightEnabled || decimalValue(height) !== null));
+      (kinds.length > 0 &&
+        decimalValue(distance) !== null &&
+        (!heightEnabled || decimalValue(height) !== null));
     onValidity(valid);
     if (!valid) return;
     onChange(
@@ -70,7 +73,7 @@ export default function AccessSampling({
   }, [enabled, distance, heightEnabled, height, ids, kinds]);
   return (
     <details>
-      <summary>Observer access sampling and network acquisition</summary>
+      <summary>Road and trail restrictions</summary>
       {networkError && <p className="error">{networkError}</p>}
       <p className="hint">
         Roads and trails are included in the source plan; verified cached data is reused.
@@ -86,9 +89,10 @@ export default function AccessSampling({
             : 'Select at least one source dataset, or include the reviewed USFS acquisition.'}
         </p>
       )}
+      {enabled && !kinds.length && <p className="error">Choose Roads, Trails, or both.</p>}
       {enabled &&
         (decimalValue(distance) === null || (heightEnabled && decimalValue(height) === null)) && (
-          <p className="error">Enter a complete nonnegative distance before reviewing downloads.</p>
+          <p className="error">Enter a complete nonnegative distance before generating setups.</p>
         )}
       {enabled && (
         <>
@@ -96,13 +100,32 @@ export default function AccessSampling({
             Only test places within the distance below. This is straight-line proximity, not walking
             distance or permission.
           </p>
+          <fieldset>
+            <legend>Mapped feature types to use</legend>
+            <p className="hint">Choose which mapped features qualify a place for sampling.</p>
+            {['roads', 'trails'].map((k) => (
+              <label key={k}>
+                <input
+                  type="checkbox"
+                  checked={kinds.includes(k)}
+                  onChange={(e) =>
+                    setKinds((v) => (e.target.checked ? [...v, k] : v.filter((i) => i !== k)))
+                  }
+                />
+                {k === 'roads' ? 'Roads' : 'Trails'}
+              </label>
+            ))}
+          </fieldset>
           <details>
-            <summary>Advanced network sources</summary>{' '}
+            <summary>Advanced source datasets</summary>
             <p>
-              Only observer eligibility changes. Original polygon, targets and obstruction terrain
-              stay intact. Unknown network/elevation does not qualify. Select source datasets below;
-              roads/trails are separate type choices. With no source selected, this run uses its
-              reviewed acquired networks.
+              These are the inventories supplying mapped features. The Roads and Trails choices
+              above determine which feature types qualify. Only observer eligibility changes; your
+              polygon, target terrain and obstruction terrain stay intact. Unknown network or
+              elevation does not qualify.
+            </p>
+            <p className="hint">
+              With no dataset selected, use the networks acquired or reused for this run.
             </p>
             {networks.map((n) => (
               <label key={n.id}>
@@ -113,33 +136,24 @@ export default function AccessSampling({
                     setIds((v) => (e.target.checked ? [...v, n.id] : v.filter((id) => id !== n.id)))
                   }
                 />
-                {n.kind}:{' '}
+                {n.kind === 'roads'
+                  ? 'Road dataset'
+                  : n.kind === 'trails'
+                    ? 'Trail dataset'
+                    : n.kind + ' dataset'}
+                :{' '}
                 {n.source.startsWith('https://apps.fs.usda.gov/')
                   ? 'USFS mapped inventory'
                   : n.source}
               </label>
             ))}
-            {['roads', 'trails'].map((k) => (
-              <label key={k}>
-                <input
-                  type="checkbox"
-                  checked={kinds.includes(k)}
-                  onChange={(e) =>
-                    setKinds((v) => (e.target.checked ? [...v, k] : v.filter((i) => i !== k)))
-                  }
-                />
-                {k}
-              </label>
-            ))}
           </details>{' '}
           <label>
             Maximum distance from a road or trail (yards) <Help topic="proximity" />
-            <input
+            <DecimalField
               aria-label="Maximum distance from a road or trail (yards)"
-              type="text"
-              inputMode="decimal"
-              value={distance}
-              onChange={(e) => setDistance(e.target.value)}
+              value={decimalValue(distance) ?? NaN}
+              onChange={(n) => setDistance(Number.isFinite(n) ? String(n) : '')}
             />
           </label>
           <label>
@@ -153,11 +167,10 @@ export default function AccessSampling({
           {heightEnabled && (
             <label>
               Maximum height (feet)
-              <input
-                type="text"
-                inputMode="decimal"
-                value={height}
-                onChange={(e) => setHeight(e.target.value)}
+              <DecimalField
+                aria-label="Maximum height above network (feet)"
+                value={decimalValue(height) ?? NaN}
+                onChange={(n) => setHeight(Number.isFinite(n) ? String(n) : '')}
               />
             </label>
           )}

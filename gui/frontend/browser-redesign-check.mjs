@@ -1,3 +1,4 @@
+import { openExisting, reloadExisting } from './browser-startup.mjs';
 // Product-level checks: use real saved terrain and isolated workflow records.
 import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
@@ -26,7 +27,7 @@ async function layout(label) {
   await page.screenshot({ path: `${out}/${label}.png` });
 }
 try {
-  await page.goto(base);
+  await openExisting(page, base);
   await page.getByLabel('Run selector').selectOption('soap-creek-decision-review-v2');
   await page.getByLabel('Select A0075', { exact: true }).waitFor();
   const selected = await page.locator('.candidate.active .candidate-select strong').innerText();
@@ -74,7 +75,7 @@ try {
   assert.equal(download.status(), 200);
   assert.match(await download.text(), /<wpt/);
   await page.screenshot({ path: `${out}/saved-1366.png` });
-  await page.reload();
+  await reloadExisting(page);
   await page.getByLabel('Select A0001', { exact: true }).waitFor();
   assert.equal(await page.getByLabel('Run selector').inputValue(), 'workflow-fixture', 'Area survives reload');
   await nav.getByRole('button', { name: /Inspect.*terrain/ }).click();
@@ -103,7 +104,7 @@ try {
     latitude:38.686, longitude:-107.29, displacement_m:1, east_m:1, north_m:0,
     scene_y_m:0, scene_key:'test', ground_m:2800, analysis:'not calculated', access:'unknown'
   }]}));
-  await manualPage.goto(base);
+  await openExisting(manualPage, base);
   await manualPage.getByLabel('Run selector').selectOption('soap-creek-decision-review-v2');
   await manualPage.getByLabel('Select waypoint Uncalculated test position', {exact:true}).click();
   await manualPage.locator('.selected-setup .selection-metric strong').getByText('unknown', {exact:true}).waitFor();
@@ -111,7 +112,7 @@ try {
   const failedScene = await browser.newPage();
   await failedScene.addInitScript(() => localStorage.setItem('huntmaps-online-imagery', 'off'));
   await failedScene.route('**/assets/first-person-*.js', route => route.abort());
-  await failedScene.goto(base);
+  await openExisting(failedScene, base);
   await failedScene.getByRole('button', {name:'View', exact:true}).click();
   await failedScene.getByRole('dialog', {name:'View could not open', exact:true}).waitFor();
   await failedScene.getByRole('button', {name:'Return to map', exact:true}).click();

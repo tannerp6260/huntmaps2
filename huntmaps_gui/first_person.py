@@ -75,8 +75,8 @@ def new_plan(run=RUN, ids=None, fidelity="lidar", acquisition=None):
         raise ValueError("Supply a list of waypoint IDs")
     if not ids or len(ids) > 250 or len(set(ids)) != len(ids):
         raise ValueError("Choose distinct completed-run waypoints")
-    if fidelity not in ("lidar", "terrain"):
-        raise ValueError("Choose lidar or terrain fidelity")
+    if fidelity not in ("lidar", "terrain", "best"):
+        raise ValueError("Choose best, lidar or terrain fidelity")
     from .workflow import point
 
     snapshots = {cid: point(run, cid) for cid in ids}
@@ -88,6 +88,7 @@ def new_plan(run=RUN, ids=None, fidelity="lidar", acquisition=None):
             kind="first-person",
             prepared=False,
             radius_m=300,
+            context_version=2 if fidelity == "best" else 1,
             download_cap_bytes=LIMIT,
             candidates=ids,
             run_id=run,
@@ -157,6 +158,8 @@ def scene(ident, cid, run_data=None, orientation=True):
             or signature.get("baseline") != r.hashes[str(r.dem_path)]
         ):
             raise ValueError("Scene inputs changed; review a new scene plan")
+    for image in meta.get("scene_imagery", []):
+        verify_file(Path(image["path"]), image["sha256"])
     for name, h in meta["hashes"].items():
         verify_file(asset_path(folder, meta, name), h)
     if not orientation:
@@ -329,6 +332,11 @@ def profile_grid(
     ]
     return dict(
         result=result,
+        line_of_sight_distance_m=(
+            float(math.hypot(distance, end - start))
+            if math.isfinite(end - start)
+            else None
+        ),
         distance_m=distance,
         minimum_clearance_m=minimum,
         borderline=minimum is not None and abs(minimum) <= 0.05,
@@ -477,6 +485,11 @@ def moved_profile(a, res, x0, y0, pose, x, y, eye, height, ground):
             )
         ),
         points=points,
+        line_of_sight_distance_m=(
+            float(math.hypot(distance, end - start))
+            if math.isfinite(end - start)
+            else None
+        ),
         distance_m=distance,
         minimum_clearance_m=minimum,
         borderline=minimum is not None and abs(minimum) <= 0.05,
@@ -492,6 +505,7 @@ def moved_profile(a, res, x0, y0, pose, x, y, eye, height, ground):
 
 def profile(ident, cid, body):
     candidate(ident, cid)
+    folder, meta = bundle(cid, ident)
     try:
         x = float(body["east_m"])
         y = float(body["north_m"])
@@ -503,10 +517,10 @@ def profile(ident, cid, body):
         not all(math.isfinite(v) for v in [x, y, eye, h])
         or not 0.8 <= eye <= 2.2
         or not 0 <= h <= 2.5
-        or math.hypot(x, y) > 2000
+        or math.hypot(x, y) > meta.get("context_radius_m", 2000)
     ):
         raise ValueError(
-            "Use eye height 0.8–2.2 m, target height 0–2.5 m and targets within 2 km."
+            "Use eye height 0.8–2.2 m, target height 0–2.5 m and targets within the saved scene extent."
         )
     from . import vegetation_screen as veg
 
@@ -522,7 +536,6 @@ def profile(ident, cid, body):
         or radius not in veg.RANGES
     ):
         raise ValueError("Choose nearby foliage range 30, 60 or 120 m")
-    folder, meta = bundle(cid, ident)
     moved = "observer_east_m" in body or "observer_north_m" in body
     pose = observer(ident, cid, body) if moved else None
     if moved and math.hypot(x, y) > 300:

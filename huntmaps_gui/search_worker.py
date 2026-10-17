@@ -52,7 +52,7 @@ def main():
                     p["group"] == "automated"
                     for p in transfer.read(root / "scores.json")
                 ):
-                    from glassing.transfer_packet import run
+                    from .radius_support import packet as run
                 else:
                     from .manual_packet import run
 

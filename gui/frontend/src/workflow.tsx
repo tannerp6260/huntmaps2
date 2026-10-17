@@ -48,16 +48,15 @@ export default function WorkflowPanel({
   }, []);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [fidelity, setFidelity] = useState('terrain');
+  const [fidelity, setFidelity] = useState('best');
   const p = workflow?.points[cid];
-  const eligible = Object.values(workflow?.points || {}).filter((p) => p.shortlisted && p.approach);
   async function prepare() {
     setBusy(true);
     setError('');
     try {
       const j = await api('/first-person/plans', {
         method: 'POST',
-        body: JSON.stringify({ run_id: runId, ids: eligible.map((p) => p.point.id), fidelity }),
+        body: JSON.stringify({ run_id: runId, ids: [cid], fidelity }),
       });
       if (!alive.current) return;
       localStorage.setItem('huntmaps-first-person-plan:' + runId, j.plan);
@@ -89,15 +88,23 @@ export default function WorkflowPanel({
       {inspect && (
         <>
           <p>Explore the view from your selected setups before adding them to your collection.</p>
-          <label>
-            View detail
-            <select value={fidelity} onChange={(e) => setFidelity(e.target.value)}>
-              <option value="terrain">Terrain · saved elevation</option>
-              <option value="lidar">Detailed ground · check lidar sources</option>
-            </select>
-          </label>
-          <button className="primary wide" disabled={!eligible.length || busy} onClick={prepare}>
-            {busy ? 'Checking view sources…' : `Prepare views (${eligible.length})`}
+          <details>
+            <summary>Scene data details</summary>
+            <label>
+              View detail
+              <select
+                aria-label="View detail"
+                value={fidelity}
+                onChange={(e) => setFidelity(e.target.value)}
+              >
+                <option value="best">Best available compatible detail</option>
+                <option value="terrain">Terrain · saved elevation</option>
+                <option value="lidar">Detailed ground · check lidar sources</option>
+              </select>
+            </label>
+          </details>
+          <button className="primary wide" disabled={!p?.approach || busy} onClick={prepare}>
+            {busy ? 'Checking view sources…' : `Prepare view for ${cid}`}
           </button>
           {p?.approach && (
             <p>

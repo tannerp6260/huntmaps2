@@ -1,5 +1,5 @@
 import { MercatorCoordinate, type Map } from 'maplibre-gl';
-export const COVERAGE_DISPLAY_VERSION = 2;
+export const COVERAGE_DISPLAY_VERSION = 3;
 export const COVERAGE_REVIEW_ZOOM = 13.8;
 export type CoveragePoint = {
   id: string;

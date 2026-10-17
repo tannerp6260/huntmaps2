@@ -5,6 +5,7 @@ frozen function with only its viewshed boundary replaced by a verified boundary.
 """
 
 import json
+import math
 from pathlib import Path
 from types import FunctionType
 import numpy as np
@@ -183,7 +184,7 @@ class Evaluation:
                 area,
                 settings["width_deg"],
                 settings["band_m"],
-                c["radius_m"],
+                math.ceil(c["radius_m"] / settings["band_m"]) * settings["band_m"],
             )
             sel = attention.select(
                 ps,

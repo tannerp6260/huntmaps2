@@ -1,3 +1,4 @@
+import { openExisting, reloadExisting } from './browser-startup.mjs';
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
@@ -12,7 +13,9 @@ for(const name of ['units','decimal-input']) {
  else {assert.equal(mod.decimalValue('.'),null);assert.equal(mod.decimalValue('.75'),.75);assert.equal(mod.decimalValue(''),null);assert.equal(mod.decimalValue('NaN'),null);}
 }
 const browser=await chromium.launch({executablePath:process.env.HUNTMAPS_BROWSER||'/usr/bin/google-chrome',headless:true,args:['--no-sandbox','--enable-unsafe-swiftshader','--use-gl=angle','--use-angle=swiftshader']});
-const page=await browser.newPage({viewport:{width:1500,height:1050}}),errors=[],requests=[];
+const page=await browser.newPage({viewport:{width:1500,height:1050}}),errors=[],requests=[],approachCoverage=[],dismissalTiming=[];
+let trackApproach=false;
+page.on('request',r=>{if (trackApproach && (/\/(?:visible|classes)\/|\/collection-tiles\//.test(r.url()))) approachCoverage.push(r.url());});
 page.on('pageerror',e=>errors.push(e.message));
 page.on('request',r=>{if(r.request){} if(r.method()==='POST'&&r.url().endsWith('/approaches'))requests.push(r.postDataJSON());});
 await page.addInitScript(()=>localStorage.setItem('huntmaps-online-imagery','off'));
@@ -25,7 +28,7 @@ async function decide(cid,action,extra={}) {
 }
 async function review() {return(await page.request.get(api+'/approach-review')).json();}
 try {
- await page.goto(base);await page.getByLabel('Run selector').selectOption('workflow-fixture');
+ await openExisting(page, base);await page.getByLabel('Run selector').selectOption('workflow-fixture');
  const run=await(await page.request.get(api)).json();
  const existing=await(await page.request.get(api+'/approaches')).json();
  const ids=run.candidates.filter(p=>p.id!=='A0001'&&!existing.some(s=>s.scenario.points.some(q=>q.id===p.id))).slice(0,2).map(p=>p.id);
@@ -45,10 +48,13 @@ try {
  const area={type:'Polygon',coordinates:[[[x0,y0],[x1,y0],[x1,y1],[x0,y1],[x0,y0]]]};
  const state=await(await page.request.get(api+'/workflow')).json(),old=await review();
  const first=ids[0];
- const d={...prior.scenario,travel_area:area,maximum_slope_deg:60,scenario:null,alternative:0,attempted:false,boundary_confirmed:true,point:state.points[first].point};
+ const d={...prior.scenario,travel_area:area,maximum_slope_deg:35,scenario:null,alternative:0,attempted:false,boundary_confirmed:true,point:state.points[first].point};
  const res=await page.request.put(api+'/approach-review',{headers,data:{revision:old.revision,workflow_revision:state.revision,ids:['A0001',...ids],active_point:first,point:state.points[first].point,draft:d}});assert.equal(res.status(),200,await res.text());
- await page.reload();await page.getByLabel('Run selector').selectOption('workflow-fixture');await page.getByRole('button',{name:/Approach.*selected/}).click();
+ trackApproach=false;await reloadExisting(page);await page.getByLabel('Run selector').selectOption('workflow-fixture');await page.getByRole('button',{name:/Approach.*selected/}).click();
  await page.getByLabel('Focused approach spot').waitFor();assert.equal(await page.getByLabel('Focused approach spot').inputValue(),first);
+ approachCoverage.length=0;trackApproach=true;
+ assert.deepEqual(JSON.parse(await page.locator('.map').getAttribute('data-coverage-cache')),[],'Approach removes even retained coverage sources');
+ assert.equal(await page.locator('.coverage-loading, .coverage-status').count(),0,'Approach does not show coverage-loading UI');
  await page.locator('.approach-boundary-check[data-ready="true"]').waitFor();
  assert.equal(requests.length,0,'Valid saved inputs must wait for an explicit calculation');
  assert.equal(await page.getByText('Terrain I want to see',{exact:false}).isVisible(),false);
@@ -79,13 +85,14 @@ try {
  const recalculation=await recalculated;assert.equal(recalculation.status(),200,await recalculation.text());
  await page.waitForFunction(()=>{const b=Array.from(document.querySelectorAll('.approach-controls button')).find(b=>b.textContent.includes('Use this approach'));return b&&!b.disabled;},undefined,{timeout:60000});
  await page.getByRole('button',{name:'Use this approach & next spot',exact:true}).waitFor();
- await page.reload();await page.getByLabel('Run selector').selectOption('workflow-fixture');await page.getByRole('button',{name:/Approach.*selected/}).click();
+ trackApproach=false;await reloadExisting(page);await page.getByLabel('Run selector').selectOption('workflow-fixture');await page.getByRole('button',{name:/Approach.*selected/}).click();
  await page.locator('.approach-settings').waitFor();if (await page.locator('.approach-settings').getAttribute('open') === null) await page.locator('.approach-settings > summary').click();await page.getByText('More options · pinned departure and preferences',{exact:true}).click();
  assert.equal(await page.getByLabel('Approach tree weight').inputValue(),'4','Reload restores individual preferences');
  assert.equal(requests.length,2,'Reload must not compute again');
+ trackApproach=true;
  await page.getByRole('button',{name:'Use this approach & next spot',exact:true}).click();
  await page.waitForFunction(cid=>document.querySelector('[aria-label="Focused approach spot"]')?.value===cid,ids[1]);
- await page.getByText('Draw this setup’s boundary to begin',{exact:false}).waitFor();
+ await page.getByText('Boundary needs confirmation',{exact:false}).waitFor();
  assert.equal(requests.length,2,'Next setup must not inherit or calculate another boundary');
  assert.equal(await page.getByRole('button',{name:'Calculate approaches for '+ids[1],exact:true}).isDisabled(),true);
  await page.getByText('Advanced boundary options · import, copy and areas to avoid',{exact:true}).click();
@@ -95,8 +102,46 @@ try {
  await page.getByRole('button',{name:'Confirm approach search boundary',exact:true}).click();
  await page.locator('.approach-boundary-check[data-ready="true"]').waitFor();
  assert.equal(requests.length,2,'Confirmation must not start calculation');
- await page.getByRole('button',{name:'Dismiss spot & next',exact:true}).click();
- await page.waitForFunction(()=>!Array.from(document.querySelectorAll('.workflow-stages button')).find(b=>b.textContent.includes('Inspect')).disabled);
+ // A deliberately stalled preference save cannot delay removal or queue focus.
+ let releaseReview,reviewStarted;
+ const reviewGate=new Promise(resolve=>{releaseReview=resolve;}),reviewEntered=new Promise(resolve=>{reviewStarted=resolve;});
+ await page.route(api+'/approach-review',async route=>{
+  if(route.request().method()==='PUT'){reviewStarted();await reviewGate;}
+  await route.continue();
+ });
+ if(!await page.getByLabel('Pinned network departure').isVisible())await page.getByText('More options · pinned departure and preferences',{exact:true}).click();
+ await page.getByLabel('Approach tree weight').fill('3');
+ await reviewEntered;
+ await page.getByLabel('Pinned network departure').fill('.');
+ // Exercise both failed persistence (rollback) and a successful delayed dismissal.
+ for(const fail of [true,false]) {
+  let releaseDecision;
+  const decisionGate=new Promise(resolve=>{releaseDecision=resolve;});
+  await page.route(api+'/workflow/'+ids[1],async route=>{
+   if(route.request().postDataJSON()?.action==='dismiss') {
+    await decisionGate;
+    if(fail)return route.fulfill({status:503,contentType:'application/json',json:{detail:'Simulated dismissal save failure'}});
+   }
+   await route.continue();
+  });
+  const started=Date.now();
+  await page.getByRole('button',{name:'Dismiss spot & next',exact:true}).click();
+  await page.waitForFunction(cid=>{const select=document.querySelector('[aria-label="Focused approach spot"]');return select&&select.value!==cid&&!Array.from(select.options).some(o=>o.value===cid);},ids[1],{timeout:1500});
+  dismissalTiming.push({failed:fail,milliseconds:Date.now()-started});
+  assert.ok(await page.getByText('Saving dismissal…',{exact:true}).isVisible());
+  assert.equal(await page.getByRole('button',{name:'Continue to inspect',exact:true}).isDisabled(),true);
+  const persisted=await(await page.request.get(api+'/workflow')).json();
+  assert.equal(persisted.points[ids[1]].shortlisted,true,'Immediate queue advance happens before the save');
+  if(fail){releaseReview();await page.unroute(api+'/approach-review');}
+  releaseDecision();
+  if(fail){
+   await page.getByText('Could not dismiss '+ids[1]+'.',{exact:false}).waitFor();
+   await page.waitForFunction(cid=>document.querySelector('[aria-label="Focused approach spot"]')?.value===cid,ids[1]);
+   assert.equal((await(await page.request.get(api+'/workflow')).json()).points[ids[1]].shortlisted,true,'A failed dismissal restores the spot');
+  } else await page.waitForFunction(()=>!Array.from(document.querySelectorAll('.workflow-stages button')).find(b=>b.textContent.includes('Inspect')).disabled);
+  await page.unroute(api+'/workflow/'+ids[1]);
+ }
+ assert.deepEqual(approachCoverage,[],'Approach focus, movement, 3D and dismissal never request visible-terrain tiles');
  await page.screenshot({path:out+'/guided-desktop.png',fullPage:true});
  await page.setViewportSize({width:900,height:900});await page.screenshot({path:out+'/guided-900.png',fullPage:true});
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
@@ -124,10 +169,10 @@ try {
  for(const cid of ids)await decide(cid,'remove');
  await page.getByRole('button',{name:'+ New area',exact:true}).click();
  await page.getByRole('button',{name:'Import file',exact:true}).click();await page.getByLabel('Import observer polygon').setInputFiles(process.env.HUNTMAPS_WORKSPACE+'/workflow-fixture/observer.geojson');
- await page.getByText('More options · sampling restrictions',{exact:true}).click();await page.getByText('Observer access sampling and network acquisition',{exact:true}).click();
+ await page.getByText('Road and trail restrictions',{exact:true}).click();
  const input=page.getByLabel('Maximum distance from a road or trail (yards)');await input.fill('');await input.pressSequentially('.');assert.equal(await input.inputValue(),'.');
- assert.equal(await page.getByRole('button',{name:'Review downloads',exact:true}).isDisabled(),true);
- await input.pressSequentially('75');assert.equal(await input.inputValue(),'.75');assert.equal(await page.getByRole('button',{name:'Review downloads',exact:true}).isDisabled(),false);
- assert.deepEqual(errors,[]);fs.writeFileSync(out+'/results.json',JSON.stringify({errors,requests,session:await review()},null,2));
+ assert.equal(await page.getByRole('button',{name:'Generate setups',exact:true}).isDisabled(),true);
+ await input.pressSequentially('75');assert.equal(await input.inputValue(),'.75');assert.equal(await page.getByRole('button',{name:'Generate setups',exact:true}).isDisabled(),false);
+ assert.deepEqual(errors,[]);fs.writeFileSync(out+'/results.json',JSON.stringify({errors,requests,approachCoverage,dismissalTiming,session:await review()},null,2));
  console.log('Imperial known answers, raw decimal keystrokes, explicit independent comparisons and per-spot boundaries, preferences/reload, next/dismiss/Undo and queue gate verified');
 } catch(e) {await page.screenshot({path:out+'/failure.png',fullPage:true});fs.writeFileSync(out+'/failure.txt',await page.locator('body').innerText());fs.writeFileSync(out+'/requests.json',JSON.stringify(requests,null,2));throw e;} finally {await browser.close();}

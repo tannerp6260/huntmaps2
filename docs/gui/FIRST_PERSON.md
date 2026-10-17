@@ -82,10 +82,20 @@ progress bars. Processing shows counted items where available and an indetermina
 bar otherwise. A completed stage does not imply a completed job. Elapsed time,
 cancellation and an expandable subprocess log remain available.
 
-Preparation has a 1536 MiB address-space limit, 900 seconds per preparation stage
-and an 800 MB derived-cache budget. Sources, plans and immutable scene bundles live
+Preparation has a 1536 MiB address-space limit and 900 seconds per preparation stage.
+Scene storage uses available disk space while preserving 20 GiB free on both the
+asset and temporary filesystems. Saved scene history has no fixed aggregate quota.
+The source plan reports saved and partial scene usage separately from estimated
+working space. Estimates allow 60 MB per requested scene, temporary lidar spools
+when needed, and source assembly headroom; verified reuse can need less space.
+Start and worker preflight share this policy. Binary assets, copies, grids and
+textures check headroom before writing; stage and publication checks monitor the
+reserve as preparation proceeds. Geometry, point, memory and time guards remain.
+Existing bundles and partials are preserved; storage cleanup remains an explicit
+user action. Sources, plans and immutable scene bundles live
 under `.gui/first-person`; jobs and logs remain under `.gui/jobs`. Historical runs,
 coordinates, terrain controls, scores and reports are not rewritten.
+See [scene storage correction and verification](SCENE_STORAGE_2026-10-15.md).
 
 ## Setup and checks
 

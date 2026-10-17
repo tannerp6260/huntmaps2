@@ -1,3 +1,4 @@
+import { openExisting, reloadExisting } from './browser-startup.mjs';
 if(!process.env.HUNTMAPS_URL||!process.env.HUNTMAPS_SCREENSHOTS)throw Error('Run through ./gui/check with an isolated server and screenshot directory');
 import {chromium} from 'playwright';
 import fs from 'node:fs';
@@ -11,7 +12,7 @@ try{
  const api=base+'/api/runs/soap-creek-decision-review-v2';
  const annotations=await (await page.request.get(api+'/annotations')).text(),jobs=await (await page.request.get(base+'/api/jobs')).json();
  const loaded=()=>page.waitForFunction(()=>{const s=JSON.parse(document.querySelector('.fp-scene')?.getAttribute('data-camera')||'{}');return s.loaded&&s.imageryPending===0});
- await page.goto(base);await page.getByLabel('Select A0031',{exact:true}).click();await page.getByRole('button',{name:'View',exact:true}).click();await loaded();assert.equal(await page.getByLabel('Measured above-ground returns',{exact:true}).isChecked(),false);assert.equal(await page.getByLabel('Inferred vegetation',{exact:true}).isChecked(),true);
+ await openExisting(page, base);await page.getByLabel('Select A0031',{exact:true}).click();await page.getByRole('button',{name:'View',exact:true}).click();await loaded();assert.equal(await page.getByLabel('Measured above-ground returns',{exact:true}).isChecked(),false);assert.equal(await page.getByLabel('Inferred vegetation',{exact:true}).isChecked(),true);
  const meta=await (await page.request.get(api+'/first-person/A0031')).json();assert.ok(meta.fine_observer_available);
  let state=JSON.parse(await page.locator('.fp-scene').getAttribute('data-camera'));assert.equal(state.eye_m,1.7);assert.equal(state.east_m,0);assert.equal(state.north_m,0);assert.equal(state.ground_m,meta.fine_ground_m);assert.equal(state.vegetationSide,2);assert.equal(state.vegetationCells,meta.vegetation.nearby_counts['120']);assert.equal(state.vegetationVisible,true);
  await page.screenshot({path:out+'/01-eye-height-ground.png',fullPage:true});
@@ -40,6 +41,6 @@ try{
  await page.getByRole('button',{name:'View',exact:true}).click();await loaded();
  await page.getByText('Some imagery unavailable; shaded terrain retained.',{exact:true}).waitFor();
  assert.ok(JSON.parse(await scene.getAttribute('data-camera')).triangles>0);
- assert.equal(await (await page.request.get(api+'/annotations')).text(),annotations);assert.equal((await (await page.request.get(base+'/api/jobs')).json()).length,jobs.length);assert.ok(mutations.every(u=>u===base+'/api/speed-probe' || u.endsWith('/profile') || u.includes('/workflow/')));assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
+ assert.equal(await (await page.request.get(api+'/annotations')).text(),annotations);assert.equal((await (await page.request.get(base+'/api/jobs')).json()).length,jobs.length);assert.ok(mutations.every(u=>u===base+'/api/speed-probe' || u===base+'/api/networks/resolve' || u.endsWith('/profile') || u.includes('/workflow/')),JSON.stringify(mutations));assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
  fs.writeFileSync(out+'/results.json',JSON.stringify({errors,external,mutations,interactionMs,metadata:meta,annotationsUnchanged:true,jobsUnchanged:true},null,2));console.log('First-person camera, points, texture, profiles, offline, keyboard, resizing, switching and context failure verified:',out);
 }finally{await browser.close()}

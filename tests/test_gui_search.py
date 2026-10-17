@@ -129,6 +129,20 @@ class SearchTests(unittest.TestCase):
                             tree_threshold_percent=15,
                         ),
                     )
+                    self.assertTrue(record["estimate_first"])
+                    payload.update(
+                        name="fixed-cap", max_download_mb=125, estimate_first=False
+                    )
+                    response = client.post(
+                        "/api/plans", headers={"X-HuntMaps": "local"}, json=payload
+                    )
+                    self.assertEqual(response.status_code, 200, response.text)
+                    fixed_id = start.call_args.args[0][-1]
+                    fixed = json.loads(
+                        (root / "state/plans" / (fixed_id + ".json")).read_text()
+                    )
+                    self.assertFalse(fixed["estimate_first"])
+                    self.assertEqual(fixed["max_download_mb"], 125)
                     payload.update(
                         name="bad-search", candidate_count=12, recommendation_count=20
                     )
@@ -136,7 +150,7 @@ class SearchTests(unittest.TestCase):
                         "/api/plans", headers={"X-HuntMaps": "local"}, json=payload
                     )
                     self.assertEqual(response.status_code, 400)
-                    self.assertEqual(start.call_count, 1)
+                    self.assertEqual(start.call_count, 2)
 
     def test_complete_search_reproducibility_manual_coordinates_and_checkpoint(self):
         with tempfile.TemporaryDirectory(prefix="huntmaps-search-") as directory:

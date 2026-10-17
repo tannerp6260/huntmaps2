@@ -149,7 +149,7 @@ class WorkflowJourney(unittest.TestCase):
                         ll, box(p["x"] - 180, p["y"] - 180, p["x"] + 180, p["y"] + 180)
                     )
                 ),
-                maximum_slope_deg=60,
+                maximum_slope_deg=35,
             ),
             self.client.app.state.jobs,
         )

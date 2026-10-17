@@ -1,3 +1,4 @@
+import DecimalField from './decimal-field';
 import { Help } from './drawing';
 export type TargetCriteria = {
   version: 1;
@@ -68,15 +69,13 @@ export default function TerrainCriteria({
               {['Minimum', 'Maximum'].map((side, i) => (
                 <label key={side}>
                   {side}
-                  <input
+                  <DecimalField
                     aria-label={`${side} ${label}`}
-                    type="number"
-                    value={
-                      Number.isFinite(value[key]![i]) ? +(value[key]![i] / scale).toFixed(5) : ''
-                    }
-                    onChange={(e) => {
+                    value={value[key]![i]}
+                    scale={scale}
+                    onChange={(n) => {
                       const a = [...value[key]!];
-                      a[i] = e.target.value === '' ? NaN : +e.target.value * scale;
+                      a[i] = n;
                       onChange({ ...value, [key]: a });
                     }}
                   />

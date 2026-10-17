@@ -1,4 +1,5 @@
 import { area, yards, KM2_PER_MI2 } from './units';
+import DistancePresets from './distance-presets';
 import DecimalField from './decimal-field';
 import { Help } from './drawing';
 import TerrainCriteria, { type TargetCriteria } from './target-criteria';
@@ -12,7 +13,6 @@ export default function AreaSettings({
   name,
   radius,
   count,
-  minutes,
   setName,
   setRadius,
   setCount,
@@ -34,7 +34,6 @@ export default function AreaSettings({
   name: string;
   radius: number;
   count: number;
-  minutes: number;
   setName: (value: string) => void;
   setRadius: (value: number) => void;
   setCount: (value: number) => void;
@@ -54,6 +53,8 @@ export default function AreaSettings({
         Area name <Help topic="name" />
         <input
           aria-label="New run name"
+          autoComplete="off"
+          name="terrain-run-identifier"
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="my-glassing-area"
@@ -64,27 +65,17 @@ export default function AreaSettings({
       </p>
       <label>
         View radius <Help topic="radius" />
-        <select
-          aria-label="View radius"
-          value={radius}
-          onChange={(e) => setRadius(+e.target.value)}
-        >
-          {[500, 1000, 1500, 2000, 2500, 3000].map((r) => (
-            <option value={r} key={r}>
-              {yards(r)}
-            </option>
-          ))}
-        </select>
+        <DistancePresets label="View radius" value={radius} onChange={setRadius} />
       </label>
       <label>
         Locations to test <Help topic="count" />
-        <input
+        <DecimalField
           aria-label="Locations to test"
-          type="number"
-          min="12"
-          max="5000"
           value={count}
-          onChange={(e) => setCount(+e.target.value)}
+          onChange={setCount}
+          min={12}
+          max={5000}
+          integer
         />
       </label>
       {areaKm2 != null && areaKm2 > 0 && (
@@ -96,13 +87,13 @@ export default function AreaSettings({
       )}
       <label>
         Top spots to recommend <Help topic="recommendations" />
-        <input
+        <DecimalField
           aria-label="Top spots to recommend"
-          type="number"
-          min="1"
-          max={Math.min(200, count)}
           value={recommendationCount}
-          onChange={(e) => setRecommendationCount(+e.target.value)}
+          onChange={setRecommendationCount}
+          min={1}
+          max={Math.min(200, count)}
+          integer
         />
       </label>
       <p className="hint">
@@ -147,13 +138,12 @@ export default function AreaSettings({
         </label>
         <label>
           Require surrounding tree cover below (%) <Help topic="trees" />
-          <input
+          <DecimalField
             aria-label="Preferred tree cover below"
-            type="number"
-            min="0"
-            max="100"
             value={treeThreshold}
-            onChange={(e) => setTreeThreshold(+e.target.value)}
+            onChange={setTreeThreshold}
+            min={0}
+            max={100}
           />
         </label>
         <p className="hint">
@@ -164,43 +154,6 @@ export default function AreaSettings({
         <p className="hint">
           Locations to test means potential glassing spots to calculate, not the number of best
           spots returned.
-        </p>
-        <details>
-          <summary>How this works</summary>
-          <p>
-            The engine samples eligible locations across sections of your observer area, then adds
-            samples from terrain resembling benches, shoulders and ridge breaks, plus general
-            background locations. It keeps minimum spacing between points and calculates views and
-            scores afterward.
-          </p>
-          <p>
-            A fixed random seed makes the same inputs repeatable. More locations means more
-            processing, not a guaranteed optimum. Broad spacing starts at 164 yd and decreases for
-            smaller areas, down to the analysis grid resolution. Exhausted eligible cells produce
-            fewer evaluations with an explanation. Nearby refinement uses up to 20% of the search
-            budget; broad sampling uses 80%. A limited area may leave some refinement budget unused.
-          </p>
-          <p>
-            Recommendations rank by matching visible terrain area. The optional nearby vegetation
-            restriction applies to where you stand, not what you view. All evaluated setups can
-            still be ordered by terrain-visible area. Original engine ranking remains available.
-            Terrain shapes do not certify suitable footing, deer habitat, or legal access.
-          </p>
-        </details>
-        <details>
-          <summary>Calculation details</summary>
-          <p>
-            Historical calculation input: {minutes} minutes allocated to inspecting a view. This is
-            not a suggested visit duration. It affects inherited indices, not terrain-visible area.
-          </p>
-        </details>
-      </details>
-      <details className="resource-limits">
-        <summary>Technical details</summary>
-        <p className="hint">
-          Existing limits: 3 million grid cells, 1536 MiB analysis memory, 900 seconds per engine
-          batch, 800 MB outputs. Analysis acquisition does not include imagery or legal-access data.
-          Online basemap tiles are separate browsing context.
         </p>
       </details>
     </div>

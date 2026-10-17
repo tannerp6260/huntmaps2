@@ -287,7 +287,9 @@ def candidates(c):
 
 def prepare(c):
     try:
-        return transfer.prepare(c)
+        from .radius_support import prepare
+
+        return prepare(c)
     except ValueError as error:
         if str(error) == "Empty observer mask":
             raise ValueError(

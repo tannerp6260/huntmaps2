@@ -44,12 +44,105 @@ class ApproachServiceTests(unittest.TestCase):
         self.assertIn("outside", response.json()["points"][0]["message"])
         response = self.client.post(
             f"/api/runs/{self.run}/approaches",
-            json=dict(outside, preflight_required=True),
+            json=dict(outside, preflight_required=True, boundary_confirmed=True),
             headers=self.headers,
         )
         self.assertEqual(response.status_code, 400, response.text)
         self.assertEqual(self.client.app.state.jobs.list(), before)
         self.assertFalse((self.config.state_dir / "approaches").exists())
+
+    def test_suggestion_confirmation_and_new_slope_policy(self):
+        from shapely.geometry import shape, Point
+
+        suggested = self.client.post(
+            f"/api/runs/{self.run}/approach-suggestion",
+            json={"id": "A0075"},
+            headers=self.headers,
+        )
+        self.assertEqual(suggested.status_code, 200, suggested.text)
+        proposal = suggested.json()
+        self.assertFalse(proposal["boundary_confirmed"])
+        self.assertTrue(
+            shape(proposal["travel_area"]).covers(
+                Point(
+                    self.r.candidate("A0075")["longitude"],
+                    self.r.candidate("A0075")["latitude"],
+                )
+            )
+        )
+        self.assertLessEqual(proposal["preflight"]["grid_cells"], 3_000_000)
+        self.assertEqual(
+            proposal["network_ids"], []
+        )  # imports with unknown coverage are not invented full inventories
+        rejected = self.client.post(
+            f"/api/runs/{self.run}/approaches",
+            json=dict(self.body, preflight_required=True),
+            headers=self.headers,
+        )
+        self.assertEqual(rejected.status_code, 400)
+        self.assertIn("Confirm", rejected.text)
+        body = dict(self.body)
+        body.pop("maximum_slope_deg")
+        self.assertEqual(service.create(self.run, body, None)["maximum_slope_deg"], 25)
+        for slope in [35.01, 60, float("nan"), 0]:
+            with self.assertRaises(ValueError):
+                service.create(self.run, dict(self.body, maximum_slope_deg=slope), None)
+
+    def test_run_preferences_and_historical_slope_remain_reviewable(self):
+        from huntmaps_gui import approach_review, workflow
+
+        saved = service.create(self.run, self.body, None)
+        draft = {
+            k: saved[k]
+            for k in (
+                "travel_area",
+                "exclusions",
+                "network_ids",
+                "kinds",
+                "weights",
+                "maximum_slope_deg",
+                "start",
+                "pinned",
+            )
+        }
+        draft.update(boundary_confirmed=True, scenario=saved["id"], alternative=0)
+        state = workflow.get(self.run, None)
+        review = approach_review.save(
+            self.run,
+            dict(
+                revision=0,
+                workflow_revision=state["revision"],
+                ids=["A0075"],
+                active_point="A0075",
+                point=state["points"]["A0075"]["point"],
+                draft=draft,
+            ),
+        )
+        self.assertEqual(review["defaults"]["maximum_slope_deg"], 35)
+        self.assertEqual(review["defaults"]["weights"], draft["weights"])
+        # Synthetic legacy scenario, separate from all owner history.
+        saved["maximum_slope_deg"] = 60
+        write(
+            self.config.state_dir / "approaches" / saved["id"] / "scenario.json", saved
+        )
+        draft["maximum_slope_deg"] = 60
+        state = workflow.get(self.run, None)
+        review = approach_review.save(
+            self.run,
+            dict(
+                revision=review["revision"],
+                workflow_revision=state["revision"],
+                ids=["A0075"],
+                active_point="A0075",
+                point=state["points"]["A0075"]["point"],
+                draft=draft,
+            ),
+        )
+        self.assertEqual(review["drafts"]["A0075"]["maximum_slope_deg"], 60)
+        self.assertEqual(review["defaults"]["maximum_slope_deg"], 25)
+        self.assertEqual(
+            service.status(saved["id"])["scenario"]["maximum_slope_deg"], 60
+        )
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix="huntmaps-approach-test-")
@@ -86,7 +179,7 @@ class ApproachServiceTests(unittest.TestCase):
             travel_area=self.area,
             network_ids=[self.network],
             weights=dict(slope=1, tree=1, shrub=1, gain=1),
-            maximum_slope_deg=60,
+            maximum_slope_deg=35,
         )
         write(
             self.config.state_dir / "annotations" / f"{self.run}.json",
@@ -160,11 +253,17 @@ class ApproachServiceTests(unittest.TestCase):
         self.assertEqual(a, b)
 
     def test_actual_worker_exports_stale_and_storage(self):
-        body = dict(
-            self.body,
-            start=list(self.network_endpoints[0]),
-            pinned=list(self.network_endpoints[-1]),
+        # Choose a departure demonstrated reachable under the new 35-degree ceiling.
+        seed = service.create(
+            self.run,
+            dict(self.body, start=list(self.network_endpoints[0])),
+            self.client.app.state.jobs,
         )
+        service.compute(seed["id"])
+        departure = service.status(seed["id"])["results"]["results"][0]["alternatives"][
+            0
+        ]["departure"]
+        body = dict(self.body, start=list(self.network_endpoints[0]), pinned=departure)
         response = self.client.post(
             f"/api/runs/{self.run}/approaches", json=body, headers=self.headers
         )

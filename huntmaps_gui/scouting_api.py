@@ -280,6 +280,19 @@ def router(jobs):
         path.write_bytes(data)
         return [dict(name=name, geometry=mapping(g)) for name, g in choices(path)]
 
+    @r.post("/runs/{ident}/approach-suggestion")
+    def approach_suggestion(ident, body: dict = Body(...)):
+        from .approach_preflight import suggest
+
+        return suggest(ident, body, jobs)
+
+    @r.post("/networks/resolve")
+    def resolve_networks(body: dict = Body(...)):
+        bounds = body.get("bounds")
+        if not isinstance(bounds, list) or len(bounds) != 4:
+            raise ValueError("Choose analysis bounds")
+        return dict(network_ids=[n["id"] for n in network.covering_networks(bounds)])
+
     @r.post("/runs/{ident}/approach-preflight")
     def preflight(ident, body: dict = Body(...)):
         from .approach_preflight import check
@@ -307,6 +320,10 @@ def router(jobs):
                         "Waypoint changed; reload before calculating approaches"
                     )
             if body.get("preflight_required"):
+                if body.get("boundary_confirmed") is not True:
+                    raise ValueError(
+                        "Confirm the suggested or edited boundary before calculating"
+                    )
                 from .approach_preflight import check
 
                 result = check(ident, body, jobs)
@@ -331,7 +348,22 @@ def router(jobs):
             return dict(scenario=scenario, job=job)
 
     @r.get("/runs/{ident}/approaches")
-    def scenarios(ident):
+    def scenarios(ident, summary: bool = False):
+        if summary:
+            from .catalog import Run
+
+            Run(ident)
+            return [
+                dict(
+                    scenario=value,
+                    results=None,
+                    stale=False,
+                    stale_reasons=[],
+                    unverified_summary=True,
+                )
+                for p in (STATE / "approaches").glob("*/scenario.json")
+                if (value := read_json(p)).get("run_id") == ident
+            ]
         return [
             approaches.status(p.parent.name, jobs)
             for p in (STATE / "approaches").glob("*/scenario.json")
@@ -341,6 +373,32 @@ def router(jobs):
     @r.get("/approaches/{ident}")
     def scenario(ident):
         return approaches.status(ident, jobs)
+
+    @r.post("/approaches/{ident}/display-timing")
+    def display_timing(ident, body: dict = Body(...)):
+        import math
+
+        network.checked_id(ident)
+        job = jobs.get(body.get("job_id", ""))
+        if job.get("plan") != ident or job.get("kind") != "approach":
+            raise ValueError("Timing must identify this comparison job")
+        fields = (
+            "click_to_response_s",
+            "click_to_display_s",
+            "completion_to_display_s",
+        )
+        if any(
+            type(body.get(k)) not in (int, float)
+            or not math.isfinite(body[k])
+            or not 0 <= body[k] <= 86400
+            for k in fields
+        ):
+            raise ValueError("Invalid comparison display timing")
+        write(
+            STATE / "scouting-metrics" / (ident + "-display.json"),
+            dict(job_id=job["id"], scenario_id=ident, **{k: body[k] for k in fields}),
+        )
+        return dict(recorded=True)
 
     @r.get("/approaches/{ident}/export/{fmt}")
     def export(

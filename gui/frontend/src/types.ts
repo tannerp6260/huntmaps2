@@ -117,6 +117,8 @@ export type AcquisitionItem = {
   provider?: string;
 };
 export type BaselinePlan = DownloadReviewInfo & {
+  source_refresh_required?: boolean;
+  source_refresh_error?: string | null;
   transferred_bytes?: number;
   recovery_notice?: string;
   acquisition_hash?: string;
@@ -169,6 +171,14 @@ export type FirstPersonPlan = DownloadReviewInfo & {
   estimated_new_bytes: number;
   already_received_bytes: number;
   source_note: string;
+  imagery_sources?: {
+    key: string;
+    title: string;
+    cached: boolean;
+    bytes: number;
+    acquisition_date: string;
+    vertical_reference?: string;
+  }[];
   errors: string[];
   sources: {
     key: string;
@@ -184,6 +194,7 @@ export type ProfileResult = {
   status?: string;
   result: string;
   distance_m: number;
+  line_of_sight_distance_m?: number | null;
   minimum_clearance_m: number | null;
   borderline: boolean;
   source_label: string;
@@ -228,6 +239,9 @@ export type MeshInfo = {
   triangle_count: number;
 };
 export type SceneReady = {
+  context_radius_m: number;
+  radius_m: number;
+  context_available: boolean;
   scene_signature?: Record<string, unknown>;
   fidelity?: string;
   status: 'ready';

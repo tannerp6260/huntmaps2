@@ -293,7 +293,7 @@ def run(c):
         for ident, t, g in sectors:
             if ident == p["id"]:
                 draw_lines(ax, g.boundary, color="orange", lw=1)
-        for r in range(500, radius + 1, 500):
+        for r in range(500, int(radius) + 1, 500):
             ax.add_patch(
                 Circle((p["x"], p["y"]), r, fill=False, color="black", lw=0.4, ls="--")
             )

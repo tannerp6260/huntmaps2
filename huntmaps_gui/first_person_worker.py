@@ -22,14 +22,17 @@ from . import first_person as fp
 from .catalog import ROOT, Run, read
 from .jobs import write
 from glassing.acquire import digest
-from .downloads import suggested_mb
+from .downloads import suggested_mb, check_space
+from .scene_storage import SCENE_BYTES, METADATA_BYTES, check_plan, write_array
 
 
 @contextmanager
 def preparation_stage(cid, label):
     fp.stage(cid + " " + label)
     try:
+        check_space(fp.HOME)
         yield
+        check_space(fp.HOME)
     except MemoryError as e:
         raise MemoryError(
             "Memory limit reached while "
@@ -95,6 +98,8 @@ def discover(ident):
                     "acquisition",
                     "fidelity",
                     "download_cap_bytes",
+                    "imagery_sources",
+                    "context_version",
                 )
             }
         )
@@ -107,8 +112,45 @@ def discover(ident):
     cached = ROOT / existing.get("path", "__missing_lidar__")
     if cached.exists():
         fp.verify_file(cached, existing["sha256"])
+    from .scene_sources import cached_lidar, lidar_acquisition
+    from shapely.geometry import box
+
+    cached_sources = {}
+    cache_notes = []
+    if p.get("fidelity") == "best":
+        for key, source in read(fp.HOME / "sources" / "manifest.json", {}).items():
+            try:
+                cached_sources[key] = cached_lidar(source, key)
+            except ValueError as error:
+                cache_notes.append(f"Skipped cached lidar {key}: {error}.")
     for cid in p["candidates"]:
         bbox = geographic_box(run, cid)
+        if p.get("fidelity") == "best":
+            for key, source in cached_sources.items():
+                bounds = source["bounds"]
+                if box(
+                    bounds["minX"], bounds["minY"], bounds["maxX"], bounds["maxY"]
+                ).intersects(box(*bbox)):
+                    path = fp.HOME / "sources" / key
+                    if path.exists():
+                        if key not in sources:
+                            fp.verify_file(path, source["sha256"])
+                            if path.stat().st_size != source["bytes"]:
+                                raise ValueError(
+                                    "Cached lidar source size changed: " + key
+                                )
+                        entry = sources.setdefault(
+                            key,
+                            dict(
+                                source,
+                                key=key,
+                                path=str(path),
+                                cached=True,
+                                candidates=[],
+                            ),
+                        )
+                        if cid not in entry["candidates"]:
+                            entry["candidates"].append(cid)
         query = urllib.parse.urlencode(
             dict(
                 datasets="Lidar Point Cloud (LPC)",
@@ -116,33 +158,41 @@ def discover(ident):
                 max=100,
             )
         )
-        with urllib.request.urlopen(
-            "https://tnmaccess.nationalmap.gov/api/v1/products?" + query, timeout=30
-        ) as response:
-            raw = response.read(5_000_001)
-            if len(raw) > 5_000_000:
-                raise ValueError("Catalog metadata exceeds 5 MB; narrow scene batch")
-            result = json.loads(raw)
-        if result.get("errors") or result.get("total", 0) > 100:
-            raise ValueError(
-                "Lidar catalog incomplete or truncated; no source plan approved."
+        try:
+            with urllib.request.urlopen(
+                "https://tnmaccess.nationalmap.gov/api/v1/products?" + query, timeout=30
+            ) as response:
+                raw = response.read(5_000_001)
+                if len(raw) > 5_000_000:
+                    raise ValueError(
+                        "Catalog metadata exceeds 5 MB; narrow scene batch"
+                    )
+                result = json.loads(raw)
+        except (OSError, ValueError) as error:
+            if p.get("fidelity") != "best":
+                raise
+            fp.stage(
+                "Lidar catalog unavailable; preparing available terrain: " + str(error)
             )
+            p["lidar_note"] = "Lidar catalog unavailable: " + str(error)
+            result = dict(items=[])
+        if result.get("errors") or result.get("total", 0) > 100:
+            if p.get("fidelity") != "best":
+                raise ValueError(
+                    "Lidar catalog incomplete or truncated; no source plan approved."
+                )
+            p["lidar_note"] = (
+                "Lidar catalog incomplete; using available terrain and verified cached sources."
+            )
+            result = dict(items=[])
+
         for item in result.get("items", []):
             url = item.get("downloadURL", "")
-            parsed = urllib.parse.urlparse(url)
-            if (
-                parsed.scheme != "https"
-                or parsed.hostname
-                not in ["rockyweb.usgs.gov", "prd-tnm.s3.amazonaws.com"]
-                or not parsed.path.lower().endswith(".laz")
-            ):
+            try:
+                project = lidar_acquisition(url)
+            except ValueError:
                 continue
             # Do not mix overlapping acquisitions in this pilot.
-            project = (
-                parsed.path.split("/LAZ/", 1)[0]
-                if "/LAZ/" in parsed.path
-                else parsed.path.rsplit("/", 1)[0]
-            )
             if p.get("acquisition") and project != p["acquisition"]:
                 continue
             size = int(item.get("sizeInBytes") or 0)
@@ -170,12 +220,20 @@ def discover(ident):
                     cached=False,
                 ),
             )
-            entry["candidates"].append(cid)
+            if entry["bytes"] != size:
+                raise ValueError("Cached lidar size differs from catalog: " + key)
+            if cid not in entry["candidates"]:
+                entry["candidates"].append(cid)
             if url == existing.get("url") and cached.exists():
                 entry.update(cached=True, path=str(cached), sha256=existing["sha256"])
-            elif (fp.HOME / "sources" / key).exists():
+            elif not entry["cached"] and (fp.HOME / "sources" / key).exists():
                 rec = read(fp.HOME / "sources" / "manifest.json", {}).get(key)
                 if rec:
+                    rec = cached_lidar(rec, key)
+                    if rec["bytes"] != size:
+                        raise ValueError(
+                            "Cached lidar size differs from catalog: " + key
+                        )
                     fp.verify_file(fp.HOME / "sources" / key, rec["sha256"])
                     entry.update(
                         cached=True,
@@ -184,6 +242,15 @@ def discover(ident):
                     )
     entries = list(sources.values())
     acquisitions = sorted(set(s["acquisition"] for s in entries))
+    if p.get("fidelity") == "best":
+        from .scene_sources import choose_acquisition
+
+        chosen = choose_acquisition(
+            entries, [geographic_box(run, cid) for cid in p["candidates"]]
+        )
+        entries = [s for s in entries if s["acquisition"] == chosen]
+        p["acquisition"] = chosen
+
     if p.get("fidelity") == "terrain":
         entries = []
     needs_selection = (
@@ -218,7 +285,19 @@ def discover(ident):
                         raise ValueError("Range partial larger than expected")
                     reused += partial.stat().st_size
             s["remaining_bytes"] = max(0, s["remaining_bytes"] - reused)
-    estimated = sum(s["remaining_bytes"] for s in entries)
+    imagery_sources = []
+    if p.get("fidelity") == "best":
+        from .scene_sources import imagery_plan
+
+        try:
+            imagery_sources = imagery_plan(
+                run, p["candidates"], min(3000, run.config["radius_m"])
+            )
+        except (ValueError, OSError) as error:
+            fp.stage("Dated imagery unavailable; retaining terrain: " + str(error))
+            p["imagery_note"] = str(error)
+    p["imagery_sources"] = imagery_sources
+    estimated = sum(s["remaining_bytes"] for s in entries + imagery_sources)
     spent = read(fp.HOME / "sources" / "ledger.json", {}).get("received_bytes", 0)
     p.update(
         prepared=True,
@@ -237,7 +316,14 @@ def discover(ident):
         coverage={
             cid: sum(cid in s["candidates"] for s in entries) for cid in p["candidates"]
         },
-        source_note="Catalog bounds do not guarantee ground-return coverage. Fine-data gaps remain unknown.",
+        source_note=" ".join(
+            [
+                p.get("lidar_note", ""),
+                p.get("imagery_note", ""),
+                *cache_notes,
+                "Catalog bounds do not guarantee ground-return coverage. Fine-data gaps remain unknown.",
+            ]
+        ),
     )
     from .approach_service import digest
 
@@ -250,6 +336,8 @@ def discover(ident):
                 "acquisition",
                 "fidelity",
                 "download_cap_bytes",
+                "imagery_sources",
+                "context_version",
             )
         }
     )
@@ -507,7 +595,7 @@ def _crop_points(run, cid, sources, radius, spool):
                     raise ValueError(
                         "Local point count exceeds bounded preparation memory; no silent processing thinning."
                     )
-                a.tofile(spool)
+                write_array(a, spool)
                 u, n = np.unique(classes[keep], return_counts=True)
                 for k, v in zip(u, n):
                     hist[str(k)] = hist.get(str(k), 0) + int(v)
@@ -590,8 +678,9 @@ def baseline_grid(run, cid):
     xx = gt[0] + (np.arange(run.dem.RasterXSize) + 0.5) * gt[1] - p["x"]
     yy = gt[3] + (np.arange(run.dem.RasterYSize) + 0.5) * gt[5] - p["y"]
     # Crop around exact observer, retaining native cell centers.
-    cc = np.flatnonzero(abs(xx) <= 2020)
-    rr = np.flatnonzero(abs(yy) <= 2020)
+    extent = getattr(run, "scene_context_radius", 2000) + 20
+    cc = np.flatnonzero(abs(xx) <= extent)
+    rr = np.flatnonzero(abs(yy) <= extent)
     if not len(rr) or not len(cc):
         raise ValueError("Baseline has no local terrain coverage")
     lo, hi = rr.min(), rr.max() + 1
@@ -646,6 +735,7 @@ def texture(run, cid, folder, radius=300, pixels=1200, name="imagery.png"):
         path = run.path(str(path))
         run.validate(str(path))
         images.append(dict(i, path=str(path)))
+    images.extend(getattr(run, "scene_images", []))
     if not images:
         return None
     rgba = imagery_mosaic(
@@ -654,6 +744,7 @@ def texture(run, cid, folder, radius=300, pixels=1200, name="imagery.png"):
         [p["x"] - radius, p["y"] - radius, p["x"] + radius, p["y"] + radius],
         pixels,
     )
+    check_space(folder, rgba.nbytes + METADATA_BYTES)
     Image.fromarray(rgba, "RGBA").save(folder / name)
     return dict(
         file=name,
@@ -724,7 +815,7 @@ def enrich_foliage(folder, meta):
         else np.zeros((1, 1, 4), dtype=np.uint8)
     )
     colors, used = veg.foliage_colors(centres, kinds, rgba)
-    colors.tofile(folder / "vegetation-colors.bin")
+    write_array(colors, folder / "vegetation-colors.bin")
     write(folder / "foliage-primitive.json", veg.primitive())
     meta["vegetation"].update(
         colors_file="vegetation-colors.bin",
@@ -751,18 +842,12 @@ def publish_copy(run, cid, key, prior, target, started):
         fp.verify_file(prior / name, h)
     for image in run.images:
         run.validate(image["path"])
-    existing = sum(
-        f.stat().st_size
-        for area in ["bundles", "partial"]
-        for f in (fp.HOME / area).rglob("*")
-        if f.is_file()
-    )
     needed = sum((prior / name).stat().st_size for name in meta["hashes"]) + 10_000_000
-    if existing + needed > 800_000_000:
-        raise ValueError("800 MB derived-asset cap lacks room; prior bundles retained.")
+    check_space(fp.HOME, needed)
     folder = fp.HOME / "partial" / (key + "-" + __import__("uuid").uuid4().hex)
     folder.mkdir(parents=True)
     for name in meta["hashes"]:
+        check_space(folder, (prior / name).stat().st_size)
         shutil.copyfile(prior / name, folder / name)
     enrich_foliage(folder, meta)
     meta.update(
@@ -775,6 +860,7 @@ def publish_copy(run, cid, key, prior, target, started):
         reused_cell_bundle=prior.name,
     )
     meta["hashes"] = {f.name: digest(f) for f in folder.iterdir() if f.is_file()}
+    check_space(folder, METADATA_BYTES)
     write(folder / "scene.json", meta)
     target.parent.mkdir(parents=True, exist_ok=True)
     folder.replace(target)
@@ -796,9 +882,9 @@ def enrich_clusters(folder, meta, points, ground_grid):
     centres = centres[selected]
     kinds = kinds[selected]
     counts = counts[selected]
-    centres.tofile(folder / "cluster-centres.bin")
-    kinds.tofile(folder / "cluster-kinds.bin")
-    counts.tofile(folder / "cluster-counts.bin")
+    write_array(centres, folder / "cluster-centres.bin")
+    write_array(kinds, folder / "cluster-kinds.bin")
+    write_array(counts, folder / "cluster-counts.bin")
     image_path = (
         fp.asset_path(folder, meta, meta["texture"]["file"])
         if meta.get("texture")
@@ -831,9 +917,9 @@ def enrich_clusters(folder, meta, points, ground_grid):
                 else np.empty(0, int)
             )
             colors, used = veg.foliage_colors(vertices, kinds[nearest], rgba)
-            vertices.tofile(folder / (prefix + "-vertices.bin"))
-            faces.tofile(folder / (prefix + "-indices.bin"))
-            colors.tofile(folder / (prefix + "-colors.bin"))
+            write_array(vertices, folder / (prefix + "-vertices.bin"))
+            write_array(faces, folder / (prefix + "-indices.bin"))
+            write_array(colors, folder / (prefix + "-colors.bin"))
             entries[name] = dict(
                 vertices_file=prefix + "-vertices.bin",
                 indices_file=prefix + "-indices.bin",
@@ -879,6 +965,7 @@ def enrich_clusters(folder, meta, points, ground_grid):
 
 
 def publish_clusters(run, cid, key, prior, target, started, sources, crops=None):
+    check_space(fp.HOME, SCENE_BYTES)
     meta = read(prior / "scene.json")
     for name, h in meta["hashes"].items():
         fp.verify_file(fp.asset_path(prior, meta, name), h)
@@ -912,15 +999,9 @@ def publish_clusters(run, cid, key, prior, target, started, sources, crops=None)
         ),
     )
     meta["hashes"].update({f.name: digest(f) for f in folder.iterdir() if f.is_file()})
+    check_space(folder, METADATA_BYTES)
     write(folder / "scene.json", meta)
-    size = sum(
-        f.stat().st_size
-        for area in ["bundles", "partial"]
-        for f in (fp.HOME / area).rglob("*")
-        if f.is_file()
-    )
-    if size > 800_000_000:
-        raise ValueError("800 MB derived-asset cap exceeded; prior scene retained.")
+    check_space(fp.HOME, METADATA_BYTES)
     if crops is not None:
         crops.verify()
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -943,6 +1024,12 @@ def scene_signature(run, cid, sources, optimized=False):
         baseline=digest(run.dem_path),
         radius=300,
     )
+    if getattr(run, "scene_context_version", 1) >= 2:
+        signature.update(
+            context_version=2,
+            context_radius_m=run.scene_context_radius,
+            scene_imagery=sorted(i["sha256"] for i in getattr(run, "scene_images", [])),
+        )
     from .foliage_clusters import IDENTIFIER
 
     signature["foliage_geometry"] = IDENTIFIER
@@ -1023,37 +1110,34 @@ def publish(run, cid, sources, crops=None, optimized=False):
         raise ValueError("Baseline observer ground unavailable")
     hasfine = np.isfinite(fine_ground)
     ground = fine_ground if hasfine else baseline_ground
-    existing_bytes = (
-        sum(
-            f.stat().st_size
-            for area in ["bundles", "partial"]
-            for f in (fp.HOME / area).rglob("*")
-            if f.is_file()
-        )
-        if fp.HOME.exists()
-        else 0
-    )
-    if existing_bytes + 60_000_000 > 800_000_000:
-        raise ValueError(
-            "800 MB derived-asset cap lacks space for another bounded bundle; retained partials need review."
-        )
+    check_space(fp.HOME, SCENE_BYTES)
     folder = fp.HOME / "partial" / (key + "-" + __import__("uuid").uuid4().hex)
     folder.mkdir(parents=True)
+    check_space(folder, a.nbytes + support.nbytes + METADATA_BYTES)
     np.savez_compressed(
         folder / "fine.npz", heights=a, support=support, res=1, x0=-300, y0=300
     )
+    check_space(folder, base.nbytes + METADATA_BYTES)
     np.savez_compressed(folder / "baseline.npz", heights=base, res=res, x0=x0, y0=y0)
     vertices, faces = fp.mesh(a, 1, -300, 300, ground, 300)
-    vertices.tofile(folder / "fine-vertices.bin")
-    faces.tofile(folder / "fine-indices.bin")
+    write_array(vertices, folder / "fine-vertices.bin")
+    write_array(faces, folder / "fine-indices.bin")
     # NAVD88 recognition is explicit; retain source realization caveat and a gap.
     baseline_ref = json.dumps(run.config)
     context_ok = (not hasfine) or ("NAVD88" in vref and "NAVD88" in baseline_ref)
-    bv, bf = fp.mesh(base, res, x0, y0, ground, 2000, 320 if hasfine else 0)
+    bv, bf = fp.mesh(
+        base,
+        res,
+        x0,
+        y0,
+        ground,
+        getattr(run, "scene_context_radius", 2000),
+        320 if hasfine else 0,
+    )
     if not context_ok:
         bf = np.empty((0, 3), dtype=np.uint32)
-    bv.tofile(folder / "context-vertices.bin")
-    bf.tofile(folder / "context-indices.bin")
+    write_array(bv, folder / "context-vertices.bin")
+    write_array(bf, folder / "context-indices.bin")
     if len(faces) + len(bf) > 1_000_000:
         raise ValueError("Scene terrain triangle cap exceeded")
     with preparation_stage(cid, "preparing measured-point display"):
@@ -1069,8 +1153,8 @@ def publish(run, cid, sources, crops=None, optimized=False):
             -display[:, 1],
         ]
     ).astype("<f4")
-    pv.tofile(folder / "points.bin")
-    display[:, 3].astype("u1").tofile(folder / "classes.bin")
+    write_array(pv, folder / "points.bin")
+    write_array(display[:, 3].astype("u1"), folder / "classes.bin")
     display_count = len(display)
     del display, pv
     from . import vegetation_screen as veg
@@ -1083,9 +1167,9 @@ def publish(run, cid, sources, crops=None, optimized=False):
         kinds = np.empty(0, dtype="u1")
         counts = np.empty(0, dtype="<u4")
         eligible_count = 0
-    centres.tofile(folder / "vegetation-centres.bin")
-    kinds.tofile(folder / "vegetation-kinds.bin")
-    counts.tofile(folder / "vegetation-counts.bin")
+    write_array(centres, folder / "vegetation-centres.bin")
+    write_array(kinds, folder / "vegetation-kinds.bin")
+    write_array(counts, folder / "vegetation-counts.bin")
     vegetation = dict(
         centres_file="vegetation-centres.bin",
         kinds_file="vegetation-kinds.bin",
@@ -1100,7 +1184,14 @@ def publish(run, cid, sources, crops=None, optimized=False):
         warning="Inferred opaque foliage volumes; four-return support and expansion are assumptions, not confidence or validated opacity.",
     )
     image = texture(run, cid, folder)
-    context_image = texture(run, cid, folder, 2000, 2048, "context-imagery.png")
+    context_image = texture(
+        run,
+        cid,
+        folder,
+        getattr(run, "scene_context_radius", 2000),
+        2048,
+        "context-imagery.png",
+    )
     valid = np.isfinite(a)
     circle = np.hypot(*np.indices(a.shape) - 300) <= 300
     hashes = {f.name: digest(f) for f in folder.iterdir() if f.is_file()}
@@ -1118,7 +1209,9 @@ def publish(run, cid, sources, crops=None, optimized=False):
         baseline_ground_m=baseline_ground,
         fine_observer_available=bool(hasfine),
         radius_m=300,
-        context_radius_m=2000,
+        context_radius_m=getattr(run, "scene_context_radius", 2000),
+        context_version=getattr(run, "scene_context_version", 1),
+        scene_imagery=getattr(run, "scene_images", []),
         context_available=context_ok,
         baseline_resolution_m=res,
         resolution_m=1 if hasfine else res,
@@ -1136,6 +1229,12 @@ def publish(run, cid, sources, crops=None, optimized=False):
         )
         or "Existing DEM; see run source metadata",
         fidelity="lidar" if hasfine else "terrain",
+        missing_detail=(["fine ground and measured returns"] if not hasfine else [])
+        + (
+            ["dated imagery"]
+            if not image or image.get("coverage_fraction", 0) < 0.99
+            else []
+        ),
         vertical_reference=vref,
         vertical_note="Local sources share the same recorded vertical CRS. Coarse NAVD88 context may differ in realization; the 300–320 m transition is deliberately not joined.",
         classification_counts=hist,
@@ -1192,15 +1291,9 @@ def publish(run, cid, sources, crops=None, optimized=False):
     with preparation_stage(cid, "building connected foliage"):
         enrich_clusters(folder, meta, points, a)
     meta["hashes"] = {f.name: digest(f) for f in folder.iterdir() if f.is_file()}
+    check_space(folder, METADATA_BYTES)
     write(folder / "scene.json", meta)
-    size = sum(
-        f.stat().st_size
-        for area in ["bundles", "partial"]
-        for f in (fp.HOME / area).rglob("*")
-        if f.is_file()
-    )
-    if size > 800_000_000:
-        raise ValueError("800 MB derived-asset cap exceeded")
+    check_space(fp.HOME, METADATA_BYTES)
     if crops is not None:
         crops.verify()
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -1233,6 +1326,7 @@ def prepare(ident, allow, review_signature=None):
         raise ValueError("Estimated new sources exceed the reviewed transfer allowance")
     if allow and p.get("errors"):
         raise ValueError("; ".join(p["errors"]))
+    check_plan(p, allow)
     spent = read(fp.HOME / "sources" / "ledger.json", {}).get("received_bytes", 0)
     ceiling = p.get("transfer_ceiling_bytes")
     if ceiling is None:
@@ -1240,10 +1334,8 @@ def prepare(ident, allow, review_signature=None):
         p["transfer_ceiling_bytes"] = ceiling
         write(fp.HOME / "plans" / (ident + ".json"), p)
     fp.LIMIT = ceiling
-    from .downloads import check_space
     from .progress import start_download, emit, flush_download
 
-    check_space(fp.HOME, 3 * (p["estimated_new_bytes"] if allow else 0) + 800_000_000)
     start_download(p["estimated_new_bytes"] if allow else 0)
     sources = []
     for s in p["sources"]:
@@ -1251,6 +1343,21 @@ def prepare(ident, allow, review_signature=None):
         if path:
             sources.append((s, path, h))
     run = fp.scene_run(p.get("run_id", fp.RUN))
+    run.scene_context_version = p.get("context_version", 1)
+    run.scene_context_radius = (
+        min(3000, run.config["radius_m"]) if run.scene_context_version >= 2 else 2000
+    )
+    from .scene_sources import acquire_imagery
+
+    run.scene_images = []
+    for source in p.get("imagery_sources", []):
+        try:
+            image = acquire_imagery(source, allow)
+            if image:
+                run.scene_images.append(image)
+        except (ValueError, OSError) as error:
+            # Available terrain is useful even if a detail provider fails.
+            fp.stage("Imagery detail unavailable: " + str(error))
     failures = {}
     flush_download()
     emit("processing", "Preparing scenes", 0, len(p["candidates"]), force=True)
@@ -1269,7 +1376,6 @@ def prepare(ident, allow, review_signature=None):
     ]
     with crop_batch(run, pending, sources) as crops:
         for index, cid in enumerate(p["candidates"]):
-            check_space(fp.HOME, 800_000_000)
             try:
                 publish(run, cid, sources, crops, optimized)
             except (ValueError, RuntimeError, MemoryError) as e:

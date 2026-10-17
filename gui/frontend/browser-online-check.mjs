@@ -1,3 +1,4 @@
+import { openExisting, reloadExisting } from './browser-startup.mjs';
 import {chromium} from 'playwright';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
@@ -11,7 +12,7 @@ try{
  const base=process.env.HUNTMAPS_URL||'http://127.0.0.1:8765',id='soap-creek-decision-review-v2';
  const annotations=await (await page.request.get(base+'/api/runs/'+id+'/annotations')).text(),jobs=await (await page.request.get(base+'/api/jobs')).json();
  const idle=()=>page.waitForFunction(()=>{const s=JSON.parse(document.querySelector('.map').getAttribute('data-map-state')||'{}');return s.loaded},{timeout:45000});
- await page.goto(base);await page.getByLabel('Online imagery — fill gaps',{exact:true}).waitFor();assert.ok(await page.getByLabel('Online imagery — fill gaps',{exact:true}).isChecked());
+ await openExisting(page, base);await page.getByLabel('Online imagery — fill gaps',{exact:true}).waitFor();assert.ok(await page.getByLabel('Online imagery — fill gaps',{exact:true}).isChecked());
  await page.getByLabel('Select A0075',{exact:true}).click();await page.locator('.selected-setup').getByText('0.485 mi²',{exact:true}).waitFor();await page.getByRole('button',{name:'Whole area',exact:true}).click();await idle();assert.ok(successful.size>0);await page.screenshot({path:out+'/01-filled-gaps.png',fullPage:true});
  assert.ok((await page.locator('.maplibregl-ctrl-attrib').innerText()).includes('USGS'));
  await page.getByRole('button',{name:'+ New area',exact:true}).click();
@@ -25,14 +26,14 @@ try{
  await page.getByRole('button',{name:'Help: count',exact:true}).focus();await page.getByRole('tooltip').filter({hasText:'not a top-X shortlist'}).waitFor({state:'visible'});
  await page.getByLabel('New run name').fill('online-settings-test');let prepared;
  await page.route('**/api/plans',async r=>{prepared=r.request().postDataJSON();await r.fulfill({status:400,json:{detail:'Verification intercepted preparation; no job started.'}})});
- await page.getByRole('button',{name:'Review downloads',exact:true}).click();await page.getByRole('alert').filter({hasText:'Verification intercepted preparation; no job started.'}).waitFor();
+ await page.getByRole('button',{name:'Generate setups',exact:true}).click();await page.getByRole('alert').filter({hasText:'Verification intercepted preparation; no job started.'}).waitFor();
  assert.equal(prepared.observation_minutes,30);assert.equal(prepared.candidate_count,150);assert.equal(prepared.radius_m,2000);assert.equal(prepared.max_download_mb,600);
  await page.getByRole('button',{name:'Dismiss error'}).click();await page.screenshot({path:out+'/02-settings-and-new-area.png',fullPage:true});
  await page.setViewportSize({width:1000,height:850});await page.screenshot({path:out+'/03-small-settings.png',fullPage:true});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  await page.getByRole('button',{name:'Back to review',exact:true}).click();
  await page.getByLabel('Online imagery — fill gaps',{exact:true}).uncheck();await page.waitForTimeout(1000);const disabled=tiles.size;
  await page.mouse.move(550,350);await page.mouse.wheel(0,-700);await page.waitForTimeout(1500);assert.equal(tiles.size,disabled);
- await page.reload();assert.equal(await page.getByLabel('Online imagery — fill gaps',{exact:true}).isChecked(),false);
+ await reloadExisting(page);assert.equal(await page.getByLabel('Online imagery — fill gaps',{exact:true}).isChecked(),false);
  await page.route('https://basemap.nationalmap.gov/**',r=>r.abort());
  await page.getByLabel('Online imagery — fill gaps',{exact:true}).check();await page.getByText('Online imagery could not load.',{exact:false}).waitFor();assert.equal(await page.getByRole('alert').count(),0);
  await page.getByLabel('Select V010',{exact:true}).click();await page.getByText('0.508 mi²',{exact:true}).waitFor();await page.screenshot({path:out+'/04-offline-fallback.png',fullPage:true});

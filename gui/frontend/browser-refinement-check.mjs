@@ -1,3 +1,4 @@
+import { openExisting, reloadExisting } from './browser-startup.mjs';
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
@@ -15,7 +16,7 @@ await page.addInitScript(()=>localStorage.setItem('huntmaps-online-imagery','off
 const headers={'X-HuntMaps':'local'};
 try {
   // No routing during this section: test actual browser cache, not intercepted responses.
-  await page.goto(base);await page.getByLabel('Run selector').selectOption('workflow-fixture');
+  await openExisting(page, base);await page.getByLabel('Run selector').selectOption('workflow-fixture');
   const sceneUrl='/api/runs/workflow-fixture/first-person/A0001';
   const before=await (await page.request.get(base+sceneUrl)).json();
   assert.equal(before.status,'ready');
@@ -53,8 +54,8 @@ print(json.dumps(dict(key=key,sha256=meta['hashes']['context-vertices.bin'])))
   await page.getByRole('button',{name:'Help: count',exact:true}).click();
   await page.getByRole('tooltip').filter({hasText:'How many possible standing'}).waitFor();
   await page.keyboard.press('Escape');
-  await page.getByText('More options · sampling restrictions',{exact:true}).click();
-  await page.getByText('Observer access sampling and network acquisition',{exact:true}).click();
+
+  await page.getByText('Road and trail restrictions',{exact:true}).click();
   const proximity=page.getByLabel('Only look near mapped roads or trails',{exact:true});
   assert.equal(await proximity.isChecked(),true);
   const distance=page.getByLabel('Maximum distance from a road or trail (yards)');

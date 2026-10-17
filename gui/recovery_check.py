@@ -102,7 +102,7 @@ from pathlib import Path
 original=urllib.request.urlopen
 def controlled(request,*args,**kwargs):
  url=request.full_url if hasattr(request,'full_url') else str(request)
- if 'geoserver/mrlc_shrub' in url:
+ if 'geoserver/rcmap_shrub' in url:
   request='http://127.0.0.1:{provider.server_port}/shrub.tif'
  elif not url.startswith('http://127.0.0.1:'):
   raise AssertionError('Uncontrolled external request: '+url)

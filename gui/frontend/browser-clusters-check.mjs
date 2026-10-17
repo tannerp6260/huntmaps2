@@ -1,3 +1,4 @@
+import { openExisting, reloadExisting } from './browser-startup.mjs';
 if(!process.env.HUNTMAPS_URL||!process.env.HUNTMAPS_SCREENSHOTS)throw Error('Run through ./gui/check with an isolated server and screenshot directory');
 import {chromium} from 'playwright';
 import fs from 'node:fs';
@@ -15,8 +16,8 @@ try{
  const legacy=JSON.parse(fs.readFileSync((process.env.HUNTMAPS_SCENE_SOURCE||'../../.gui/first-person')+'/bundles/'+currentMeta.reused_base_bundle+'/scene.json','utf8'));
  const legacyRoute=route=>route.fulfill({json:{...legacy,key:currentMeta.key,initial_bearing_deg:currentMeta.initial_bearing_deg,initial_facing_note:currentMeta.initial_facing_note}});
  await page.route(api+'/first-person/A0075',legacyRoute);
- await page.goto(base);await page.getByLabel('Select A0075',{exact:true}).click();await page.getByRole('button',{name:'View',exact:true}).click();
- const loaded=cid=>page.waitForFunction(cid=>{const s=JSON.parse(document.querySelector('.fp-scene')?.getAttribute('data-camera')||'{}');return s.candidate===cid&&s.loaded&&s.imageryPending===0},cid);
+ await openExisting(page, base);await page.getByLabel('Select A0075',{exact:true}).click();await page.getByRole('button',{name:'View',exact:true}).click();
+ const loaded=async cid=>{try{await page.waitForFunction(cid=>{const s=JSON.parse(document.querySelector('.fp-scene')?.getAttribute('data-camera')||'{}');return s.candidate===cid&&s.loaded&&s.imageryPending===0},cid)}catch(e){console.log('Scene diagnostics',await page.locator('.fp-scene').getAttribute('data-camera'),await page.getByRole('dialog').getByRole('alert').allTextContents());await page.screenshot({path:out+'/load-failure.png',fullPage:true});throw e}};
  const state=async()=>JSON.parse(await page.locator('.fp-scene').getAttribute('data-camera'));
  await loaded('A0075');await page.getByLabel('First-person heading',{exact:true}).fill('187');await page.getByLabel('First-person look angle',{exact:true}).fill('-16');
  await page.waitForFunction(()=>{const s=JSON.parse(document.querySelector('.fp-scene').getAttribute('data-camera'));return s.loaded&&s.heading===187&&s.look===-16});
@@ -35,6 +36,7 @@ try{
  await page.getByLabel('First-person setup',{exact:true}).selectOption('A0075');await loaded('A0075');
  const profile=await (await page.request.post(api+'/first-person/A0075/profile',{headers:{'X-HuntMaps':'local'},data:{east_m:0,north_m:-120,vegetation_scenario:'medium',vegetation_radius_m:30}})).json();
  assert.equal(profile.vegetation.evaluated_radius_m,30);assert.equal(profile.vegetation.geometry_identifier,'rounded-cell-union-v2');assert.equal(profile.vegetation.farther_vegetation_unevaluated,true);
+ await page.getByLabel('Inspection map radius',{exact:true}).selectOption(String(250*.9144));
  const map=page.getByLabel('Choose inspection target on plan map',{exact:true});await map.scrollIntoViewIfNeeded();const b=await map.boundingBox();await page.mouse.click(b.x+b.width*.5,b.y+b.height*.69);await page.locator('.fp-vegetation table').waitFor();assert.equal(await page.locator('.fp-vegetation tbody tr').count(),3);
  // Exercise a measured nearby target and verify UI/profile mesh identity.
  const current=await (await page.request.get(api+'/first-person/A0075')).json();const raw=await (await page.request.get(api+'/first-person/A0075/assets/'+current.vegetation.centres_file)).body();const centres=new Float32Array(raw.buffer.slice(raw.byteOffset,raw.byteOffset+raw.byteLength));

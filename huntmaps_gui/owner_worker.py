@@ -133,6 +133,12 @@ def main():
     Fetcher.get = get
     from glassing import owner_data
     from .source_reuse import cached
+    from . import rcmap_sources
+
+    original_plan = owner_data.plan
+    owner_data.plan = lambda config, inputs: rcmap_sources.plan(
+        config, inputs, original_plan
+    )
 
     original_cached = owner_data.cached
     owner_data.cached = lambda config, inputs: cached(config, inputs, original_cached)
@@ -180,6 +186,23 @@ def main():
 
     subprocess.run = run
     from glassing import owner
+    from . import radius_support
+
+    # Owner imports intake inside main. Install the GUI boundary in this worker
+    # process; frozen source files and historical CLI processes stay unchanged.
+    from glassing import transfer
+
+    original_intake = transfer.intake
+
+    def gui_intake(config):
+        if config["radius_m"] % 500 == 0:
+            return original_intake(config)
+        from .requests import Preparation
+
+        Preparation.radius_preset(config["radius_m"])
+        return radius_support._yard_intake(config)
+
+    transfer.intake = gui_intake
 
     original_write = owner.write
 
@@ -195,6 +218,8 @@ def main():
                 storage,
                 acquisition,
                 source_reuse,
+                rcmap_sources,
+                radius_support,
             )
             from .storage import read_json
 
@@ -212,6 +237,8 @@ def main():
                             search.target_filters,
                             acquisition,
                             source_reuse,
+                            rcmap_sources,
+                            radius_support,
                         ]
                     }
                 )

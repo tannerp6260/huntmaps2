@@ -15,10 +15,14 @@ import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
 BROWSER_CHECKS = (
+    "browser-lidar-recovery-check",
+    "browser-guided-flow-check",
+    "browser-find-flow-check",
     "browser-workflow-check",
     "browser-redesign-check",
     "browser-target-search-check",
     "browser-guided-approaches-check",
+    "browser-approach-dismiss-check",
     "browser-refinement-check",
     "browser-workflow-regressions",
     "browser-transfer-check",
@@ -30,6 +34,7 @@ BROWSER_CHECKS = (
     "browser-check",
     "browser-training-check",
     "browser-first-person-check",
+    "browser-scene-storage-check",
     "browser-working-waypoint-check",
     "browser-storage-check",
     "browser-scouting-check",
@@ -102,6 +107,7 @@ def main():
         HUNTMAPS_SOURCE_DIR=str(ROOT),
         PYTHONDONTWRITEBYTECODE="1",
         HUNTMAPS_DISABLE_SPEED_PROBE="1",
+        HUNTMAPS_DISABLE_BROWSING="1",
         HUNTMAPS_SCREENSHOTS=str(work / "screenshots"),
         HUNTMAPS_IMPORT_FILE=str(ROOT / "inputs/test.kml"),
         HUNTMAPS_SCENE_SOURCE=str(ROOT / ".gui/first-person"),
@@ -182,7 +188,10 @@ def main():
         run(["npm", "run", "format:check"], "frontend-format", ROOT / "gui/frontend")
         run(["npm", "run", "build"], "frontend-build", ROOT / "gui/frontend")
         if not args.skip_browser:
-            run([sys.executable, "gui/recovery_check.py"], "browser-recovery-worker")
+            if not args.browser_check:
+                run(
+                    [sys.executable, "gui/recovery_check.py"], "browser-recovery-worker"
+                )
             for name in ("glassing", "configs"):
                 shutil.copytree(
                     ROOT / name,

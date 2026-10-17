@@ -1,3 +1,4 @@
+import { openExisting, reloadExisting } from './browser-startup.mjs';
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
@@ -17,7 +18,7 @@ const decision=async(cid,action)=>{const v=await (await page.request.get(`${base
  const text='['+point.longitude+', '+point.latitude+']';point.revision=await page.evaluate(async text=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text)))].map(x=>x.toString(16).padStart(2,'0')).join(''),text); }
  const res=await page.request.put(`${base}/api/runs/${run}/workflow/${cid}`,{headers,data:{action,revision:v.revision,point}});assert.equal(res.status(),200,await res.text());return await res.json();};
 try {
- await page.goto(base);await page.getByLabel('Run selector').selectOption(run);await page.getByLabel('Saved neighborhood').selectOption('all');await page.getByLabel('Select A0001',{exact:true}).click();
+ await openExisting(page, base);await page.getByLabel('Run selector').selectOption(run);await page.getByLabel('Saved neighborhood').selectOption('all');await page.getByLabel('Select A0001',{exact:true}).click();
  const targetBefore=await (await page.request.get(base+'/api/runs/workflow-fixture/annotations')).json();
  await page.getByRole('button',{name:'Setup details',exact:true}).click();await page.getByLabel('Candidate decision').selectOption('keep');await page.getByLabel('Candidate notes').fill('Belongs only to search-fixture');
  let release,enter;const held=new Promise(r=>release=r),entered=new Promise(r=>enter=r);

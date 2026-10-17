@@ -1,4 +1,4 @@
-import { refreshPolling } from './polling';
+import { refreshPolling, trackJob } from './polling';
 export async function request(path: string, body?: unknown, method = 'POST') {
   const r = await fetch(
     path,
@@ -20,6 +20,8 @@ export async function request(path: string, body?: unknown, method = 'POST') {
     throw Error(v);
   }
   const result = await r.json();
-  if (body !== undefined) void refreshPolling();
+  if (result?.job?.id) trackJob(result.job);
+  else if (result?.id && result?.status && result?.kind) trackJob(result);
+  else if (body !== undefined) void refreshPolling();
   return result;
 }

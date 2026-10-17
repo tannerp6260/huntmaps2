@@ -1,3 +1,4 @@
+import { openExisting, reloadExisting } from './browser-startup.mjs';
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
@@ -57,7 +58,7 @@ try {
     }
     return url.startsWith(base) || url.startsWith('blob:') ? route.continue() : route.abort();
   });
-  await page.goto(base);
+  await openExisting(page, base);
   await page.getByLabel('Run selector').selectOption('search-fixture');
   const run = await (await page.request.get(base + '/api/runs/search-fixture')).json();
   const [a, b] = run.recommendation_ids;

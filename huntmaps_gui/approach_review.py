@@ -133,8 +133,16 @@ def save(run, body, jobs=None):
             ):
                 raise ValueError("Approach preferences must range from zero to five")
             slope = draft.get("maximum_slope_deg")
-            if type(slope) not in (int, float) or not 0 < slope <= 60:
-                raise ValueError("Choose a slope limit between zero and 60 degrees")
+            if (
+                type(slope) not in (int, float)
+                or not 0 < slope <= 35
+                and not (
+                    draft.get("scenario")
+                    and slope
+                    == status(draft["scenario"], jobs)["scenario"]["maximum_slope_deg"]
+                )
+            ):
+                raise ValueError("Choose a slope limit between zero and 35 degrees")
             if type(draft.get("boundary_confirmed")) is not bool:
                 raise ValueError("Confirm the approach search boundary")
             if draft["boundary_confirmed"] and draft["travel_area"] is None:
@@ -192,6 +200,11 @@ def save(run, body, jobs=None):
             draft = dict(
                 draft, attempted=draft.get("attempted", False), alternative=index
             )
+            v["defaults"] = {
+                k: draft[k] for k in ("weights", "maximum_slope_deg", "kinds")
+            }
+            if v["defaults"]["maximum_slope_deg"] > 35:
+                v["defaults"]["maximum_slope_deg"] = 25
             v["drafts"][cid] = dict(
                 {k: draft.get(k) for k in fields}, point=state["points"][cid]["point"]
             )

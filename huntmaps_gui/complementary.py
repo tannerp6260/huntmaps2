@@ -23,7 +23,7 @@ from . import scouting_filters as filters, workflow, manual_observers
 from .working_waypoints import DisplayRun
 from .display_cache import changed, touch
 
-VERSION = "greedy-coverage-v1"
+VERSION = "greedy-coverage-display-v2"
 CACHE_BUDGET = 32 * 1024**2
 CACHE_ITEMS = 8192  # Bound object overhead, including empty windows.
 CACHE = OrderedDict()
@@ -359,7 +359,11 @@ def write_mask(path, packed, run, width):
     from .tiles import rgba_file
 
     rgba = np.zeros((*mask.shape, 4), dtype=np.uint8)
-    rgba[:, :, :3] = (0, 192, 232) if path.stem == "combined" else (255, 103, 130)
+    rgba[:, :, :3] = (
+        (0, 192, 232)
+        if path.stem == "combined"
+        else (170, 111, 255) if path.stem == "shared" else (255, 103, 130)
+    )
     rgba[:, :, 3] = mask * 255
     rgba_file(path, rgba, run.dem)
 
@@ -394,7 +398,33 @@ def calculate(ident, count=5, profile="", jobs=None):
                 if p["additional_cells"] is not None
                 else None
             )
-        layers = ["combined", *["additional-" + cid for cid in deltas]]
+        members = [*result["kept"], *result["suggestions"]]
+        counts = np.zeros(context.shape, dtype=np.uint16)
+        masks = {}
+        for member in members:
+            packed = context.coverage(dict(id=member["id"]))
+            if packed is None:
+                continue
+            full = np.zeros_like(union)
+            packed.include(full)
+            mask = np.unpackbits(full, axis=1)[:, : context.shape[1]].astype(bool)
+            counts += mask
+            masks[member["id"]] = full
+        shared = np.packbits(counts >= 2, axis=1)
+        unique = {
+            cid: np.packbits(
+                (np.unpackbits(full, axis=1)[:, : context.shape[1]] > 0)
+                & (counts == 1),
+                axis=1,
+            )
+            for cid, full in masks.items()
+        }
+        layers = [
+            "combined",
+            "shared",
+            *["additional-" + cid for cid in deltas],
+            *["unique-" + cid for cid in unique],
+        ]
         result.update(
             id=token,
             run_id=ident,
@@ -406,6 +436,7 @@ def calculate(ident, count=5, profile="", jobs=None):
             sources=context.sources,
             layers=layers,
             profile_spec=context.profile,
+            shared_km2=float((counts >= 2).sum()) * area,
             combined_km2=result["combined_cells"] * area,
             initial_km2=result["initial_cells"] * area,
             unknown_ids=context.unknown,
@@ -429,6 +460,11 @@ def calculate(ident, count=5, profile="", jobs=None):
             ):
                 raise ValueError("Sources changed during collection calculation; retry")
             write_mask(home / "combined.tif", union, context.run, context.shape[1])
+            write_mask(home / "shared.tif", shared, context.run, context.shape[1])
+            for cid, mask in unique.items():
+                write_mask(
+                    home / f"unique-{cid}.tif", mask, context.run, context.shape[1]
+                )
             for cid, delta in deltas.items():
                 write_mask(
                     home / f"additional-{cid}.tif", delta, context.run, context.shape[1]

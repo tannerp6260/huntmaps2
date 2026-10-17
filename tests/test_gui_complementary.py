@@ -233,6 +233,22 @@ class CoverageAPI(unittest.TestCase):
             self.assertEqual(p["additional_cells"], int((mask & ~union).sum()))
             union |= mask
         self.assertEqual(result["combined_cells"], int(union.sum()))
+        counts = np.zeros(union.shape, np.uint16)
+        masks = {}
+        for member in [*result["kept"], *result["suggestions"]]:
+            masks[member["id"]] = self.r.mask(member["id"])[0]
+            counts += masks[member["id"]]
+        folder = c.folder(result["id"])
+        ds = gdal.Open(str(folder / "shared.tif"))
+        np.testing.assert_array_equal(
+            ds.GetRasterBand(4).ReadAsArray() > 0, counts >= 2
+        )
+        for cid, mask in masks.items():
+            ds = gdal.Open(str(folder / f"unique-{cid}.tif"))
+            np.testing.assert_array_equal(
+                ds.GetRasterBand(4).ReadAsArray() > 0, mask & (counts == 1)
+            )
+
         image = self.client.get(
             f"/api/runs/{self.run}/collection-tiles/{result['id']}/combined/0/0/0.png"
         )

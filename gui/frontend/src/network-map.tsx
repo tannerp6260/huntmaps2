@@ -1,3 +1,4 @@
+import Transportation from './transportation';
 import DownloadReview from './download-review';
 import JobProgress from './job-progress';
 import { networkResponse, type DisplayNetwork } from './network-response';
@@ -219,97 +220,105 @@ export default function NetworkMap({
     }
   }
   return (
-    <details className="network-map-controls" open>
-      <summary>Roads and trails on map</summary>
-      {loadingNetworks && <p role="status">Loading road/trail data…</p>}
-      {!loadingNetworks && !networks.length && !networkError && (
-        <p role="status">No road/trail data loaded. Review a download or import mapped lines.</p>
-      )}
-      {networkError && (
-        <p role="alert" className="error">
-          {networkError}
-        </p>
-      )}
-      {['roads', 'trails'].map((kind) => (
-        <label key={kind}>
-          <input
-            type="checkbox"
-            checked={visible.includes(kind)}
-            onChange={(e) =>
-              setVisible((v) => (e.target.checked ? [...v, kind] : v.filter((k) => k !== kind)))
-            }
-          />
-          {kind === 'roads' ? 'Roads' : 'Trails'}
-          <small>
-            {!networks.some((n) => n.kind === kind && n.display_features.length)
-              ? `No ${kind === 'roads' ? 'road' : 'trail'} lines loaded`
-              : covered(kind)
-                ? 'Mapped query coverage includes this area'
-                : 'Complete mapped coverage unconfirmed'}
-          </small>
-        </label>
-      ))}
-      <div className="legend">
-        {styles
-          .filter(
-            ([key]) =>
-              visible.includes(key.split(':')[0]) &&
-              networks.some((n) =>
-                n.display_features.some(
-                  (f) => `${f.properties?.kind}:${f.properties?.subtype}` === key,
+    <div className="network-status">
+      <Transportation map={map} />
+      <p>
+        {covered('roads') && covered('trails')
+          ? 'Roads and trails ready.'
+          : 'Analysis network coverage needs review.'}
+      </p>
+      <details className="network-map-controls">
+        <summary>Roads and trails on map</summary>
+        {loadingNetworks && <p role="status">Loading road/trail data…</p>}
+        {!loadingNetworks && !networks.length && !networkError && (
+          <p role="status">No road/trail data loaded. Review a download or import mapped lines.</p>
+        )}
+        {networkError && (
+          <p role="alert" className="error">
+            {networkError}
+          </p>
+        )}
+        {['roads', 'trails'].map((kind) => (
+          <label key={kind}>
+            <input
+              type="checkbox"
+              checked={visible.includes(kind)}
+              onChange={(e) =>
+                setVisible((v) => (e.target.checked ? [...v, kind] : v.filter((k) => k !== kind)))
+              }
+            />
+            {kind === 'roads' ? 'Roads' : 'Trails'}
+            <small>
+              {!networks.some((n) => n.kind === kind && n.display_features.length)
+                ? `No ${kind === 'roads' ? 'road' : 'trail'} lines loaded`
+                : covered(kind)
+                  ? 'Mapped query coverage includes this area'
+                  : 'Complete mapped coverage unconfirmed'}
+            </small>
+          </label>
+        ))}
+        <div className="legend">
+          {styles
+            .filter(
+              ([key]) =>
+                visible.includes(key.split(':')[0]) &&
+                networks.some((n) =>
+                  n.display_features.some(
+                    (f) => `${f.properties?.kind}:${f.properties?.subtype}` === key,
+                  ),
                 ),
-              ),
-          )
-          .map(([key, label, color]) => (
-            <span key={key}>
-              <i
-                style={{
-                  background: key.startsWith('trails:') ? 'transparent' : color,
-                  border: 'none',
-                  height: 3,
-                  borderTop: key.startsWith('trails:') ? `2px dashed ${color}` : undefined,
-                }}
-              />
-              {label}
-            </span>
-          ))}
-      </div>
-      <small>
-        Recorded attributes, not current access certification. Click lines for source details.
-        Display only; analysis inputs unchanged.
-      </small>
-      {(!covered('roads') || !covered('trails')) && (
-        <button disabled={!extent || busy || active} onClick={review}>
-          Review road/trail download
-        </button>
-      )}
-      {!extent && <p>Draw or import an observer area to review a bounded USFS download.</p>}
-      {plan && (
-        <div className="plan">
-          <p>
-            {plan.provider}: up to {plan.estimated_bytes / 1000000} MB. {plan.note}
-          </p>
-          <DownloadReview plan={plan} bytes={plan.estimated_bytes ?? null} />
-          <p>Bounds: {plan.bounds.join(', ')}. Source date unknown until inspected.</p>
-          <p className="hint">
-            Download mapped roads/trails approves this displayed plan and allowance.
-          </p>
-          <button disabled={active || busy || plan.storage?.blocked} onClick={download}>
-            Download mapped roads/trails
+            )
+            .map(([key, label, color]) => (
+              <span key={key}>
+                <i
+                  style={{
+                    background: key.startsWith('trails:') ? 'transparent' : color,
+                    border: 'none',
+                    height: 3,
+                    borderTop: key.startsWith('trails:') ? `2px dashed ${color}` : undefined,
+                  }}
+                />
+                {label}
+              </span>
+            ))}
+        </div>
+        <small>
+          Recorded attributes, not current access certification. Click lines for source details.
+          Display only; analysis inputs unchanged.
+        </small>
+        {(!covered('roads') || !covered('trails')) && (
+          <button disabled={!extent || busy || active} onClick={review}>
+            Review road/trail download
           </button>
-        </div>
-      )}
-      {job && (
-        <div role="status">
-          <JobProgress job={job} />
-          Network acquisition {job.status}: {job.error || job.stage}
-        </div>
-      )}
-      {error && (
-        <p role="alert" className="error">
-          {error}
-        </p>
-      )}
-    </details>
+        )}
+        {!extent && <p>Draw or import an observer area to review a bounded USFS download.</p>}
+        {plan && (
+          <div className="plan">
+            <p>
+              {plan.provider}: up to {plan.estimated_bytes / 1000000} MB. {plan.note}
+            </p>
+            <DownloadReview plan={plan} bytes={plan.estimated_bytes ?? null} />
+            <p>Bounds: {plan.bounds.join(', ')}. Source date unknown until inspected.</p>
+            <p className="hint">
+              Download mapped roads/trails approves this displayed plan and allowance.
+            </p>
+            <button disabled={active || busy || plan.storage?.blocked} onClick={download}>
+              Download mapped roads/trails
+            </button>
+          </div>
+        )}
+        {job && (
+          <div role="status">
+            <JobProgress job={job} />
+            Network acquisition {job.status}: {job.error || job.stage}
+          </div>
+        )}
+        {error && (
+          <p role="alert" className="error">
+            {error}
+          </p>
+        )}
+      </details>
+    </div>
   );
 }

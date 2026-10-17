@@ -86,3 +86,70 @@ def check(run, body, jobs=None):
         grid_cells=cells,
         note="Geometry and mapped departures checked. Path calculation still checks terrain and constraints.",
     )
+
+
+def suggest(run, body, jobs=None):
+    """A separate, unconfirmed proposal; observer and target domains are untouched."""
+    import numpy as np
+    from shapely.geometry import box, mapping, shape
+    from .scouting_network import covering_networks
+
+    r, points = point_snapshot(run, jobs)
+    cid = body.get("id")
+    if cid not in points:
+        raise ValueError("Choose a current shortlisted setup")
+    xy = project(4326, r.config["epsg"])
+    ll = project(r.config["epsg"], 4326)
+    target = Point(xy(points[cid]["longitude"], points[cid]["latitude"]))
+    ds = r.dem
+    gt = ds.GetGeoTransform()
+    if gt[2] or gt[4] or gt[1] <= 0 or gt[5] >= 0:
+        raise ValueError("Suggestion needs a north-up metric terrain grid")
+    footprint = box(
+        gt[0], gt[3] + ds.RasterYSize * gt[5], gt[0] + ds.RasterXSize * gt[1], gt[3]
+    )
+    # Fine holes stay outside the proposed domain, just as they do in path calculation.
+    band = ds.GetRasterBand(1)
+    values = band.ReadAsArray()
+    valid = np.isfinite(values) & (band.GetMaskBand().ReadAsArray() > 0)
+    if not valid.all():
+        from osgeo import gdal, ogr
+
+        mask = gdal.GetDriverByName("MEM").Create(
+            "", ds.RasterXSize, ds.RasterYSize, 1, gdal.GDT_Byte
+        )
+        mask.SetGeoTransform(gt)
+        mask.SetProjection(ds.GetProjection())
+        mask.GetRasterBand(1).WriteArray(valid.astype("uint8"))
+        vector = ogr.GetDriverByName("Memory").CreateDataSource("")
+        layer = vector.CreateLayer("valid", geom_type=ogr.wkbPolygon)
+        gdal.Polygonize(mask.GetRasterBand(1), mask.GetRasterBand(1), layer, -1, [])
+        import json
+
+        footprint = unary_union(
+            [shape(json.loads(f.GetGeometryRef().ExportToJson())) for f in layer]
+        )
+    area = target.buffer(2000, resolution=48).intersection(footprint)
+    if area.is_empty or not area.covers(target):
+        raise ValueError("No supported obstruction terrain at this setup")
+    geographic = mapping(transform(ll, area))
+    networks = covering_networks(shape(geographic).bounds)
+    ids = [n["id"] for n in networks]
+    preflight = check(
+        run,
+        dict(
+            ids=[cid],
+            travel_area=geographic,
+            exclusions=body.get("exclusions", []),
+            network_ids=ids,
+        ),
+        jobs,
+    )
+    return dict(
+        travel_area=geographic,
+        buffer_m=2000,
+        boundary_confirmed=False,
+        network_ids=ids,
+        preflight=preflight,
+        note="Suggested boundary clipped to obstruction terrain. Confirm or edit it; mapped departures do not establish permission.",
+    )

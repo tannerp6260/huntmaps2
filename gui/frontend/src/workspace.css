@@ -1979,3 +1979,87 @@ pre {
 .collection-suggestion[aria-pressed='true'] {
   border-color: #a52e4b;
 }
+.scouting-dialog {
+  width: min(640px, calc(100vw - 32px));
+  max-height: calc(100dvh - 48px);
+  box-sizing: border-box;
+  overflow: auto;
+  margin: auto;
+  border: 1px solid #bbc9b3;
+  border-radius: 12px;
+  padding: 24px;
+  color: #203e35;
+  background: #fafcf7;
+  box-shadow: 0 16px 64px #19342c40;
+}
+.scouting-dialog::backdrop {
+  background: #19342c90;
+}
+.scouting-dialog .section-title {
+  align-items: center;
+  gap: 16px;
+}
+.scouting-dialog h2 {
+  margin: 0;
+}
+.scouting-dialog p {
+  line-height: 1.5;
+}
+.scouting-dialog pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.scouting-dialog .job-progress {
+  padding: 20px 0;
+  font-size: 1rem;
+}
+.scouting-dialog progress {
+  display: block;
+  width: 100%;
+  height: 16px;
+  margin: 16px 0;
+}
+.startup-choices button {
+  width: 100%;
+  padding: 12px;
+  font-size: 1rem;
+}
+.startup-choices p {
+  margin: 6px 0 20px;
+}
+.generation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.find-next-action {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+  background: var(--panel, #16251e);
+  padding: 10px 0;
+}
+.approach-primary {
+  position: sticky;
+  bottom: 8px;
+  z-index: 5;
+}
+.approach-input-fields {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.approach-alternative[data-selected='true'] {
+  outline: 2px solid #79c8ae;
+}
+.collection-suggestion-card {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+}
+.collection-suggestion-card > .collection-suggestion {
+  grid-column: 1 / -1;
+}

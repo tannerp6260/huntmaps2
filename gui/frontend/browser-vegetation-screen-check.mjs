@@ -1,3 +1,4 @@
+import { openExisting, reloadExisting } from './browser-startup.mjs';
 import {chromium} from 'playwright';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -7,7 +8,7 @@ try{
  const page=await browser.newPage({viewport:{width:1900,height:1050}});page.setDefaultTimeout(45000);const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.addInitScript(()=>localStorage.setItem('huntmaps-online-imagery','off'));
  await page.route('**/*',r=>r.request().url().startsWith(base)||r.request().url().startsWith('blob:')?r.continue():r.abort());
- await page.goto(base);await page.getByLabel('Select A0075',{exact:true}).click();await page.getByRole('button',{name:'View',exact:true}).click();
+ await openExisting(page, base);await page.getByLabel('Select A0075',{exact:true}).click();await page.getByRole('button',{name:'View',exact:true}).click();
  const state=()=>JSON.parse(document.querySelector('.fp-scene')?.getAttribute('data-camera')||'{}');
  await page.waitForFunction(()=>{const s=JSON.parse(document.querySelector('.fp-scene')?.getAttribute('data-camera')||'{}');return s.loaded&&s.imageryPending===0});
  await page.getByLabel('First-person heading',{exact:true}).fill('187');await page.getByLabel('First-person look angle',{exact:true}).fill('-16');

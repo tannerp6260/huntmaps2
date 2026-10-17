@@ -1,3 +1,4 @@
+import { openExisting, reloadExisting } from './browser-startup.mjs';
 import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -15,7 +16,7 @@ page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.url().
 await page.addInitScript(()=>localStorage.setItem('huntmaps-online-imagery','off'));
 await page.route('**/*',r=>r.request().url().startsWith(base)||r.request().url().startsWith('blob:')?r.continue():r.abort());
 try {
- await page.goto(base); await page.getByLabel('Run selector').selectOption('search-fixture');
+ await openExisting(page, base); await page.getByLabel('Run selector').selectOption('search-fixture');
  await page.locator('.selected-setup').getByText('matching terrain',{exact:true}).waitFor();
  const run=await (await page.request.get(base+'/api/runs/search-fixture')).json();
  assert.equal(run.search_summary.options.ranking_version,2);
@@ -25,7 +26,7 @@ try {
  assert.deepEqual(await list(),expected);
  await page.waitForFunction(()=>document.querySelector('.coverage-status')?.textContent.includes('Coverage ready'),undefined,{timeout:60000});
  assert.ok(tiles.length>0,'Saved target criteria must produce filtered blue coverage automatically');
- await page.reload();await page.getByLabel('Run selector').selectOption('search-fixture');await page.locator('.selected-setup').getByText('matching terrain',{exact:true}).waitFor();
+ await reloadExisting(page);await page.getByLabel('Run selector').selectOption('search-fixture');await page.locator('.selected-setup').getByText('matching terrain',{exact:true}).waitFor();
  await page.getByRole('button',{name:/Terrain & access filters/}).click();
  assert.equal(await page.getByLabel('Elevation range (feet)',{exact:true}).isChecked(),true);
  assert.equal(await page.getByLabel('Avoid standing in dense vegetation',{exact:true}).isChecked(),false);

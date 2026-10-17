@@ -1,3 +1,4 @@
+import { openExisting, reloadExisting } from './browser-startup.mjs';
 import {chromium} from 'playwright';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
@@ -11,14 +12,14 @@ page.on('pageerror',e=>errors.push(e.message));
 await page.addInitScript(()=>localStorage.setItem('huntmaps-online-imagery','off'));
 await page.route('**/*',r=>r.request().url().startsWith(base)||r.request().url().startsWith('blob:')?r.continue():r.abort());
 try {
- await page.goto(base);
+ await openExisting(page, base);
  await page.getByLabel('Run selector').selectOption(runId);
  if(runId!=='workflow-fixture')await page.getByLabel('Saved neighborhood').selectOption('all');
  await page.getByLabel('Select A0001',{exact:true}).click();
  const api=`${base}/api/runs/${runId}`;
  const p=await (await page.request.get(api+'/candidates/A0001')).json();
  const initial=await (await page.request.get(api+'/workflow')).json();
- if(initial.points.A0001?.shortlisted) {await page.request.put(api+'/workflow/A0001',{headers:{'X-HuntMaps':'local'},data:{action:'remove',revision:initial.revision,point:initial.points.A0001.point}});await page.reload();await page.getByLabel('Run selector').selectOption(runId);await page.getByLabel('Saved neighborhood').selectOption('all');await page.getByLabel('Select A0001',{exact:true}).click();}
+ if(initial.points.A0001?.shortlisted) {await page.request.put(api+'/workflow/A0001',{headers:{'X-HuntMaps':'local'},data:{action:'remove',revision:initial.revision,point:initial.points.A0001.point}});await reloadExisting(page);await page.getByLabel('Run selector').selectOption(runId);await page.getByLabel('Saved neighborhood').selectOption('all');await page.getByLabel('Select A0001',{exact:true}).click();}
  const run=await (await page.request.get(api)).json();
  const listIds=()=>page.locator('.candidate-select strong').allTextContents().then(ids=>ids.map(id=>id.trim().split(' · ')[0]));
  assert.deepEqual(await listIds(),[...run.candidates].sort((a,b)=>b.metrics.raw_km2-a.metrics.raw_km2).map(p=>p.id));
@@ -52,7 +53,7 @@ try {
  await page.locator('.scouting-tools').getByLabel('Import road trail network',{exact:true}).setInputFiles({name:'workflow-fixture-network.geojson',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(network))});
  await page.getByLabel('Import travel area').setInputFiles({name:'workflow-travel.geojson',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(area))});
  await page.locator('.approach-settings').waitFor();if (await page.locator('.approach-settings').getAttribute('open') === null) await page.locator('.approach-settings > summary').click();await page.getByText('More options · pinned departure and preferences',{exact:true}).click();
- await page.getByLabel('Maximum approach slope').fill('60');
+ await page.getByLabel('Maximum approach slope').fill('35');
  await page.getByRole('button',{name:'Confirm approach search boundary',exact:true}).click();
  await page.locator('.approach-boundary-check[data-ready="true"]').waitFor();
  await page.getByRole('button',{name:'Calculate approaches for A0001',exact:true}).click();
@@ -63,7 +64,8 @@ try {
  await nav.getByRole('button',{name:/Inspect.*terrain/}).click();
  const task=page.locator('.workflow-task').first();
  assert.equal(await task.getByRole('button',{name:'Confirm setup',exact:true}).isDisabled(),true);
- await task.getByRole('button',{name:/Prepare views/}).click();
+ await task.getByText('Scene data details',{exact:true}).click();await task.getByLabel('View detail',{exact:true}).selectOption('terrain');
+ await task.getByRole('button',{name:/Prepare view/}).click();
  await page.getByRole('dialog').waitFor();
  await page.getByRole('dialog').getByRole('button',{name:'Prepare views',exact:true}).click({timeout:60000});
  await page.getByRole('dialog').getByRole('button',{name:'Confirm setup',exact:true}).waitFor({timeout:60000});
@@ -77,14 +79,14 @@ try {
  await page.setViewportSize({width:900,height:900});
  await page.screenshot({path:out+'/04-inspect-900.png',fullPage:true});
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
- await page.getByRole('button',{name:'Return to map',exact:true}).click();
+ if(await page.getByRole('button',{name:'Return to map',exact:true}).count())await page.getByRole('button',{name:'Return to map',exact:true}).click();
  await page.screenshot({path:out+'/05-confirmed-900.png',fullPage:true});
  await nav.getByRole('button',{name:/Save.*confirmed/}).click();
  await page.locator('.collection-item').filter({hasText:'A0001'}).waitFor();
  assert.equal(await page.locator('.collection-export a').count(),2);
  await page.screenshot({path:out+'/06-saved-collection.png',fullPage:true});
  await nav.getByRole('button',{name:/Find/}).click();
- await page.reload();
+ await reloadExisting(page);
  await page.getByLabel('Run selector').selectOption(runId);
  await page.waitForFunction(()=>document.querySelector('.workflow-stages').textContent.includes('1 confirmed'));
  const state=await (await page.request.get(api+'/workflow')).json();

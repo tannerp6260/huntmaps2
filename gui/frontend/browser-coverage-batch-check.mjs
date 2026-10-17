@@ -1,3 +1,4 @@
+import { openExisting, reloadExisting } from './browser-startup.mjs';
 import {chromium} from 'playwright';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
@@ -49,7 +50,7 @@ await page.route('**/*',async route=>{
  } finally {inflight--;}
 });
 try {
- await page.goto(base);await page.getByLabel('Run selector').selectOption('search-fixture');
+ await openExisting(page, base);await page.getByLabel('Run selector').selectOption('search-fixture');
  await page.locator('.coverage-status').filter({hasText:'Coverage ready'}).waitFor({timeout:60000});
  await page.getByLabel('Saved neighborhood').selectOption('all');
  const order=await page.locator('.candidate-select strong').allTextContents();

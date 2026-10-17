@@ -29,6 +29,7 @@ export default function ComplementaryViews({
   onResult,
   onSelect,
   onAdded,
+  onDecision,
   api,
 }: {
   run: string;
@@ -39,6 +40,7 @@ export default function ComplementaryViews({
   onResult: (result: Collection | null, signature: string) => void;
   onSelect: (id: string) => void;
   onAdded: (workflow: Workflow) => void;
+  onDecision: (cid: string, action: string) => Promise<boolean>;
   api: (path: string, options?: RequestInit) => Promise<any>;
 }) {
   const [count, setCount] = useState(5);
@@ -46,6 +48,16 @@ export default function ComplementaryViews({
   const [result, setResult] = useState<{ value: Collection; signature: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [pendingDecision, setPendingDecision] = useState('');
+  async function decide(cid: string, action: string) {
+    if (pendingDecision) return;
+    setPendingDecision(cid + ':' + action);
+    try {
+      await onDecision(cid, action);
+    } finally {
+      setPendingDecision('');
+    }
+  }
   const [error, setError] = useState('');
   const callbacks = useRef({ onResult, onSelect, onAdded });
   const mounted = useRef(true);
@@ -120,7 +132,7 @@ export default function ComplementaryViews({
         <select
           aria-label="Complementary collection size"
           value={count}
-          disabled={adding}
+          disabled={adding || !!pendingDecision}
           onChange={(e) => setCount(+e.target.value)}
         >
           {[3, 4, 5].map((n) => (
@@ -141,7 +153,9 @@ export default function ComplementaryViews({
           coverage… The map remains available.
         </p>
       )}
-      {paused && <p role="status">Coverage suggestions resume when the current job finishes.</p>}
+      {paused && (
+        <p role="status">Coverage suggestions resume when the current operation finishes.</p>
+      )}
       {error && (
         <div role="alert">
           <p>{error}</p>
@@ -181,26 +195,39 @@ export default function ComplementaryViews({
           )}
           <div className="collection-suggestions">
             {active.suggestions.map((p) => (
-              <button
-                className="collection-suggestion"
-                key={p.id}
-                onClick={() => onSelect(p.id)}
-                aria-label={'Preview contribution ' + p.id}
-                aria-pressed={selected === p.id}
-              >
-                <b>{p.id}</b>
-                <span>Total matching: {area(p.total_km2)}</span>
-                <strong>Additional: {area(p.additional_km2)}</strong>
-                <small>
-                  Overlap: {p.overlap_percent?.toFixed(1)}% of this position’s matching area
-                </small>
-              </button>
+              <div key={p.id} className="collection-suggestion-card">
+                <button
+                  className="collection-suggestion"
+                  onClick={() => onSelect(p.id)}
+                  aria-label={'Preview contribution ' + p.id}
+                  aria-pressed={selected === p.id}
+                >
+                  <b>{p.id}</b>
+                  <span>Total matching: {area(p.total_km2)}</span>
+                  <strong>Additional: {area(p.additional_km2)}</strong>
+                  <small>
+                    Overlap: {p.overlap_percent?.toFixed(1)}% of this position’s matching area
+                  </small>
+                </button>
+                <button
+                  disabled={adding || !!pendingDecision}
+                  onClick={() => void decide(p.id, 'shortlist')}
+                >
+                  Shortlist {p.id}
+                </button>
+                <button
+                  disabled={adding || !!pendingDecision}
+                  onClick={() => void decide(p.id, 'dismiss')}
+                >
+                  Dismiss {p.id}
+                </button>
+              </div>
             ))}
           </div>
           <p className="hint">
             Overlap is the fraction of this position’s matching visible area already covered by
-            retained positions and earlier suggestions. Blue shows the combined collection; pink
-            shows the selected suggestion’s additional contribution at its selection step.
+            retained positions and earlier suggestions. Cyan shows combined coverage; violet shows
+            terrain covered by two or more members; pink shows the focused member’s unique terrain.
           </p>
           {!active.suggestions.length && (
             <p className="notice">
