@@ -1,7 +1,7 @@
 import DecimalField from './decimal-field';
 import { Icon } from './workspace-ui';
 import { yards, feet } from './units';
-import DownloadReview from './download-review';
+import DownloadReview, { duration } from './download-review';
 import JobProgress from './job-progress';
 import JobLogs from './job-logs';
 import { useEffect, useRef, useState } from 'react';
@@ -83,6 +83,16 @@ export default function FirstPerson({
   const updateDelivered = useRef('');
   const updating = savingWaypoint || ['running', 'cancelling'].includes(updateJob?.status || '');
   const entityKey = waypointKey || cid;
+  const identity = `${runId}:${cid}:${entityKey}:${workingWaypoint?.revision || ''}`;
+  const currentIdentity = useRef(identity);
+  currentIdentity.current = identity;
+  const mounted = useRef(true);
+  useEffect(
+    () => () => {
+      mounted.current = false;
+    },
+    [],
+  );
   const committed =
     meta?.status === 'ready' && meta.scene_signature
       ? null
@@ -129,6 +139,23 @@ export default function FirstPerson({
       before?.focus();
     };
   }, []);
+  const [loadError, setLoadError] = useState(false);
+  const [fallbackReason, setFallbackReason] = useState('');
+  const [detailFailure, setDetailFailure] = useState<Job | null>(null);
+  const basicAttempt = useRef('');
+  const startBasic = useRef('');
+  const requestedFor = useRef('');
+  const startDetailed = useRef('');
+  useEffect(() => {
+    setFallbackReason('');
+    setDetailFailure(null);
+    basicAttempt.current = '';
+    startBasic.current = '';
+    startDetailed.current = '';
+    setBusy(false);
+    setJob(null);
+    setPlan(null);
+  }, [identity]);
   const [planId, setPlanId] = useState(
       () => localStorage.getItem('huntmaps-first-person-plan:' + runId) || '',
     ),
@@ -255,6 +282,7 @@ export default function FirstPerson({
   useEffect(() => {
     let alive = true;
     setMeta(null);
+    setLoadError(false);
     setOpened('');
     setObserver(null);
     setExplore(false);
@@ -292,28 +320,40 @@ export default function FirstPerson({
         }
       })
       .catch((e) => {
-        if (alive) setError(e instanceof Error ? e.message : String(e));
+        if (alive) {
+          setLoadError(true);
+          setError(e instanceof Error ? e.message : String(e));
+        }
       });
     return () => {
       alive = false;
     };
-  }, [url, sceneVersion]);
+  }, [url, sceneVersion, entityKey]);
   useEffect(() => {
     if (!planId) return;
     localStorage.setItem('huntmaps-first-person-plan:' + runId, planId);
     let alive = true,
+      accepted = false,
       last = '';
     const poll = async () => {
       const current = jobSnapshot().find((v) => v.plan === planId);
       const stamp = current ? current.id + ':' + current.status : 'initial';
       if (stamp === last) {
-        if (current && alive) setJob(current);
+        if (current && alive && accepted) setJob(current);
         return;
       }
       last = stamp;
       try {
         const p = await request('/api/first-person/plans/' + planId);
-        if (!alive) return;
+        if (
+          !alive ||
+          (p.run_id && p.run_id !== runId) ||
+          !p.candidates?.includes(cid) ||
+          (p.snapshots?.[cid] &&
+            (p.snapshots[cid].working_revision || '') !== (workingWaypoint?.revision || ''))
+        )
+          return;
+        accepted = true;
         setPlan(p);
         setJob(current || null);
         if (
@@ -327,7 +367,8 @@ export default function FirstPerson({
             setMeta(ready);
             setError(current.error || '');
             if (current.status === 'complete' && ready.status === 'ready') {
-              const details = dialog.current?.querySelector<HTMLDetailsElement>('.fp-preparation');
+              const details =
+                dialog.current?.querySelector<HTMLDetailsElement>('.fp-source-details');
               if (details) details.open = false;
               setRange(
                 Math.min(
@@ -346,7 +387,10 @@ export default function FirstPerson({
           }
         }
       } catch (e) {
-        if (alive) setError(String(e));
+        if (alive) {
+          if (requestedFor.current === identity) setJob(current || null);
+          setError(String(e));
+        }
       }
     };
     void poll();
@@ -355,7 +399,7 @@ export default function FirstPerson({
       alive = false;
       unsubscribe();
     };
-  }, [planId, refresh, url]);
+  }, [planId, refresh, url, identity]);
   useEffect(() => {
     setProfile(null);
     if (!target || meta?.status !== 'ready') return;
@@ -387,7 +431,10 @@ export default function FirstPerson({
   }, [url, target, eye, height, scenario, nearby, meta?.key, observer]);
   const action = async (path: string, body: unknown) => {
     if (busy) return;
+    const owner = identity;
+    requestedFor.current = owner;
     setBusy(true);
+    setLoadError(false);
     setJob(null);
     if (path === '/api/first-person/plans') {
       setPlanId('');
@@ -396,15 +443,17 @@ export default function FirstPerson({
     setError('');
     try {
       const j = await request(path, body);
+      trackJob(j);
+      if (!mounted.current || currentIdentity.current !== owner) return;
       setPlanId(j.plan);
       setJob(j);
-      trackJob(j);
       setRefresh((v) => v + 1);
       setAllow(false);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
+      if (mounted.current && currentIdentity.current === owner)
+        setError(e instanceof Error ? e.message : String(e));
     } finally {
-      setBusy(false);
+      if (mounted.current && currentIdentity.current === owner) setBusy(false);
     }
   };
   const active = !!job && ['running', 'cancelling'].includes(job.status);
@@ -414,14 +463,78 @@ export default function FirstPerson({
   const preparationStopped =
     job?.kind === 'first-person-prepare' &&
     ['failed', 'cancelled', 'interrupted'].includes(job.status);
+  const remainingBytes = plan?.remaining_new_bytes ?? plan?.estimated_new_bytes;
   const estimateReady =
-    !!plan?.prepared && Number.isFinite(plan.estimated_new_bytes) && plan.estimated_new_bytes >= 0;
+    !!plan?.prepared &&
+    remainingBytes != null &&
+    Number.isFinite(remainingBytes) &&
+    remainingBytes >= 0;
+  const isBasicPlan = plan?.fidelity === 'terrain';
+  const canPrepare =
+    estimateReady &&
+    !plan?.storage?.blocked &&
+    !plan?.errors?.length &&
+    !plan?.review_required &&
+    !(plan as FirstPersonPlan & { needs_acquisition_selection?: boolean })
+      ?.needs_acquisition_selection;
+  const largeTransfer =
+    (remainingBytes || 0) >= 1_000_000_000 || (plan?.download_time?.maximum_s || 0) >= 1800;
+  const lowHeadroom =
+    !!plan?.storage &&
+    plan.storage.volumes.some(
+      (v) =>
+        v.free_bytes - plan.storage!.required_bytes < plan.storage!.reserve_bytes + 5 * 2 ** 30,
+    );
+  const showPrepare = meta?.status === 'unprepared' || (!!plan && !isBasicPlan);
+  useEffect(() => {
+    if (meta?.status === 'ready' && meta.fine_observer_available) setFallbackReason('');
+  }, [meta]);
+  useEffect(() => {
+    if (
+      meta?.status !== 'unprepared' ||
+      busy ||
+      active ||
+      globalBusy ||
+      isBasicPlan ||
+      basicAttempt.current === identity
+    )
+      return;
+    const failed =
+      job?.status === 'failed' && ['first-person-plan', 'first-person-prepare'].includes(job.kind);
+    const unavailable =
+      job?.status === 'complete' &&
+      job.kind === 'first-person-plan' &&
+      plan?.prepared &&
+      !plan.sources.length;
+    if (!failed && !unavailable) return;
+    if (failed) setDetailFailure(job);
+    basicAttempt.current = identity;
+    startBasic.current = identity;
+    setFallbackReason(failed ? 'Detailed preparation failed.' : 'Lidar is unavailable here.');
+    void action('/api/first-person/plans', { run_id: runId, ids: [cid], fidelity: 'terrain' });
+  }, [meta?.status, job, plan, busy, active, globalBusy, identity]);
+  useEffect(() => {
+    if (
+      startBasic.current !== identity ||
+      !isBasicPlan ||
+      !canPrepare ||
+      busy ||
+      active ||
+      globalBusy ||
+      job?.status !== 'complete'
+    )
+      return;
+    startBasic.current = '';
+    void action('/api/first-person/plans/' + planId + '/start', { download: false });
+  }, [plan, job, busy, active, globalBusy, identity]);
   const autoChecked = useRef('');
   useEffect(() => {
     if (
       meta?.status !== 'unprepared' ||
       busy ||
       active ||
+      globalBusy ||
+      fallbackReason ||
       autoChecked.current === url ||
       jobSnapshot().some(
         (j) => j.plan === planId && ['running', 'cancelling'].includes(j.status),
@@ -431,11 +544,29 @@ export default function FirstPerson({
       return;
     autoChecked.current = url;
     void action('/api/first-person/plans', { run_id: runId, ids: [cid], fidelity: 'best' });
-  }, [meta?.status, url, busy, active]);
-  function improveDetail() {
-    const details = dialog.current?.querySelector<HTMLDetailsElement>('.fp-preparation');
-    if (details) details.open = true;
+  }, [meta?.status, url, busy, active, globalBusy, fallbackReason]);
+  useEffect(() => {
+    if (
+      startDetailed.current !== identity ||
+      isBasicPlan ||
+      !canPrepare ||
+      busy ||
+      active ||
+      globalBusy ||
+      job?.status !== 'complete' ||
+      job.kind !== 'first-person-plan'
+    )
+      return;
+    startDetailed.current = '';
+    if (remainingBytes === 0)
+      void action('/api/first-person/plans/' + planId + '/start', { download: false });
+  }, [plan, job, busy, active, globalBusy, identity]);
+  function checkDetailedSources() {
     void action('/api/first-person/plans', { run_id: runId, ids: [cid], fidelity: 'best' });
+  }
+  function retryDetailedView() {
+    startDetailed.current = identity;
+    checkDetailedSources();
   }
   function selectTarget(value: Target) {
     setTarget(value);
@@ -471,7 +602,13 @@ export default function FirstPerson({
         <div className="section-title">
           <h2>
             <Icon name="inspect" /> View from {cid}{' '}
-            <span className="status-badge">Modeled terrain</span>
+            <span className="status-badge">
+              {meta?.status === 'ready'
+                ? meta.fine_observer_available
+                  ? 'Detailed terrain'
+                  : 'Basic terrain'
+                : 'Modeled terrain'}
+            </span>
           </h2>
           <button onClick={onClose}>Return to map</button>
         </div>
@@ -492,234 +629,304 @@ export default function FirstPerson({
             before final confirmation.
           </p>
         )}
-        <label>
-          Saved setup
-          <select
-            aria-label="First-person setup"
-            disabled={updating}
-            value={cid}
-            onChange={(e) => onSelect(e.target.value)}
-          >
-            {(runId === 'soap-creek-decision-review-v2' && pilot.includes(cid) ? pilot : [cid]).map(
-              (v) => (
+        {runId === 'soap-creek-decision-review-v2' && pilot.includes(cid) && (
+          <label>
+            Saved setup
+            <select
+              aria-label="First-person setup"
+              disabled={updating}
+              value={cid}
+              onChange={(e) => onSelect(e.target.value)}
+            >
+              {(runId === 'soap-creek-decision-review-v2' && pilot.includes(cid)
+                ? pilot
+                : [cid]
+              ).map((v) => (
                 <option key={v}>{v}</option>
-              ),
-            )}
-          </select>
-        </label>
+              ))}
+            </select>
+          </label>
+        )}
         {!approachCurrent && (
           <p className="notice">
             Early terrain preview. Return to Find to shortlist this setup, then plan its approach.
           </p>
         )}
         {error && (
-          <div role="alert">
-            {error}
-            <button
-              onClick={() => {
-                setError('');
-                setSceneVersion((v) => v + 1);
-              }}
-            >
-              Reload scene
-            </button>
+          <div role="alert" className="fp-error">
+            <p>
+              {loadError
+                ? 'The saved view could not be opened.'
+                : isBasicPlan
+                  ? 'Basic terrain preparation could not finish. Your saved data is retained.'
+                  : 'Detailed preparation could not finish. Your saved data is retained.'}
+            </p>
+            {loadError && (
+              <button
+                onClick={() => {
+                  setError('');
+                  setSceneVersion((v) => v + 1);
+                }}
+              >
+                Retry opening view
+              </button>
+            )}
           </div>
         )}
-        <details open={meta?.status === 'unprepared'} className="fp-preparation">
-          <summary>
+        {fallbackReason && (
+          <p className="notice" role="status">
+            {fallbackReason}{' '}
             {meta?.status === 'ready'
-              ? 'Improve detail · source details'
-              : 'Prepare view · selected sources'}
-          </summary>
-          <p>
-            Preparation uses exact waypoints from this run. Existing scores and outputs stay
-            unchanged. New downloads require a reviewed allowance; storage checks keep 20 GiB free.
-            Cached sources are reused.
+              ? 'Showing basic terrain; lidar ground and vegetation are unavailable.'
+              : job?.status === 'failed' && isBasicPlan
+                ? 'Basic terrain could not be prepared either. See Details and settings.'
+                : 'Preparing basic terrain without downloads…'}
           </p>
-          <button disabled={busy || active} onClick={improveDetail}>
-            {busy || (active && job?.kind === 'first-person-plan')
-              ? 'Checking available detail…'
-              : sourceCheckStopped
-                ? 'Retry Improve detail'
-                : 'Improve detail'}
-          </button>
-          {plan && (
-            <>
-              <p>
-                {estimateReady
-                  ? (plan.estimated_new_bytes / 1e6).toFixed(1) + ' MB estimated new downloads'
-                  : sourceCheckStopped
-                    ? 'Source check did not complete. Retry Improve detail.'
-                    : active || busy
-                      ? 'Checking catalog metadata…'
-                      : 'Source sizes are not available. Check sources before preparation.'}{' '}
-                · {(plan.already_received_bytes || 0) / 1e6} MB previously transferred
-              </p>
-              {(
-                plan as FirstPersonPlan & {
-                  needs_acquisition_selection?: boolean;
-                  acquisitions?: string[];
-                }
-              ).needs_acquisition_selection && (
-                <label>
-                  Select one acquisition
-                  <select
-                    aria-label="Lidar acquisition"
-                    defaultValue=""
-                    onChange={(e) =>
-                      action('/api/first-person/plans', {
-                        run_id: runId,
-                        ids: plan.candidates || [cid],
-                        acquisition: e.target.value,
-                      })
-                    }
-                  >
-                    <option value="" disabled>
-                      Choose acquisition…
-                    </option>
-                    {(plan as FirstPersonPlan & { acquisitions?: string[] }).acquisitions?.map(
-                      (v) => <option key={v}>{v}</option>,
-                    )}
-                  </select>
-                </label>
-              )}
-              <button
-                disabled={busy || active}
-                onClick={() =>
-                  action('/api/first-person/plans', {
-                    run_id: runId,
-                    ids: plan.candidates || [cid],
-                    fidelity: 'terrain',
-                  })
-                }
-              >
-                Review terrain-only scene · no new transfer
-              </button>
-              {[...(plan.sources || []), ...(plan.imagery_sources || [])].map((s) => (
-                <p key={s.key}>
-                  <b>{s.cached ? 'Cached' : 'New source'}</b> · {s.title} ·{' '}
-                  {(s.bytes / 1e6).toFixed(1)} MB · {s.acquisition_date} ·{' '}
-                  {s.vertical_reference || 'Vertical reference: inspect recorded scene sources'}
-                </p>
-              ))}
-              {plan.errors?.map((v: string) => (
-                <p className="error" key={v}>
-                  {v}
-                </p>
-              ))}
-              <p>{plan.source_note}</p>
+        )}
+        <section className="fp-preparation" aria-label="View preparation">
+          {sourceCheckStopped && meta?.status === 'ready' && (
+            <p role="status">
+              {job?.status === 'cancelled'
+                ? 'Detailed source check was cancelled.'
+                : 'Detailed source check could not finish.'}{' '}
+              Your current view is retained.
+            </p>
+          )}
+          {(active || busy) && (
+            <p role="status">
+              {job?.kind === 'first-person-prepare'
+                ? 'Preparing your view…'
+                : 'Checking available detail…'}
+            </p>
+          )}
+          {plan && showPrepare && (
+            <div className="fp-prepare-action">
               {estimateReady && (
-                <p>
-                  Already cached:{' '}
-                  {(plan.sources?.filter((s) => s.cached).reduce((sum, s) => sum + s.bytes, 0) ||
-                    0) / 1e6}{' '}
-                  MB. Suggested transfer ceiling:{' '}
-                  {Math.max(10, Math.ceil((plan.estimated_new_bytes * 1.2) / 1e7) * 10)} MB; storage
-                  checks keep 20 GiB free.
+                <p className="hint">
+                  {remainingBytes === 0
+                    ? 'No download needed.'
+                    : `${(remainingBytes! / 1e6).toFixed(1)} MB to download.`}{' '}
+                  {remainingBytes! > 0 &&
+                  plan.download_time?.minimum_s != null &&
+                  plan.download_time?.maximum_s != null
+                    ? `About ${duration(plan.download_time.minimum_s)}–${duration(plan.download_time.maximum_s)}; processing takes additional time.`
+                    : ''}
                 </p>
               )}
-              <DownloadReview
-                plan={estimateReady ? plan : { ...plan, download_time: undefined }}
-                bytes={estimateReady ? plan.estimated_new_bytes : null}
-              />
-              {plan.review_required && (
-                <p>
-                  Check the source plan again before approving new downloads. Cached preparation
-                  remains available.
+              {(largeTransfer || lowHeadroom) && (
+                <p className="notice" role="status">
+                  {largeTransfer
+                    ? 'This is a large or slow download. Check the size and time before preparing.'
+                    : ''}{' '}
+                  {lowHeadroom
+                    ? 'Storage headroom is low. Preparation will preserve 20 GiB free.'
+                    : ''}
                 </p>
               )}
-              <details>
-                <summary>Custom scene transfer ceiling</summary>
-                <DecimalField
-                  aria-label="Scene download allowance"
-                  disabled={active || busy || !estimateReady}
-                  value={transferLimit}
-                  onChange={setTransferLimit}
-                  min={10}
-                  integer
-                />
-                <button
-                  disabled={
-                    active ||
-                    busy ||
-                    !estimateReady ||
-                    !Number.isInteger(transferLimit) ||
-                    transferLimit < 10
-                  }
-                  onClick={async () => {
-                    try {
-                      setPlan(
-                        await request(
-                          '/api/first-person/plans/' + planId + '/allowance',
-                          { max_download_mb: transferLimit },
-                          'PUT',
-                        ),
-                      );
-                      setAllow(false);
-                    } catch (e) {
-                      setError(String(e));
-                    }
-                  }}
-                >
-                  Review scene allowance
-                </button>
-              </details>
-              <p className="hint">
-                Prepare views approves this displayed source plan within{' '}
-                {Math.round(plan.download_cap_bytes / 1e6)} MB.
-              </p>
+              {(plan as FirstPersonPlan & { needs_acquisition_selection?: boolean })
+                .needs_acquisition_selection && (
+                <p className="notice">
+                  Several lidar surveys overlap this setup.{' '}
+                  <button
+                    onClick={() => {
+                      const details =
+                        dialog.current?.querySelector<HTMLDetailsElement>('.fp-source-details');
+                      if (details) {
+                        details.open = true;
+                        details.querySelector<HTMLSelectElement>('select')?.focus();
+                      }
+                    }}
+                  >
+                    Choose lidar survey
+                  </button>
+                </p>
+              )}
+              {plan.storage?.blocked && (
+                <p className="error" role="alert">
+                  Not enough storage to prepare this view while keeping 20 GiB free.
+                </p>
+              )}
               <button
-                disabled={
-                  busy ||
-                  active ||
-                  !estimateReady ||
-                  plan.storage?.blocked ||
-                  !!plan.errors?.length ||
-                  plan.review_required ||
-                  !!(plan as FirstPersonPlan & { needs_acquisition_selection?: boolean })
-                    .needs_acquisition_selection
-                }
+                className="primary"
+                disabled={busy || active || globalBusy || !canPrepare}
                 onClick={() =>
                   action('/api/first-person/plans/' + planId + '/start', {
-                    download: true,
+                    download: !isBasicPlan,
                     review_signature: plan.review_signature,
                   })
                 }
               >
-                {busy
-                  ? 'Starting preparation…'
-                  : active
-                    ? 'Preparing view…'
+                {busy || active
+                  ? 'Preparing view…'
+                  : isBasicPlan
+                    ? 'Prepare basic view'
                     : preparationStopped
-                      ? 'Retry preparation'
-                      : 'Prepare views'}
+                      ? 'Retry detailed view'
+                      : `Prepare detailed view${remainingBytes! > 0 ? ' · ' + (remainingBytes! / 1e6).toFixed(1) + ' MB' : ''}`}
               </button>
-            </>
-          )}
-          {job && (
-            <div className="fp-job" role="status">
-              <JobProgress job={job} />
-              <b>{job.status}</b> · {job.stage} · {job.elapsed_s || 0} s{' '}
-              {active && (
-                <button
-                  disabled={job.status === 'cancelling'}
-                  onClick={() =>
-                    request('/api/jobs/' + job.id + '/cancel', {})
-                      .then(() => setRefresh((v) => v + 1))
-                      .catch((e) => {
-                        setError(e instanceof Error ? e.message : String(e));
-                        setRefresh((v) => v + 1);
-                      })
-                  }
-                >
-                  Cancel preparation
-                </button>
-              )}
-              {job.error && <p>{job.error}</p>}
-              <JobLogs id={job.id} label="Actual preparation log" />
             </div>
           )}
-        </details>
+          {(sourceCheckStopped ||
+            fallbackReason ||
+            (meta?.status === 'ready' && !meta.fine_observer_available)) &&
+            !active &&
+            !busy &&
+            !(plan && showPrepare && canPrepare && !isBasicPlan) && (
+              <button disabled={globalBusy} onClick={retryDetailedView}>
+                {fallbackReason || sourceCheckStopped
+                  ? 'Retry detailed view'
+                  : 'Prepare detailed view'}
+              </button>
+            )}
+          {active && job && (
+            <div className="fp-job" role="status">
+              <JobProgress job={job} />
+              <button
+                disabled={job.status === 'cancelling'}
+                onClick={() =>
+                  request('/api/jobs/' + job.id + '/cancel', {})
+                    .then(() => setRefresh((v) => v + 1))
+                    .catch((e) => setError(String(e)))
+                }
+              >
+                Cancel preparation
+              </button>
+            </div>
+          )}
+          <details className="fp-source-details">
+            <summary>Details and settings</summary>
+            <p className="hint">
+              Exact setup coordinates and existing scouting scores stay unchanged. Detailed
+              preparation reuses verified files. New downloads require the displayed source plan and
+              allowance.
+            </p>
+            <button disabled={busy || active || globalBusy} onClick={checkDetailedSources}>
+              Check detailed sources
+            </button>
+            {plan && (
+              <>
+                <p>
+                  {estimateReady
+                    ? `${(remainingBytes! / 1e6).toFixed(1)} MB remaining downloads`
+                    : 'Source sizes are not available.'}{' '}
+                  · {((plan.already_received_bytes || 0) / 1e6).toFixed(1)} MB previously
+                  transferred
+                </p>
+                {(
+                  plan as FirstPersonPlan & {
+                    needs_acquisition_selection?: boolean;
+                    acquisitions?: string[];
+                  }
+                ).needs_acquisition_selection && (
+                  <label>
+                    Choose one lidar survey
+                    <select
+                      aria-label="Lidar acquisition"
+                      defaultValue=""
+                      onChange={(e) =>
+                        action('/api/first-person/plans', {
+                          run_id: runId,
+                          ids: [cid],
+                          acquisition: e.target.value,
+                        })
+                      }
+                    >
+                      <option value="" disabled>
+                        Choose acquisition…
+                      </option>
+                      {(plan as FirstPersonPlan & { acquisitions?: string[] }).acquisitions?.map(
+                        (v) => <option key={v}>{v}</option>,
+                      )}
+                    </select>
+                  </label>
+                )}
+                {[...(plan.sources || []), ...(plan.imagery_sources || [])].map((s) => (
+                  <p key={s.key}>
+                    <b>
+                      {(plan.cached_source_keys?.includes(s.key) ?? s.cached)
+                        ? 'Cached'
+                        : 'New source'}
+                    </b>{' '}
+                    · {s.title} · {(s.bytes / 1e6).toFixed(1)} MB · {s.acquisition_date} ·{' '}
+                    {s.vertical_reference || 'Vertical reference: inspect recorded scene sources'}
+                  </p>
+                ))}
+                {plan.errors?.map((v) => (
+                  <p className="error" key={v}>
+                    {v}
+                  </p>
+                ))}
+                <p>{plan.source_note}</p>
+                <DownloadReview
+                  plan={estimateReady ? plan : { ...plan, download_time: undefined }}
+                  bytes={estimateReady ? remainingBytes! : null}
+                />
+                {plan.review_required && (
+                  <p>Check detailed sources again before approving new downloads.</p>
+                )}
+                <details>
+                  <summary>Download limit</summary>
+                  <DecimalField
+                    aria-label="Scene download allowance"
+                    disabled={active || busy || !estimateReady}
+                    value={transferLimit}
+                    onChange={setTransferLimit}
+                    min={10}
+                    integer
+                  />
+                  <button
+                    disabled={
+                      active ||
+                      busy ||
+                      !estimateReady ||
+                      !Number.isInteger(transferLimit) ||
+                      transferLimit < 10
+                    }
+                    onClick={async () => {
+                      try {
+                        setPlan(
+                          await request(
+                            '/api/first-person/plans/' + planId + '/allowance',
+                            { max_download_mb: transferLimit },
+                            'PUT',
+                          ),
+                        );
+                      } catch (e) {
+                        setError(String(e));
+                      }
+                    }}
+                  >
+                    Update download limit
+                  </button>
+                </details>
+                <p className="hint">
+                  Preparing approves this source plan within{' '}
+                  {Math.round(plan.download_cap_bytes / 1e6)} MB.
+                </p>
+              </>
+            )}
+            {error && <p>{error}</p>}
+            {detailFailure && detailFailure.id !== job?.id && (
+              <div>
+                <p>Detailed preparation failed: {detailFailure.error || detailFailure.stage}</p>
+                <JobLogs
+                  key={detailFailure.id}
+                  id={detailFailure.id}
+                  label="Detailed preparation log"
+                />
+              </div>
+            )}
+            {job && (
+              <>
+                <p>
+                  {job.status} · {job.stage} · {(job.elapsed_s || 0).toFixed(1)} s
+                </p>
+                {job.error && <p>{job.error}</p>}
+                <JobLogs id={job.id} label="Preparation log" />
+              </>
+            )}
+          </details>
+        </section>
         {meta?.status === 'ready' && meta.candidate === sceneAnchor && (
           <>
             <p className="fp-detail-status" role="status">
@@ -730,7 +937,7 @@ export default function FirstPerson({
                 ? `Lidar-supported inferred vegetation available within ${yards(nearby)}.`
                 : meta.fine_observer_available
                   ? `No supported foliage within ${yards(nearby)}; missing returns do not establish an opening.`
-                  : 'Lidar vegetation unavailable. Improve detail to check available sources.'}
+                  : 'Lidar vegetation unavailable. Check detailed sources to look for available detail.'}
             </p>
             <div className="fp-controls">
               <label>
@@ -846,6 +1053,8 @@ export default function FirstPerson({
                   </span>
                 </div>
                 <Viewer
+                  onRetry={() => setSceneVersion((v) => v + 1)}
+                  onUnavailable={() => setOpened('')}
                   onOpened={() => {
                     setOpened(meta.key);
                     const current = workingWaypoint || initialObserver;
@@ -933,7 +1142,7 @@ export default function FirstPerson({
                       <small>
                         Standing-position refinement needs supported fine ground at this setup.
                       </small>
-                      <button onClick={improveDetail}>Improve detail for standing position</button>
+                      <small>Prepare a detailed view above to enable refinement.</small>
                     </div>
                   )}
                   {explore && (

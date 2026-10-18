@@ -28,7 +28,10 @@ class TileConcurrency(unittest.TestCase):
                 ):
                     with self.assertRaisesRegex(ValueError, "20 GiB"):
                         tiles.tile(None, "visible", "A0001", 3, 1, 1, background=True)
-                write(root / "jobs/job.json", dict(status="running"))
+                write(
+                    root / "jobs" / ("d" * 32 + ".json"),
+                    dict(id="d" * 32, status="running", started=1, kind="fixture"),
+                )
                 with self.assertRaisesRegex(ValueError, "analysis is active"):
                     tiles.tile(None, "visible", "A0001", 3, 1, 1, background=True)
 

@@ -1,13 +1,15 @@
 """Local FastAPI application. Optional browser basemap; no arbitrary commands or historical run writes."""
 
 import re
+import asyncio
 import sys
 import threading
 import uuid
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from fastapi import APIRouter, UploadFile, File, Body, Header
+from fastapi import APIRouter, UploadFile, File, Body, Header, HTTPException, Request
 from fastapi.responses import Response, FileResponse
+from starlette.concurrency import run_in_threadpool
 from shapely.geometry import mapping
 from .catalog import ROOT, STATE, Run, runs, read, collection, feature
 from .jobs import Jobs, write
@@ -65,11 +67,19 @@ def api_router(jobs: Jobs):
     @router.get("/api/first-person/plans/{ident}")
     def fp_get_plan(ident):
         p = fp.plan(ident)
-        from .scene_storage import review
+        from .scene_storage import review, effective_plan
+
+        effective = effective_plan(p)
 
         return dict(
             p,
             review_required=bool(p.get("prepared") and not p.get("review_signature")),
+            remaining_new_bytes=effective["estimated_new_bytes"],
+            cached_source_keys=[
+                source["key"]
+                for source in effective["sources"] + effective["imagery_sources"]
+                if source.get("cached") and source.get("key")
+            ],
             errors=[e for e in p.get("errors", []) if "500 MB pilot budget" not in e],
             **review(p),
         )
@@ -390,7 +400,17 @@ def api_router(jobs: Jobs):
             raise ValueError("Notes are limited to 10,000 characters")
         path = STATE / "annotations" / (ident + ".json")
         with STORE_LOCK, transaction(path, {}) as data:
-            data[candidate] = dict(status=body["status"], notes=body.get("notes", ""))
+            revision = data.get(candidate, {}).get("revision", 0)
+            if body.get("revision", 0) != revision:
+                raise HTTPException(
+                    409,
+                    "This review changed in another window. Your draft is retained; review the latest saved notes before saving again.",
+                )
+            data[candidate] = dict(
+                status=body["status"],
+                notes=body.get("notes", ""),
+                revision=revision + 1,
+            )
         return data[candidate]
 
     @router.get("/api/runs/{ident}/export/{fmt}")
@@ -747,11 +767,26 @@ def api_router(jobs: Jobs):
             )
 
     @router.get("/api/browsing/transportation/{z}/{x}/{y}.png")
-    def transportation_context(z: int, x: int, y: int):
-        from .browsing import transportation
+    async def transportation_context(request: Request, z: int, x: int, y: int):
+        from .browsing import transportation, cached_transportation
 
+        data = await run_in_threadpool(cached_transportation, z, x, y)
+        if data is not None:
+            return Response(
+                data,
+                media_type="image/png",
+                headers={"Cache-Control": "private, max-age=86400"},
+            )
+        # Wait asynchronously before borrowing shared API workers. Normal viewport
+        # bursts queue, while stalled optional providers occupy at most two threads.
+        loop = asyncio.get_running_loop()
+        if getattr(request.app.state, "browsing_loop", None) is not loop:
+            request.app.state.browsing_loop = loop
+            request.app.state.browsing_capacity = asyncio.Semaphore(2)
+        async with request.app.state.browsing_capacity:
+            data = await run_in_threadpool(transportation, z, x, y)
         return Response(
-            transportation(z, x, y),
+            data,
             media_type="image/png",
             headers={"Cache-Control": "private, max-age=86400"},
         )

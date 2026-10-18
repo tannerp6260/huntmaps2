@@ -15,7 +15,7 @@ from osgeo import gdal
 from glassing import core
 from .catalog import STATE, safe_path
 from .storage import read_json
-from .jobs import ACTIVE
+from .jobs import has_active_jobs
 
 LOCK = threading.RLock()
 WORKERS = threading.BoundedSemaphore(2)
@@ -45,10 +45,16 @@ CLASS_COLORS = np.array(
 )
 
 
-def fingerprint(paths):
+def fingerprint(paths, authoritative=False):
     return hashlib.sha256(
         "|".join(
-            f"{p}:{p.stat().st_size}:{p.stat().st_mtime_ns}" for p in paths
+            f"{p}:{p.stat().st_size}:{p.stat().st_mtime_ns}:"
+            + (
+                f"{p.stat().st_dev}:{p.stat().st_ino}:{p.stat().st_ctime_ns}"
+                if authoritative
+                else ""
+            )
+            for p in paths
         ).encode()
     ).hexdigest()[:24]
 
@@ -86,11 +92,16 @@ def sources(run, layer, ident, color):
         paths = [run.visibility_path(ident)]
         return paths, fingerprint(paths)
     if layer == "imagery":
-        return [run.path(i["path"]) for i in run.images], None
+        paths = [run.path(i["path"]) for i in run.images]
+        for path in paths:
+            run.validate(path)
+        return paths, None
     ds = run.dem
     inputs = [run.dem_path]
+    visibility = None
     if layer in ["visible", "classes"]:
-        inputs += [run.visibility_path(ident), run.analysis / "target.tif"]
+        visibility = run.visibility_path(ident)
+        inputs += [visibility, run.analysis / "target.tif"]
         if layer == "classes":
             inputs += [run.analysis / "tree.tif"]
             saved = (
@@ -105,7 +116,13 @@ def sources(run, layer, ident, color):
                 inputs.append(saved)
     elif layer != "hillshade":
         raise ValueError("Unknown map layer")
-    key = fingerprint(inputs)
+    # Verify authoritative inputs on hits too; display cache is never evidence.
+    for source in inputs:
+        # visibility_path validates either the saved manifest or the working
+        # mask publication seal; derived masks do not belong in the old manifest.
+        if source != visibility:
+            run.validate(source)
+    key = fingerprint(inputs, authoritative=True)
     if hasattr(run, "profile"):
         key += "-" + run.profile["id"]
     path = STATE / "cache" / key / f"{layer}-{ident}-{color}.tif"
@@ -163,10 +180,7 @@ def tile(run, layer, ident, z, x, y, color=0, background=False):
             raise ValueError(
                 "Background coverage paused to retain 1 GiB available memory"
             )
-        if any(
-            read_json(p).get("status") in ACTIVE
-            for p in (STATE / "jobs").glob("*.json")
-        ):
+        if has_active_jobs(STATE / "jobs"):
             raise ValueError("Background coverage paused while analysis is active")
         if shutil.disk_usage(STATE.resolve()).free < 20 * 1024**3:
             raise ValueError("Background coverage paused to retain 20 GiB free")
@@ -183,7 +197,13 @@ def tile(run, layer, ident, z, x, y, color=0, background=False):
                 touch(path)
             if not paths:
                 return transparent()
-            cache = STATE / "cache" / "tiles" / fingerprint(paths) / f"{z}-{x}-{y}.png"
+            cache = (
+                STATE
+                / "cache"
+                / "tiles"
+                / fingerprint(paths, authoritative=layer == "imagery")
+                / f"{z}-{x}-{y}.png"
+            )
             if layer == "visible" and hasattr(run, "id"):
                 remember(cache.parent, run.id, ident, not background)
                 for path in paths:

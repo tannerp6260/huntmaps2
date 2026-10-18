@@ -49,6 +49,7 @@ try {
  assert.ok(pixels.pink>1500,'Actual incremental coverage pixels must be visible');
  assert.ok(pixels.cyan>1500,'Actual combined coverage pixels must be visible');
  const preparationStart=Date.now();
+ if (await page.locator('.coverage-options').getAttribute('open') === null) await page.locator('.coverage-options > summary').click();
  await page.getByRole('button',{name:'Prepare coverage',exact:true}).click();
  await page.locator('.coverage-preparation[data-phase="ready"]').waitFor({timeout:180000});
  const preparationMs=Date.now()-preparationStart;
@@ -66,11 +67,13 @@ try {
  await page.waitForFunction(()=>document.querySelector('.complementary-views')?.textContent.includes('Your shortlist already fills'));
  const added=await api('/runs/collection-fixture/workflow');
  assert.ok(value.suggestions.every(p=>added.points[p.id].shortlisted));
- assert.ok(Object.values(added.points).every(p=>!p.confirmed));
+ for(const [id,point] of Object.entries(added.points))
+  assert.equal(!!point.confirmed,!!initial.points[id]?.confirmed,'Shortlisting must preserve prior confirmation and never confirm a new setup');
  const retained=structuredClone(added.points);
  value=await result(()=>page.getByLabel('Complementary collection size').selectOption('5'));
  assert.equal(value.kept.length,3);assert.ok(value.suggestions.length<=2);
  assert.deepEqual((await api('/runs/collection-fixture/workflow')).points,retained);
+ if (await page.locator('.coverage-options').getAttribute('open') === null) await page.locator('.coverage-options > summary').click();
  await page.getByRole('button',{name:'Prepare coverage',exact:true}).click();
  await page.locator('.coverage-preparation[data-phase="ready"]').waitFor({timeout:180000});
  await page.locator('.coverage-preparation').getByText('5/5 setups',{exact:false}).waitFor();

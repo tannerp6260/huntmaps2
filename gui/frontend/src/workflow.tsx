@@ -50,6 +50,27 @@ export default function WorkflowPanel({
   const [busy, setBusy] = useState(false);
   const [fidelity, setFidelity] = useState('best');
   const p = workflow?.points[cid];
+  const [prepared, setPrepared] = useState(false);
+  useEffect(() => {
+    let current = true;
+    setPrepared(false);
+    if (inspect && cid)
+      api(`/runs/${runId}/first-person/${cid}`)
+        .then((scene) => {
+          if (current)
+            setPrepared(
+              scene.status === 'ready' &&
+                scene.observer.longitude === p?.point.longitude &&
+                scene.observer.latitude === p?.point.latitude,
+            );
+        })
+        .catch(() => {
+          /* Opening inspection exposes the actionable source diagnostics. */
+        });
+    return () => {
+      current = false;
+    };
+  }, [runId, cid, inspect, p?.point.revision]);
   async function prepare() {
     setBusy(true);
     setError('');
@@ -103,8 +124,16 @@ export default function WorkflowPanel({
               </select>
             </label>
           </details>
-          <button className="primary wide" disabled={!p?.approach || busy} onClick={prepare}>
-            {busy ? 'Checking view sources…' : `Prepare view for ${cid}`}
+          <button
+            className={prepared ? 'wide' : 'primary wide'}
+            disabled={!p?.approach || busy}
+            onClick={prepare}
+          >
+            {busy
+              ? 'Checking view sources…'
+              : prepared
+                ? 'Improve detail'
+                : `Prepare view for ${cid}`}
           </button>
           {p?.approach && (
             <p>
@@ -116,8 +145,12 @@ export default function WorkflowPanel({
               </a>
             </p>
           )}
-          <button onClick={onInspect} disabled={!cid || pending}>
-            Inspect current setup
+          <button
+            className={prepared ? 'primary wide' : 'wide'}
+            onClick={onInspect}
+            disabled={!cid || pending}
+          >
+            {prepared ? 'Open prepared view' : 'Inspect current setup'}
           </button>
           <button onClick={onApproaches}>Return to approaches</button>
           <button

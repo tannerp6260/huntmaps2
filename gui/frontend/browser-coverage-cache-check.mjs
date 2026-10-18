@@ -1,3 +1,4 @@
+import { workflowFixture } from './browser-fixture.mjs';
 import { openExisting, reloadExisting } from './browser-startup.mjs';
 import {chromium} from 'playwright';
 import fs from 'node:fs';
@@ -8,6 +9,7 @@ fs.mkdirSync(out,{recursive:true});
 const browser=await chromium.launch({executablePath:process.env.HUNTMAPS_BROWSER||'/usr/bin/google-chrome',headless:true,args:['--no-sandbox','--enable-unsafe-swiftshader','--use-gl=angle','--use-angle=swiftshader']});
 try {
  const page=await browser.newPage({viewport:{width:1500,height:1050}}), errors=[], requests=[];
+ await workflowFixture(page.request, base);
  await page.addInitScript(()=>localStorage.setItem('huntmaps-online-imagery','off'));
  // No request interception: Playwright routing disables HTTP caching.
  const cdp=await page.context().newCDPSession(page);
@@ -30,7 +32,9 @@ try {
  const ready=id=>page.locator('.coverage-status').filter({hasText:'Coverage ready · '+id}).waitFor({timeout:60000});
  await ready(first);
  const firstMs=Date.now()-began;
+ if (await page.locator('.coverage-options').getAttribute('open') === null) await page.locator('.coverage-options > summary').click();
  assert.equal(await page.getByLabel('Coverage batch size').inputValue(),'10');
+ if (await page.locator('.coverage-options').getAttribute('open') === null) await page.locator('.coverage-options > summary').click();
  await page.getByRole('button',{name:'Prepare coverage',exact:true}).click();
  const batchStarted=Date.now();
  await page.locator('.coverage-preparation[data-phase="preparing"]').waitFor({timeout:60000});
@@ -85,7 +89,8 @@ try {
  assert.equal(review.active_point,'A0001');
  const nav=page.getByRole('navigation',{name:'Scouting workflow'});
  await nav.getByRole('button',{name:/Approach.*selected/}).click();
- await ready(review.active_point);
+ await page.locator('.coverage-status').waitFor({state:'hidden'});
+ assert.deepEqual(await cache(),[],'Approach removes coverage sources; returning to Find may reuse HTTP cache');
  await page.getByRole('button',{name:'← Shortlist',exact:true}).click();
  assert.equal(await page.getByLabel('Select '+review.active_point,{exact:true}).getAttribute('aria-pressed'),'true','Approach must restore the saved review focus');
  await nav.getByRole('button',{name:/Find/}).click();

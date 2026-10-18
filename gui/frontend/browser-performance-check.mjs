@@ -24,7 +24,7 @@ try {
   const before=await camera(),binaryRequests=assets.length;assert.ok(binaryRequests>0,'Measure actual keyed scene geometry requests');
   await page.waitForTimeout(1500);
   const idle=await camera();assert.equal(idle.draws,before.draws,'Idle view must not draw repeatedly');
-  await page.getByRole('button',{name:'Explore nearby positions',exact:true}).click();
+  await page.getByRole('button',{name:'Refine standing position',exact:true}).click();
   const moveStarted=performance.now();
   await page.getByRole('button',{name:'Move observer one foot east',exact:true}).click();
   await page.waitForFunction(()=>Math.abs(JSON.parse(document.querySelector('.fp-scene').getAttribute('data-camera')).east_m-.3048)<1e-7);
@@ -35,7 +35,8 @@ try {
   await page.screenshot({path:out+'/performance-desktop.png',fullPage:true});
   await page.setViewportSize({width:900,height:800});await page.screenshot({path:out+'/performance-900.png',fullPage:true});
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
-  assert.deepEqual(errors,[]);assert.ok(mutations.every(url=>url===base+'/api/speed-probe' || url.endsWith('/observer') || url.includes('/workflow/')));
+  fs.writeFileSync(out+'/http-diagnostics.json',JSON.stringify({errors,mutations},null,2));
+  assert.deepEqual(errors,[]);assert.ok(mutations.every(url=>url===base+'/api/speed-probe' || url===base+'/api/networks/resolve' || url.endsWith('/observer') || url.includes('/workflow/')));
   fs.writeFileSync(out+'/performance.json',JSON.stringify({readyMs,moveMs,heap,binaryRequests,additionalGeometryRequests:assets.length-binaryRequests,idleDraws:idle.draws-before.draws,triangles:moved.triangles,errors,mutations},null,2));
   console.log('Idle rendering, cached geometry and 900px layout passed:',out);
 } finally {await browser.close()}

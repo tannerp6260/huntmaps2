@@ -1,3 +1,4 @@
+import { workflowFixture } from './browser-fixture.mjs';
 import { openExisting, reloadExisting } from './browser-startup.mjs';
 import { chromium } from 'playwright';
 import fs from 'node:fs';
@@ -28,8 +29,9 @@ await page.route('**/*', (route) =>
 );
 const headers = { 'X-HuntMaps': 'local' };
 try {
+ await workflowFixture(page.request, base);
   const run = await (await page.request.get(base + '/api/runs/' + runId)).json();
-  const cid = process.env.HUNTMAPS_SCENE_TEST_POINT || run.candidates[0].id;
+  const cid = process.env.HUNTMAPS_SCENE_TEST_POINT || run.candidates.at(-1).id;
   const response = await page.request.post(base + '/api/first-person/plans', {
     headers,
     data: { run_id: runId, ids: [cid], fidelity: 'terrain' },
@@ -63,31 +65,29 @@ try {
     await page.getByLabel('Select ' + cid, { exact: true }).click();
     await page.getByRole('button', { name: 'View', exact: true }).click();
     const section = page.locator('.fp-preparation');
-    if ((await section.getAttribute('open')) === null)
-      await section.locator('summary').first().click();
+    if ((await section.locator('.fp-source-details').getAttribute('open')) === null)
+      await section.locator('.fp-source-details > summary').click();
     await section.getByText('Saved scenes:', { exact: false }).waitFor();
     return section;
   }
   await openExisting(page, base);
   let section = await viewer();
   assert.equal(
-    await section.getByRole('button', { name: 'Prepare views', exact: true }).isDisabled(),
+    await section.getByRole('button', { name: 'Prepare basic view', exact: true }).isDisabled(),
     false,
   );
   assert.ok((await section.innerText()).includes('retained partial scenes:'));
   assert.ok((await section.innerText()).includes('keep 20 GiB free'));
   await page.screenshot({ path: out + '/storage-review.png', fullPage: true });
-  await section.getByRole('button', { name: 'Prepare views', exact: true }).click();
-  await page.waitForFunction(
-    async (id) => {
-      const jobs = await (await fetch('/api/jobs')).json();
-      return jobs.some(
-        (j) => j.plan === id && j.kind === 'first-person-prepare' && j.status === 'complete',
-      );
-    },
-    planId,
-    { timeout: 60000 },
-  );
+  await section.getByRole('button', { name: 'Prepare basic view', exact: true }).click();
+  for (let n = 0; n < 200; n++) {
+    const jobs = await (await page.request.get(base + '/api/jobs')).json();
+    const current = jobs.find(j => j.plan === planId && j.kind === 'first-person-prepare');
+    if (current?.status === 'failed') throw Error(current.error);
+    if (current?.status === 'complete') break;
+    if (n === 199) throw Error('Scene preparation did not complete');
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
   const meta = await (
     await page.request.get(base + '/api/runs/' + runId + '/first-person/' + cid)
   ).json();
@@ -96,6 +96,7 @@ try {
   await page.route(planUrl, async (route) => {
     const response = await route.fetch();
     const value = await response.json();
+    value.fidelity = 'best';
     value.storage.blocked = true;
     value.storage.volumes.forEach((v) => {
       v.free_bytes = value.storage.reserve_bytes + value.storage.required_bytes - 1;
@@ -106,7 +107,7 @@ try {
   section = await viewer();
   await section.getByText('Insufficient storage for this plan', { exact: false }).waitFor();
   assert.equal(
-    await section.getByRole('button', { name: 'Prepare views', exact: true }).isDisabled(),
+    await section.getByRole('button', { name: 'Prepare detailed view', exact: true }).isDisabled(),
     true,
   );
   await page.setViewportSize({ width: 900, height: 900 });

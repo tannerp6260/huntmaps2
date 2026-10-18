@@ -42,14 +42,18 @@ def locked(path):
 
 
 def atomic_write(path, value, *, compact=False):
+    content = json.dumps(value, indent=None if compact else 2, allow_nan=False) + "\n"
+    atomic_bytes(path, content.encode())
+
+
+def atomic_bytes(path, content):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    content = json.dumps(value, indent=None if compact else 2, allow_nan=False) + "\n"
     descriptor, temporary = tempfile.mkstemp(
         prefix="." + path.name + "-", suffix=".tmp", dir=path.parent
     )
     try:
-        with os.fdopen(descriptor, "w") as handle:
+        with os.fdopen(descriptor, "wb") as handle:
             handle.write(content)
             handle.flush()
             os.fsync(handle.fileno())
@@ -147,6 +151,14 @@ def validate(path, records):
             ):
                 raise ValueError(
                     f"Invalid review decision in {path}; restore a backup."
+                )
+            if (
+                Path(path).parent.name == "annotations"
+                and "revision" in record
+                and (type(record["revision"]) is not int or record["revision"] < 0)
+            ):
+                raise ValueError(
+                    f"Invalid review revision in {path}; preserve the file and restore a backup."
                 )
             if "notes" in record and not isinstance(record["notes"], str):
                 raise ValueError(f"Invalid notes in {path}; expected text.")

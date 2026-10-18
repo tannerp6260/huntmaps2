@@ -15,6 +15,9 @@ import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
 BROWSER_CHECKS = (
+    "browser-scene-recovery-check",
+    "browser-audit-regressions",
+    "browser-connectivity-check",
     "browser-lidar-recovery-check",
     "browser-guided-flow-check",
     "browser-find-flow-check",
@@ -84,6 +87,11 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--skip-browser", action="store_true")
     parser.add_argument(
+        "--keep-going",
+        action="store_true",
+        help="Run remaining browser journeys after a failure; overall check still fails",
+    )
+    parser.add_argument(
         "--browser-only",
         action="store_true",
         help="Reuse a prior passing unit-test run; check formatting, build and browser journeys",
@@ -113,6 +121,11 @@ def main():
         HUNTMAPS_SCENE_SOURCE=str(ROOT / ".gui/first-person"),
         HUNTMAPS_BROWSER=os.environ.get("HUNTMAPS_BROWSER", "/usr/bin/google-chrome"),
     )
+    from PIL import Image
+
+    provider_fixture = work / "transportation-fixture.png"
+    Image.new("RGBA", (256, 256)).save(provider_fixture)
+    env["HUNTMAPS_BROWSING_FIXTURE"] = str(provider_fixture)
     (work / "workspace").mkdir()
     from .preservation import audit
 
@@ -366,13 +379,35 @@ def main():
                     time.sleep(0.1)
             else:
                 raise RuntimeError("Dedicated test server did not become ready")
+            browser_results = {}
             for check in args.browser_check or BROWSER_CHECKS:
                 script = check + ".mjs"
                 env["HUNTMAPS_SCREENSHOTS"] = str(
                     work / "screenshots" / script.removesuffix(".mjs")
                 )
-                run(
-                    ["node", script], script.removesuffix(".mjs"), ROOT / "gui/frontend"
+                try:
+                    run(
+                        ["node", script],
+                        script.removesuffix(".mjs"),
+                        ROOT / "gui/frontend",
+                    )
+                    browser_results[check] = "passed"
+                except (RuntimeError, subprocess.TimeoutExpired) as error:
+                    browser_results[check] = str(error)
+                    if not args.keep_going:
+                        raise
+                finally:
+                    (work / "browser-results.json").write_text(
+                        json.dumps(browser_results, indent=2)
+                    )
+            if any(value != "passed" for value in browser_results.values()):
+                raise RuntimeError(
+                    "Browser failures: "
+                    + ", ".join(
+                        key
+                        for key, value in browser_results.items()
+                        if value != "passed"
+                    )
                 )
         if process is not None:
             (work / "server-memory.txt").write_text(

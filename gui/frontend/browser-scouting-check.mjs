@@ -1,4 +1,4 @@
-import { openExisting, reloadExisting } from './browser-startup.mjs';
+import { openExisting, reloadExisting, openNetworks } from './browser-startup.mjs';
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
@@ -21,7 +21,7 @@ await page.getByLabel('Focused approach spot').selectOption('A0075');
 await page.getByLabel('Import road trail network',{exact:true}).setInputFiles({name:'synthetic-network.geojson',mimeType:'application/geo+json',buffer:Buffer.from(JSON.stringify(network))});
 await page.getByLabel('Import travel area',{exact:true}).setInputFiles({name:'synthetic-travel.geojson',mimeType:'application/geo+json',buffer:Buffer.from(JSON.stringify(area))});
 
-await page.locator('.approach-settings').waitFor();if (await page.locator('.approach-settings').getAttribute('open') === null) await page.locator('.approach-settings > summary').click();await page.getByText('More options · pinned departure and preferences',{exact:true}).click();await page.getByLabel('Maximum approach slope',{exact:true}).fill('60');
+await page.locator('.approach-settings').waitFor();if (await page.locator('.approach-settings').getAttribute('open') === null) await page.locator('.approach-settings > summary').click();await page.getByText('More options · pinned departure and preferences',{exact:true}).click();await page.getByLabel('Maximum approach slope',{exact:true}).fill('35');
 await page.getByRole('button',{name:'Confirm approach search boundary',exact:true}).click();
 await page.getByText('Boundary confirmed for this setup',{exact:false}).waitFor();
 await page.locator('.approach-boundary-check[data-ready="true"]').waitFor();
@@ -30,7 +30,7 @@ await page.getByRole('link',{name:'Provisional approach GeoJSON',exact:true}).fi
 const href=await page.getByRole('link',{name:'Provisional approach GeoJSON',exact:true}).first().getAttribute('href');
 const data=await (await page.request.get(base+href)).json();
 const destination=data.features.find(f=>f.geometry.type==='Point').geometry.coordinates;assert.deepEqual(destination,[lon,lat]);
-await page.locator('.layers > summary').click();const controls = page.locator('.network-map-controls');
+await page.locator('.layers > summary').click();const controls = await openNetworks(page);
 await controls.getByLabel('Roads', {exact:false}).uncheck();
 assert.ok(await page.getByRole('link',{name:'Provisional approach GeoJSON',exact:true}).count());
 await controls.getByLabel('Roads', {exact:false}).check();
@@ -70,6 +70,7 @@ await page.route('**/api/network-plans', async route => {
   assert.equal(body.bounds.length,4);
   await route.fulfill({json:{id:planId,provider:'Synthetic USFS download review',estimated_bytes:20000000,note:'Shared cap; synthetic test',bounds:body.bounds}});
 });
+await openNetworks(page);
 await controls.getByRole('button',{name:'Review road/trail download',exact:true}).click();
 assert.equal(await controls.getByRole('button',{name:'Download mapped roads/trails',exact:true}).isDisabled(),false);
 assert.equal(await controls.getByRole('checkbox',{name:'Approve this reviewed network download',exact:true}).count(),0);
@@ -80,5 +81,7 @@ await page.route(`**/api/network-plans/${planId}/start`, async route => {
 await controls.getByRole('button',{name:'Download mapped roads/trails',exact:true}).click();
 await controls.getByRole('alert').filter({hasText:'Synthetic network acquisition failure'}).waitFor();
 await page.screenshot({path:out+'/23-network-download-900.png',fullPage:true});
-await page.request.put(`${base}/api/runs/${rid}/annotations/A0075`,{headers,data:old.A0075||{status:'unmarked',notes:''}});
+const currentReview=await (await page.request.get(`${base}/api/runs/${rid}/annotations`)).json();
+const restoredReview=await page.request.put(`${base}/api/runs/${rid}/annotations/A0075`,{headers,data:{...(old.A0075||{status:'unmarked',notes:''}),revision:currentReview.A0075?.revision ?? 0}});
+assert.equal(restoredReview.status(),200,await restoredReview.text());
 assert.deepEqual(errors,[]);await browser.close();console.log('Scouting filter/keep/travel/approach/export/stale preferences and 600 MB allowance browser checks passed');

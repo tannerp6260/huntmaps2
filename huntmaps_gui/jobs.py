@@ -1,6 +1,8 @@
 """One process group at a time; durable job records, bounded logs and safe cancellation."""
 
 import json
+import math
+import re
 import os
 import signal
 import subprocess
@@ -19,6 +21,55 @@ BOOT_ID = (
 
 
 from .storage import write, locked as file_locked
+
+
+def validate_record(path, record):
+    """Validate before arithmetic, filesystem access, restart recovery or signals."""
+
+    def number(value):
+        return (
+            not isinstance(value, bool)
+            and isinstance(value, (int, float))
+            and math.isfinite(value)
+            and value >= 0
+        )
+
+    valid = (
+        isinstance(record, dict)
+        and record.get("id") == path.stem
+        and re.fullmatch(r"[a-f0-9]{32}", path.stem)
+        and isinstance(record.get("kind"), str)
+        and isinstance(record.get("status"), str)
+        and record["status"]
+        in ACTIVE | {"complete", "failed", "cancelled", "interrupted"}
+        and number(record.get("started"))
+        and (record.get("finished") is None or number(record["finished"]))
+        and (
+            record.get("pid") is None
+            or (type(record["pid"]) is int and record["pid"] > 0)
+        )
+        and all(
+            record.get(k) is None or isinstance(record[k], str)
+            for k in ("ticks", "boot_id", "name", "plan", "stage")
+        )
+    )
+    if not valid:
+        raise ValueError(
+            f"Damaged job record: {path}. Preserve it and restore a backup."
+        )
+    return record
+
+
+def has_active_jobs(folder):
+    """Unknown worker state must conservatively retain caches, without 500s."""
+    for path in folder.glob("*.json"):
+        try:
+            record = validate_record(path, read(path))
+        except ValueError:
+            return True
+        if record["status"] in ACTIVE:
+            return True
+    return False
 
 
 def start_ticks(pid):
@@ -48,12 +99,7 @@ class Jobs:
                 continue
             try:
                 j = read(p)
-                if not isinstance(j, dict) or not all(
-                    k in j for k in ("id", "status", "started", "kind")
-                ):
-                    raise ValueError(
-                        f"Damaged job record: {p}. Preserve it and restore a backup."
-                    )
+                validate_record(p, j)
             except ValueError as error:
                 self.storage_errors.append(str(error))
                 continue
@@ -114,12 +160,7 @@ class Jobs:
                 continue
             try:
                 j = read(p)
-                if not isinstance(j, dict) or not all(
-                    k in j for k in ("id", "status", "started", "kind")
-                ):
-                    raise ValueError(
-                        f"Damaged job record: {p}. Preserve it and restore a backup."
-                    )
+                validate_record(p, j)
             except ValueError as error:
                 result.append(
                     dict(
@@ -210,8 +251,14 @@ class Jobs:
         with configured(self.config), file_locked(
             self.config.state_dir / "maintenance"
         ), self.lock:
-            if any(j["status"] in ACTIVE for j in self.list(include_logs=False)):
+            if (self.process is not None and self.process.poll() is None) or any(
+                j["status"] in ACTIVE for j in self.list(include_logs=False)
+            ):
                 raise ValueError("Another job is running. Wait or cancel it first.")
+            if any(j["status"] == "damaged" for j in self.list(include_logs=False)):
+                raise ValueError(
+                    "Recover the damaged job record in Storage before starting another worker; its active state is unknown"
+                )
             ident = uuid.uuid4().hex
             j = dict(
                 id=ident,
@@ -234,22 +281,49 @@ class Jobs:
                 MPLCONFIGDIR=str(self.config.state_dir / "mpl"),
             )
             env["HUNTMAPS_PROGRESS_FILE"] = str(self.folder / (ident + ".progress"))
-            self.process = subprocess.Popen(
-                [sys.executable, "-u", "-m", "huntmaps_gui.guarded_job", *command],
-                cwd=cwd or self.config.source_dir,
-                env=env,
-                stdout=log,
-                stderr=subprocess.STDOUT,
-                start_new_session=True,
-            )
-            proc = self.process
-            j.update(pid=proc.pid, ticks=start_ticks(proc.pid), boot_id=BOOT_ID)
-            write(self.folder / (ident + ".json"), j)
-            waiter = threading.Thread(
-                target=self._wait, args=(ident, proc, log), daemon=True
-            )
-            self.wait_threads.append(waiter)
-            waiter.start()
+            proc = None
+            try:
+                proc = subprocess.Popen(
+                    [sys.executable, "-u", "-m", "huntmaps_gui.guarded_job", *command],
+                    cwd=cwd or self.config.source_dir,
+                    env=env,
+                    stdout=log,
+                    stderr=subprocess.STDOUT,
+                    start_new_session=True,
+                )
+                self.process = proc
+                j.update(pid=proc.pid, ticks=start_ticks(proc.pid), boot_id=BOOT_ID)
+                write(self.folder / (ident + ".json"), j)
+                waiter = threading.Thread(
+                    target=self._wait, args=(ident, proc, log), daemon=True
+                )
+                waiter.start()
+                self.wait_threads.append(waiter)
+            except BaseException:
+                # Submission is transactional: even failed persistence/thread creation
+                # must not leave a worker capable of publishing untracked output.
+                if proc is not None:
+                    try:
+                        os.killpg(proc.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                    proc.wait()
+                log.close()
+                self.process = None
+                path = self.folder / (ident + ".json")
+                if path.exists():
+                    j.update(
+                        status="failed",
+                        finished=time.time(),
+                        stage="Submission failed; worker stopped",
+                    )
+                    try:
+                        write(path, j)
+                    except OSError as error:
+                        self.storage_errors.append(
+                            f"Job submission record needs recovery: {path}: {error}"
+                        )
+                raise
             return j
 
     def _wait(self, ident, proc, log):
@@ -259,7 +333,11 @@ class Jobs:
             self.config.state_dir / "maintenance"
         ), self.lock:
             path = self.folder / (ident + ".json")
-            j = read(path)
+            try:
+                j = validate_record(path, read(path))
+            except ValueError as error:
+                self.storage_errors.append(str(error))
+                return
             # A restarted manager may already have recorded interruption. A late
             # waiter must not overwrite that durable diagnosis with generic failure.
             if j["status"] not in ACTIVE:
@@ -325,7 +403,13 @@ class Jobs:
                     (diagnostics[-1] if diagnostics else "Scouting job failed.")
                     + " Prior scenarios and sources retained; inspect the job log and explicitly recompute after correcting the named constraint or source."
                 )
-            write(path, j)
+            try:
+                write(path, j)
+            except OSError as error:
+                self.storage_errors.append(
+                    f"Job finished but its record needs recovery: {path}: {error}"
+                )
+                return
             errors_before = len(self.storage_errors)
             self.reconcile()
             if (
@@ -351,9 +435,13 @@ class Jobs:
             self.config.state_dir / "maintenance"
         ), self.lock:
             path = self.folder / (ident + ".json")
-            j = read(path)
-            if not j or j["status"] not in ACTIVE:
+            j = validate_record(path, read(path))
+            if j["status"] not in ACTIVE:
                 raise ValueError("Job is not running")
+            if not j.get("pid") or not j.get("ticks"):
+                raise ValueError(
+                    "Job process identity unavailable; preserve the record and restart for recovery"
+                )
             j["status"] = "cancelling"
             write(path, j)
             if start_ticks(j["pid"]) == j["ticks"]:
@@ -371,7 +459,15 @@ class Jobs:
         with configured(self.config), file_locked(
             self.config.state_dir / "maintenance"
         ), self.lock:
-            current = read(self.folder / (j["id"] + ".json"))
+            path = self.folder / (j["id"] + ".json")
+            current = read(path)
+            if current is None:
+                return
+            try:
+                validate_record(path, current)
+            except ValueError as error:
+                self.storage_errors.append(str(error))
+                return
             if current["status"] not in ACTIVE:
                 return
             try:
@@ -380,8 +476,24 @@ class Jobs:
                 pass
 
     def shutdown(self):
-        for j in self.list(include_logs=False):
-            if j["status"] == "running":
-                self.cancel(j["id"])
+        try:
+            for j in self.list(include_logs=False):
+                if j["status"] == "running":
+                    try:
+                        self.cancel(j["id"])
+                    except (OSError, ValueError) as error:
+                        self.storage_errors.append(str(error))
+        except (OSError, ValueError) as error:
+            self.storage_errors.append(str(error))
         for thread in self.kill_threads + self.wait_threads:
             thread.join(timeout=3)
+        # A damaged/full record store must not defeat shutdown of our own child.
+        proc = self.process
+        if proc is not None and proc.poll() is None:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            proc.wait(timeout=3)
+            for thread in self.wait_threads:
+                thread.join(timeout=3)

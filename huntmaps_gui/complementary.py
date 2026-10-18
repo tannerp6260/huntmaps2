@@ -147,9 +147,19 @@ def decision_state(run):
 
 
 class Context:
-    def __init__(self, ident, profile, jobs):
+    def __init__(self, ident, profile, jobs, connection_screen=""):
         self.run = DisplayRun(ident, jobs)
         r = self.run
+        self.connection_screen = connection_screen
+        if connection_screen:
+            from .connectivity import eligible
+
+            connection_ids = eligible(ident, connection_screen)
+        else:
+            connection_ids = None
+        self.connection_ids = (
+            sorted(connection_ids) if connection_ids is not None else []
+        )
         if r.dem.RasterXSize * r.dem.RasterYSize > 3_000_000:
             raise ValueError("Collection coverage exceeds the existing grid limit")
         self.state = decision_state(ident)
@@ -252,6 +262,8 @@ class Context:
                 and 0 <= col < self.shape[1]
                 and bool(observer[row, col])
             )
+            if connection_ids is not None:
+                eligible = eligible and cid in connection_ids
             if self.filtered.standing is not None:
                 eligible = eligible and bool(self.filtered.standing[row, col])
             settings = self.filtered.settings
@@ -303,6 +315,7 @@ class Context:
                 sources=self.sources,
                 config=r.config,
                 rows=self.rows,
+                connection_screen=connection_screen,
             )
         )
 
@@ -368,12 +381,12 @@ def write_mask(path, packed, run, width):
     rgba_file(path, rgba, run.dem)
 
 
-def calculate(ident, count=5, profile="", jobs=None):
+def calculate(ident, count=5, profile="", jobs=None, connection_screen=""):
     if type(count) is not int or count not in (3, 4, 5):
         raise ValueError("Choose a collection size from three to five positions")
     started = time.perf_counter()
     with CALCULATION:
-        context = Context(ident, profile, jobs)
+        context = Context(ident, profile, jobs, connection_screen)
         token = digest([context.stamp, count])[:32]
         home = folder(token)
         cached = read_json(home / "result.json")
@@ -429,6 +442,8 @@ def calculate(ident, count=5, profile="", jobs=None):
             id=token,
             run_id=ident,
             profile=profile,
+            connection_screen=connection_screen,
+            connection_eligible=context.connection_ids,
             count=count,
             stamp=context.stamp,
             version=VERSION,
@@ -495,6 +510,14 @@ def load_result(ident, token):
         raise ValueError(
             "Decisions or waypoints changed; calculate the collection again"
         )
+    if result.get("connection_screen"):
+        from .connectivity import eligible
+
+        ids = eligible(ident, result["connection_screen"])
+        if sorted(ids) != result.get("connection_eligible", []):
+            raise ValueError(
+                "Connection eligibility changed; calculate the collection again"
+            )
     for path, (_, expected) in result["sources"].items():
         if identity(path) != expected:
             raise ValueError(
@@ -523,7 +546,9 @@ def add(ident, token, jobs):
     """Atomically add the reviewed suggestions. Preserve every existing decision."""
     with CALCULATION, locked(STATE / "maintenance"), locked(workflow.path(ident)):
         result = load_result(ident, token)
-        context = Context(ident, result["profile"], jobs)
+        context = Context(
+            ident, result["profile"], jobs, result.get("connection_screen", "")
+        )
         if context.stamp != result["stamp"]:
             raise ValueError(
                 "Collection inputs changed; calculate the collection again"

@@ -11,18 +11,34 @@ page.on('response',async r=>{if(r.request().method()==='PUT' && r.url().includes
 page.on('pageerror',e=>errors.push(e.message));
 await page.addInitScript(()=>localStorage.setItem('huntmaps-online-imagery','off'));
 await page.route('**/*',r=>r.request().url().startsWith(base)||r.request().url().startsWith('blob:')?r.continue():r.abort());
+async function activate(locator) { await locator.focus(); await page.keyboard.press('Enter'); }
 try {
  await openExisting(page, base);
  await page.getByLabel('Run selector').selectOption(runId);
  if(runId!=='workflow-fixture')await page.getByLabel('Saved neighborhood').selectOption('all');
+ if(runId!=='workflow-fixture') await page.getByLabel('Find a setup').fill('A0001');
  await page.getByLabel('Select A0001',{exact:true}).click();
+ if(runId!=='workflow-fixture') await page.getByLabel('Find a setup').fill('');
  const api=`${base}/api/runs/${runId}`;
  const p=await (await page.request.get(api+'/candidates/A0001')).json();
  const initial=await (await page.request.get(api+'/workflow')).json();
  if(initial.points.A0001?.shortlisted) {await page.request.put(api+'/workflow/A0001',{headers:{'X-HuntMaps':'local'},data:{action:'remove',revision:initial.revision,point:initial.points.A0001.point}});await reloadExisting(page);await page.getByLabel('Run selector').selectOption(runId);await page.getByLabel('Saved neighborhood').selectOption('all');await page.getByLabel('Select A0001',{exact:true}).click();}
  const run=await (await page.request.get(api)).json();
- const listIds=()=>page.locator('.candidate-select strong').allTextContents().then(ids=>ids.map(id=>id.trim().split(' · ')[0]));
+ const listIds=async()=> {
+  const ids=[];
+  const previous=page.getByRole('button',{name:'Previous setups',exact:true}), next=page.getByRole('button',{name:'Next setups',exact:true});
+  while(await previous.count() && await previous.isEnabled()) { await previous.click(); }
+  do {
+   ids.push(...(await page.locator('.candidate-select strong').allTextContents()).map(id=>id.trim().split(' · ')[0]));
+   if(!await next.count() || await next.isDisabled()) break;
+   const first=await page.locator('.candidate-select strong').first().innerText();
+   await next.click();
+   await page.waitForFunction(old=>document.querySelector('.candidate-select strong')?.textContent!==old,first);
+  } while(true);
+  return ids;
+ };
  assert.deepEqual(await listIds(),[...run.candidates].sort((a,b)=>b.metrics.raw_km2-a.metrics.raw_km2).map(p=>p.id));
+ if(run.candidates.length>250) await page.getByLabel('Find a setup').fill('A0001');
  const card=page.locator('[data-tour="setup-A0001"]');
  await card.getByRole('button',{name:'Dismiss',exact:true}).click();
  await page.waitForFunction(()=>!document.querySelector('[data-tour="setup-A0001"]'));
@@ -35,17 +51,19 @@ try {
  await page.waitForFunction(()=>!document.querySelector('[data-tour="setup-A0001"]'));
  await page.getByLabel('Saved neighborhood').selectOption('all');
  await card.waitFor();
+ await page.getByLabel('Find a setup').fill('');
  await page.getByLabel('Setup order').selectOption('engine');
  assert.deepEqual(await listIds(),[...run.candidates].sort((a,b)=>(b.metrics.baseline_score??b.metrics.selective_score??-1)-(a.metrics.baseline_score??a.metrics.selective_score??-1)).map(p=>p.id));
  await page.getByLabel('Setup order').selectOption('coverage');
+ if(run.candidates.length>250) await page.getByLabel('Find a setup').fill('A0001');
  const nav=page.getByRole('navigation',{name:'Scouting workflow'});
  assert.equal(await nav.getByRole('button',{name:/Approach.*selected/}).isDisabled(),true);
  await card.getByRole('button',{name:'Shortlist',exact:true}).click();
  await nav.getByRole('button',{name:/Approach.*selected/}).waitFor();
  await page.waitForFunction(()=>!Array.from(document.querySelectorAll('.workflow-stages button')).find(b=>b.textContent.includes('Approach')).disabled);
  await page.screenshot({path:out+'/01-find-desktop.png',fullPage:true});
- await nav.getByRole('button',{name:/Approach.*selected/}).click();
- await page.getByText('Confirm an approach search boundary that includes your spots and a road or trail.',{exact:true}).waitFor();
+ await activate(nav.getByRole('button',{name:/Approach.*selected/}));
+ await page.getByText('Confirm this boundary to continue.',{exact:true}).waitFor();
  const lon=p.longitude,lat=p.latitude;
  const network={type:'LineString',coordinates:[[lon-.0008,lat-.001],[lon-.0008,lat+.001]]};
  const area={type:'Polygon',coordinates:[[[lon-.002,lat-.002],[lon+.002,lat-.002],[lon+.002,lat+.002],[lon-.002,lat+.002],[lon-.002,lat-.002]]]};
@@ -61,18 +79,18 @@ try {
  await page.getByRole('button',{name:'Use this approach & next spot',exact:true}).first().click();
  await page.waitForFunction(()=>!Array.from(document.querySelectorAll('.workflow-stages button')).find(b=>b.textContent.includes('Inspect')).disabled);
  await page.screenshot({path:out+'/02-approaches-desktop.png',fullPage:true});
- await nav.getByRole('button',{name:/Inspect.*terrain/}).click();
+ await activate(nav.getByRole('button',{name:/Inspect.*terrain/}));
  const task=page.locator('.workflow-task').first();
  assert.equal(await task.getByRole('button',{name:'Confirm setup',exact:true}).isDisabled(),true);
  await task.getByText('Scene data details',{exact:true}).click();await task.getByLabel('View detail',{exact:true}).selectOption('terrain');
  await task.getByRole('button',{name:/Prepare view/}).click();
  await page.getByRole('dialog').waitFor();
- await page.getByRole('dialog').getByRole('button',{name:'Prepare views',exact:true}).click({timeout:60000});
+ await page.getByRole('dialog').getByRole('button',{name:'Prepare basic view',exact:true}).click({timeout:60000});
  await page.getByRole('dialog').getByRole('button',{name:'Confirm setup',exact:true}).waitFor({timeout:60000});
  await page.waitForFunction(()=>!document.querySelector('.fp-workspace .workflow-task button').disabled);
  await page.screenshot({path:out+'/03-inspect-desktop.png',fullPage:true});
  const confirmation=page.waitForResponse(r=>r.url()===api+'/workflow/A0001' && r.request().method()==='PUT' && r.request().postDataJSON()?.action==='confirm');
- await page.getByRole('dialog').getByRole('button',{name:'Confirm setup',exact:true}).click();
+ await activate(page.getByRole('dialog').getByRole('button',{name:'Confirm setup',exact:true}));
  const confirmed=await confirmation;assert.equal(confirmed.status(),200);assert.equal((await confirmed.json()).points.A0001.confirmed,true);
  await page.waitForFunction(()=>document.querySelector('.workflow-stages').textContent.includes('1 confirmed'));
 
@@ -81,7 +99,7 @@ try {
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  if(await page.getByRole('button',{name:'Return to map',exact:true}).count())await page.getByRole('button',{name:'Return to map',exact:true}).click();
  await page.screenshot({path:out+'/05-confirmed-900.png',fullPage:true});
- await nav.getByRole('button',{name:/Save.*confirmed/}).click();
+ await activate(nav.getByRole('button',{name:/Save.*confirmed/}));
  await page.locator('.collection-item').filter({hasText:'A0001'}).waitFor();
  assert.equal(await page.locator('.collection-export a').count(),2);
  await page.screenshot({path:out+'/06-saved-collection.png',fullPage:true});

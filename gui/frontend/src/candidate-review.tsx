@@ -13,6 +13,7 @@ export default function CandidateCard({
   busy,
   onDecision,
   matching,
+  connection,
   selected,
   activeManual,
   compare,
@@ -32,6 +33,7 @@ export default function CandidateCard({
   busy?: boolean;
   onDecision?: (action: string) => void;
   matching?: number;
+  connection?: string;
   selected: string;
   activeManual: boolean;
   compare: string[];
@@ -81,7 +83,7 @@ export default function CandidateCard({
           />
         </span>
         <span className="candidate-signals">
-          <small>{approach ? '✓ Approach selected' : 'Access to review'}</small>
+          <small>{approach ? '✓ Approach selected' : connection || 'Access to review'}</small>
           <small>
             {typeof p.metrics.foreground_tree_mean === 'number'
               ? `${(p.metrics.foreground_tree_mean * 100).toFixed(0)}% nearby trees`
@@ -108,6 +110,7 @@ export default function CandidateCard({
           <input
             type="checkbox"
             aria-label={`Compare ${p.id}`}
+            title="Compare terrain views; this does not shortlist the setup"
             checked={compare.includes(p.id)}
             onChange={() => toggleCompare(p.id)}
           />
@@ -117,6 +120,7 @@ export default function CandidateCard({
           <input
             type="checkbox"
             aria-label={`Export ${p.id}`}
+            title="Select for provisional waypoint export; the confirmed collection is in Save"
             checked={exportIds.includes(p.id)}
             onChange={() => toggleExport(p.id)}
           />

@@ -26,6 +26,7 @@ class Review(Payload):
 
 
 class Annotation(Payload):
+    revision: StrictInt = Field(default=0, ge=0)
     status: Decision
     notes: str = Field(default="", max_length=10000)
 

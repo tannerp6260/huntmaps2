@@ -1,3 +1,4 @@
+import { workflowFixture } from './browser-fixture.mjs';
 import { openExisting, reloadExisting } from './browser-startup.mjs';
 import { chromium } from 'playwright';
 import fs from 'node:fs';
@@ -15,6 +16,7 @@ page.on('pageerror',e=>errors.push(e.message));
 await page.addInitScript(()=>localStorage.setItem('huntmaps-online-imagery','off'));
 const headers={'X-HuntMaps':'local'};
 try {
+ await workflowFixture(page.request, base);
   // No routing during this section: test actual browser cache, not intercepted responses.
   await openExisting(page, base);await page.getByLabel('Run selector').selectOption('workflow-fixture');
   const sceneUrl='/api/runs/workflow-fixture/first-person/A0001';

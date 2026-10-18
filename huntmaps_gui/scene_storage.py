@@ -9,6 +9,30 @@ SCENE_BYTES = 60_000_000
 METADATA_BYTES = 64_000
 
 
+def effective_plan(plan):
+    """Current verified cache view; keep the stored approval and ledger immutable."""
+    from .scene_sources import cached_source
+
+    value = dict(plan)
+    missing = 0
+    for field, kind in (("sources", "sources"), ("imagery_sources", "imagery")):
+        value[field] = []
+        for source in plan.get(field, []):
+            cached = cached_source(source, kind)
+            item = dict(cached or source)
+            value[field].append(item)
+            if not item.get("cached"):
+                missing += item.get("remaining_bytes", item.get("bytes", 0))
+    # Legacy plans may contain only a total estimate; do not treat unknown sizes
+    # as a verified zero-byte preparation.
+    value["estimated_new_bytes"] = (
+        missing
+        if value["sources"] or value["imagery_sources"]
+        else plan.get("estimated_new_bytes", 0)
+    )
+    return value
+
+
 def estimate(plan, allow=True):
     from .lidar_batch import MAX_SPOOL_BYTES
 
@@ -44,6 +68,7 @@ def usage():
 
 
 def review(plan):
+    plan = effective_plan(plan)
     work = estimate(plan)
     info = downloads.review_info(
         [fp.HOME],
@@ -59,6 +84,7 @@ def review(plan):
 
 
 def check_plan(plan, allow):
+    plan = effective_plan(plan)
     work = estimate(plan, allow)
     required = (
         3 * (plan.get("estimated_new_bytes", 0) if allow else 0)

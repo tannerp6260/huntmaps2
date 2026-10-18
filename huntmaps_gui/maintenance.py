@@ -9,8 +9,8 @@ import uuid
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
 from .config import STATE, current
-from .storage import locked, read_json, write, atomic_write, validate
-from .jobs import ACTIVE
+from .storage import locked, read_json, write, atomic_write, atomic_bytes, validate
+from .jobs import validate_record, has_active_jobs
 
 router = APIRouter(prefix="/api/storage")
 
@@ -60,9 +60,14 @@ def status(request: Request = None):
         *(STATE / "jobs").glob("*.json"),
     ]:
         try:
-            read_json(path)
+            value = read_json(path)
+            if path.parent == STATE / "jobs":
+                validate_record(path, value)
         except ValueError as error:
             problems.append(str(error))
+    from .catalog import run_problems
+
+    problems.extend(run_problems())
     return dict(
         state_dir=str(STATE),
         records=len(records()),
@@ -149,6 +154,7 @@ def restore(body: Restore):
                 )
                 for part in target.relative_to(STATE.resolve()).parts
             ):
+                read_json(source) if source.suffix == ".json" else None
                 restored[target] = source.read_bytes()
                 continue
             value = read_json(source)
@@ -156,23 +162,24 @@ def restore(body: Restore):
             if target.name == "state.json":
                 value = dict(value, pending={})
             restored[target] = value
+        later = set(records()) - set(restored)
         key = backup()
         for target, value in restored.items():
             # Restore may replace malformed current records, with their bytes backed up.
             if isinstance(value, bytes):
-                target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_bytes(value)
+                atomic_bytes(target, value)
             else:
                 atomic_write(target, dict(_store_version=1, records=value))
-        return dict(restored=len(restored), backup=key)
+        for path in later:
+            path.unlink()
+        return dict(restored=len(restored), removed=len(later), backup=key)
 
 
 def ensure_idle():
-    for path in (STATE / "jobs").glob("*.json"):
-        if read_json(path)["status"] in ACTIVE:
-            raise ValueError(
-                "Wait for the active job or cancel it before storage maintenance."
-            )
+    if has_active_jobs(STATE / "jobs"):
+        raise ValueError(
+            "Wait for the active job, or recover a damaged job record in Storage before maintenance."
+        )
 
 
 def inventory():
@@ -219,9 +226,7 @@ def inventory():
         revisions.update(
             (path.parent.name, p["revision"]) for p in data["pending"].values()
         )
-    active = any(
-        read_json(p)["status"] in ACTIVE for p in (STATE / "jobs").glob("*.json")
-    )
+    active = has_active_jobs(STATE / "jobs")
     items = []
 
     def add(path, kind, retain):

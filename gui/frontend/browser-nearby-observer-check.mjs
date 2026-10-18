@@ -21,7 +21,7 @@ try{
  for(const cid of ['A0075','V010','V008','A0031']){console.log('Checking nearby '+cid);
   await page.getByLabel('First-person setup',{exact:true}).selectOption(cid);await loaded(cid);const meta=await (await page.request.get(api+'/first-person/'+cid)).json();
   assert.equal((await state()).vegetationScenario,'dense');assert.equal((await state()).vegetationRadius,120);assert.equal(await page.getByLabel('Nearby foliage range',{exact:true}).count(),0);
-  await page.getByRole('button',{name:'Explore nearby positions',exact:true}).click();await page.getByLabel('First-person heading',{exact:true}).fill('187');await page.getByLabel('First-person look angle',{exact:true}).fill('-16');await page.waitForTimeout(500);
+  await page.getByRole('button',{name:'Refine standing position',exact:true}).click();await page.getByLabel('First-person heading',{exact:true}).fill('187');await page.getByLabel('First-person look angle',{exact:true}).fill('-16');await page.waitForTimeout(500);
   // Prepare the visible movement control before timing its click-to-pose latency.
   const move=page.getByRole('button',{name:'Move observer one foot east',exact:true});
   await move.scrollIntoViewIfNeeded();await move.click({trial:true});

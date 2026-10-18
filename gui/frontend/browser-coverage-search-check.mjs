@@ -30,7 +30,11 @@ try {
  const run=await (await page.request.get(base+'/api/runs/search-fixture')).json();
  assert.equal(run.recommendation_ids.length,5);
  assert.equal(await page.getByLabel('Saved neighborhood').inputValue(),'recommended');
- assert.deepEqual((await page.locator('.candidate-select strong').allTextContents()).map(v=>v.trim()),run.recommendation_ids);
+ const workflow=await (await page.request.get(base+'/api/runs/search-fixture/workflow')).json();
+ const retained=Object.entries(workflow.points).filter(([,p])=>p.shortlisted).map(([id])=>id);
+ const expected=[...new Set([...run.recommendation_ids,...retained])].sort((a,b)=>run.candidates.find(p=>p.id===b).metrics.raw_km2-run.candidates.find(p=>p.id===a).metrics.raw_km2);
+ const actual=(await page.locator('.candidate-select strong').allTextContents()).map(v=>v.trim());
+ assert.deepEqual(new Set(actual),new Set(expected),'Recommendations also retain explicitly shortlisted setups');
  const selected=run.recommendation_ids[0];
  const failedPoint=selected === "A0002" ? "A0001" : "A0002";
  const originalRequests=requests.filter(v=>v.includes('/'+selected+'/')).length;

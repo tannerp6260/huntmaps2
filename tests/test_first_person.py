@@ -120,9 +120,9 @@ class GroundDiagnostics(unittest.TestCase):
             while next(v for v in jobs.list() if v['id']==fail['id'])['status']=='running' and time.monotonic()<deadline:time.sleep(.02)
             record=next(v for v in jobs.list() if v['id']==fail['id'])
             self.assertEqual(record['status'],'failed');self.assertIn('synthetic source missing',record['error'])
-            write(state/'jobs'/'interrupted.json',dict(id='interrupted',status='running',started=time.time(),kind='first-person-prepare'))
+            write(state/'jobs'/('e'*32+'.json'),dict(id='e'*32,status='running',started=time.time(),kind='first-person-prepare'))
             restarted=Jobs(state)
-            self.assertEqual(next(v for v in restarted.list() if v['id']=='interrupted')['status'],'interrupted')
+            self.assertEqual(next(v for v in restarted.list() if v['id']=='e'*32)['status'],'interrupted')
             jobs.shutdown();restarted.shutdown()
     def test_download_budget_and_cached_only(self):
         with tempfile.TemporaryDirectory() as d,configured(AppConfig(state_dir=Path(d))):

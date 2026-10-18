@@ -11,12 +11,12 @@ try{
  const oldPlan=await page.evaluate(()=>localStorage.getItem('huntmaps-first-person-plan'));
  await page.locator('summary').filter({hasText:'View preparation & source detail'}).click();await page.getByRole('button',{name:'Check source plan',exact:true}).click();
  await page.waitForFunction(old=>localStorage.getItem('huntmaps-first-person-plan')!==old,oldPlan);
- await page.getByRole('button',{name:'Prepare views',exact:true}).waitFor();await page.waitForFunction(()=>!document.querySelector('.fp-preparation button:last-of-type')?.disabled);
+ await page.getByRole('button',{name:/Prepare detailed view/}).waitFor();await page.waitForFunction(()=>!document.querySelector('.fp-prepare-action > button')?.disabled);
  const pid=await page.evaluate(()=>localStorage.getItem('huntmaps-first-person-plan'));
  const plan=await (await page.request.get(base+'/api/first-person/plans/'+pid)).json();assert.equal(plan.estimated_new_bytes,0);assert.ok(plan.sources.every(s=>s.cached));
  assert.equal(await page.getByRole('checkbox',{name:/Allow this plan/}).count(),0);
  await page.screenshot({path:out+'/06-acquisition-plan.png',fullPage:true});
- await page.getByRole('button',{name:'Prepare views',exact:true}).click();
+ await page.getByRole('button',{name:/Prepare detailed view/}).click();
  let job;
  for(let attempt=0;attempt<60;attempt++){
   const jobs=await (await page.request.get(base+'/api/jobs')).json();job=jobs.find(j=>j.plan===pid&&j.kind==='first-person-prepare');

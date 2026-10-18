@@ -25,11 +25,38 @@ def router(jobs):
 
     from . import complementary
 
+    from . import connectivity
+
+    @r.get("/connectivity-screens/{token}")
+    def recover_connection_screen(token):
+        value = read_json(connectivity.path(token))
+        if not isinstance(value, dict) or not isinstance(value.get("run_id"), str):
+            raise ValueError(
+                "Connection screen cache unavailable; open the original area and check connections again"
+            )
+        return dict(run_id=value["run_id"])
+
+    @r.get("/runs/{ident}/connectivity-screen")
+    def connection_screen(ident):
+        return connectivity.current(ident, jobs)
+
+    @r.post("/runs/{ident}/connectivity-screen")
+    def start_connection_screen(ident, body: dict = Body(default={})):
+        return connectivity.start(ident, body, jobs)
+
+    @r.post("/approaches/{ident}/connection-diagnostics")
+    def connection_diagnostics(ident):
+        return connectivity.diagnose(ident, jobs)
+
     @r.post("/runs/{ident}/complementary")
     def complementary_calculate(ident, body: dict = Body(...)):
         return complementary.public_result(
             complementary.calculate(
-                ident, body.get("count", 5), body.get("profile", ""), jobs
+                ident,
+                body.get("count", 5),
+                body.get("profile", ""),
+                jobs,
+                body.get("connection_screen", ""),
             )
         )
 

@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 from .config import STATE, current
 from .storage import locked, read_json, write
-from .jobs import ACTIVE
+from .jobs import has_active_jobs
 
 
 _pins = {}
@@ -85,7 +85,7 @@ def evict():
 
 def _evict():
     state = STATE.resolve()
-    if any(read_json(p)["status"] in ACTIVE for p in (STATE / "jobs").glob("*.json")):
+    if has_active_jobs(STATE / "jobs"):
         _dirty.add(state)  # Retry once the job is idle, including on a cached hit.
         return 0
     files = [

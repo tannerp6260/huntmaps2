@@ -90,6 +90,11 @@ export default function StoragePanel({ onRecordsChanged }: { onRecordsChanged: (
           ))}
         </select>
       </label>
+      <p>
+        Restore replaces GUI records with the selected snapshot, including removing records created
+        later. A backup of the current records is kept automatically. Analysis results are
+        preserved.
+      </p>
       <button
         disabled={busy || !selected}
         onClick={() => action(() => call('/restore', { backup: selected }), true)}

@@ -1,3 +1,4 @@
+import { workflowFixture } from './browser-fixture.mjs';
 import { openExisting, reloadExisting } from './browser-startup.mjs';
 // Product-level checks: use real saved terrain and isolated workflow records.
 import { chromium } from 'playwright';
@@ -27,6 +28,7 @@ async function layout(label) {
   await page.screenshot({ path: `${out}/${label}.png` });
 }
 try {
+ await workflowFixture(page.request, base);
   await openExisting(page, base);
   await page.getByLabel('Run selector').selectOption('soap-creek-decision-review-v2');
   await page.getByLabel('Select A0075', { exact: true }).waitFor();
@@ -79,7 +81,7 @@ try {
   await page.getByLabel('Select A0001', { exact: true }).waitFor();
   assert.equal(await page.getByLabel('Run selector').inputValue(), 'workflow-fixture', 'Area survives reload');
   await nav.getByRole('button', { name: /Inspect.*terrain/ }).click();
-  await page.getByRole('button', { name: 'Inspect current setup', exact: true }).click();
+  await page.getByRole('button', { name: /Open prepared view|Inspect current setup/ }).click();
   await page.waitForFunction(() => JSON.parse(document.querySelector('.fp-scene')?.dataset.camera || '{}').loaded, undefined, {timeout:60000});
   await page.locator('.fp-orientation').getByText(/Observer A0001/).waitFor();
   await page.screenshot({ path: `${out}/inspect-1366.png` });

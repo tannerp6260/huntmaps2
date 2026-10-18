@@ -28,12 +28,14 @@ journey works without them. A missing real fixture is a visible failure rather t
 a synthetic replacement for real scene evidence.
 
 Open **Storage and recovery** to inspect record diagnostics and cache sizes. Back up
-GUI records before maintenance. Restore selects a retained backup; it never changes
-saved analysis outputs. Restoring working records clears pending publication tokens
+GUI records before maintenance. Restore replaces GUI records with a retained snapshot, including removing records
+created after it. A pre-restore backup retains the replaced state. Saved analysis
+outputs remain unchanged. Restoring working records clears pending publication tokens
 so a late worker cannot authorize an old move. Explicit reset requires typing
 `RESET GUI RECORDS`, makes a backup, and resets notes and waypoints. It is separate
 from cache cleanup. Invalid records are preserved for diagnosis and are never
-silently replaced with empty records. Job-record damage may require restoring the
+silently replaced with empty records. Invalid job types and skipped damaged run
+configurations appear in Storage diagnostics; healthy runs remain available. Job-record damage may require restoring the
 named JSON file from a known copy while the application is stopped.
 
 Cleanup first presents a preview. Execution rechecks that preview under the shared

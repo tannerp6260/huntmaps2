@@ -71,7 +71,7 @@ export type Job = {
 };
 
 export type RunSummary = { id: string; label: string; experimental: boolean };
-export type Review = { name?: string; notes: string; status: string };
+export type Review = { revision?: number; name?: string; notes: string; status: string };
 export type Target = { east_m: number; north_m: number };
 export type ObserverPose = Target & {
   anchor: string;
@@ -162,6 +162,11 @@ export type BaselinePlan = DownloadReviewInfo & {
   };
 };
 export type FirstPersonPlan = DownloadReviewInfo & {
+  run_id?: string;
+  snapshots?: Record<string, { working_revision?: string }>;
+  fidelity?: 'best' | 'lidar' | 'terrain';
+  remaining_new_bytes?: number;
+  cached_source_keys?: string[];
   review_required?: boolean;
   review_signature?: string;
   download_cap_bytes: number;

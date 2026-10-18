@@ -65,22 +65,32 @@ available, without inventing a datum adjustment.
 
 ## Preparation and recovery
 
-Open **Prepare local fine terrain and lidar**, then **Check source plan**. This
-checks catalog metadata and lists source dates, sizes and cached status. The source
-download checkbox starts unchecked. **Prepare using cached sources only** cannot
-bulk-download missing lidar. Review the plan before explicitly enabling downloads.
+Opening a saved view loads it automatically. The badge identifies **Detailed terrain**
+or **Basic terrain**. When preparation is needed, **Prepare detailed view** shows the
+remaining download size and estimated time. Clicking it approves the displayed
+source plan; new downloads never start simply by opening the window.
 
-Each source plan has an explicitly approved allowance for new payload. The old
-500 MB lifetime pilot cap is removed; historical transfer totals remain informational.
-Review shows approximate download time, cached reuse and storage headroom.
-A 20 GiB free-space reserve replaces fixed transfer caps. Complete cached sources are checksum-verified. Partial range
-receipts support safe continuation; cancellation retains partial files and valid
-published scenes. After restart, unfinished jobs become interrupted. Review the
-source plan and run preparation again. One preparation or analysis job runs at a
-time. The panel shows transferred bytes, approximate remaining download time and
-progress bars. Processing shows counted items where available and an indeterminate
-bar otherwise. A completed stage does not imply a completed job. Elapsed time,
-cancellation and an expandable subprocess log remain available.
+**Retry opening view** reloads a saved scene after a loading/rendering failure. It
+does not rebuild terrain. **Retry detailed view** checks sources and reuses verified
+cached files; new transfer still requires the displayed preparation approval.
+
+If detailed preparation fails or lidar is unavailable, the window retains any valid
+existing view. Otherwise it automatically prepares a download-free basic terrain
+view from the existing DEM, with a visible limitation notice. This does not create
+lidar ground or measured vegetation. Cancellation does not launch fallback work;
+failed basic preparation does not repeat automatically. Only a successfully rendered
+current scene can count as inspected.
+
+**Details and settings** contains source dates/checksums, full logs, cumulative
+transfer history, storage estimates and an optional download limit. The normal
+window warns for downloads of at least 1 GB, estimates reaching 30 minutes, or
+projected headroom within 5 GiB above the 20 GiB reserve. Complete cached files are
+checksum-verified and estimates refresh after processing failure; transfer history
+is never reset. Partial downloads and published scenes remain retained.
+
+One preparation or analysis job runs at a time. Progress and **Cancel preparation**
+remain beside the current task. After restart, unfinished jobs become interrupted
+and require an explicit retry. A completed stage does not imply a completed job.
 
 Preparation has a 1536 MiB address-space limit and 900 seconds per preparation stage.
 Scene storage uses available disk space while preserving 20 GiB free on both the
@@ -90,7 +100,7 @@ working space. Estimates allow 60 MB per requested scene, temporary lidar spools
 when needed, and source assembly headroom; verified reuse can need less space.
 Start and worker preflight share this policy. Binary assets, copies, grids and
 textures check headroom before writing; stage and publication checks monitor the
-reserve as preparation proceeds. Geometry, point, memory and time guards remain.
+reserve as preparation proceeds. Local triangulations are bounded by the quarter-metre-bin occupancy of each tile and halo; there is no blanket 800,000-ground-point rejection. The eight-million-return, process memory and time guards remain.
 Existing bundles and partials are preserved; storage cleanup remains an explicit
 user action. Sources, plans and immutable scene bundles live
 under `.gui/first-person`; jobs and logs remain under `.gui/jobs`. Historical runs,

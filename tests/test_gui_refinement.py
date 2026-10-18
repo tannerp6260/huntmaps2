@@ -213,7 +213,7 @@ class RefinementJourney(unittest.TestCase):
         finally:
             link.unlink()
         preview = run_management.preview(self.run)
-        write(self.state / "jobs" / ("a" * 32 + ".json"), dict(status="running"))
+        write(self.state / "jobs" / ("a" * 32 + ".json"), dict(id="a"*32, status="running", started=1, kind="fixture"))
         with self.assertRaisesRegex(ValueError, "active job"):
             run_management.delete(self.run, preview["token"])
         (self.state / "jobs" / ("a" * 32 + ".json")).unlink()

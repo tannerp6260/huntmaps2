@@ -117,14 +117,15 @@ try {
     true,
   );
   await page
-    .getByRole('button', { name: 'Improve detail for standing position', exact: true })
+    .getByRole('button', { name: 'Prepare detailed view', exact: true })
     .click();
   await page
-    .getByRole('button', { name: 'Checking available detail…', exact: true })
+    .getByText('Checking available detail…', { exact: true })
     .waitFor({ timeout: 200 });
   await page
-    .getByText('Source check did not complete. Retry Improve detail.', { exact: false })
+    .getByText('Detailed source check could not finish.', { exact: false })
     .waitFor();
+  await page.locator('.fp-source-details > summary').click();
   let panel = await page.locator('.fp-preparation').innerText();
   assert.ok(!panel.includes('NaN') && !panel.includes('Checking catalog metadata'));
   assert.ok(!panel.includes('sec · cached'));
@@ -133,19 +134,11 @@ try {
   await page.setViewportSize({ width: 900, height: 900 });
   await page.screenshot({ path: out + '/lidar-failed-900.png', fullPage: true });
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
-  await page.getByRole('button', { name: 'Retry Improve detail', exact: true }).click();
-  const prepare = page.getByRole('button', { name: 'Prepare views', exact: true });
-  await prepare.waitFor();
-  await page.waitForFunction(() =>
-    [...document.querySelectorAll('button')].some(
-      (b) => b.textContent === 'Prepare views' && !b.disabled,
-    ),
-  );
-  await prepare.click();
+  await page.getByRole('button', { name: 'Retry detailed view', exact: true }).click();
   await page.getByRole('dialog', { name: 'First-person modeled view', exact: true }).getByText('Injected preparation failure', { exact: false }).first().waitFor();
-  assert.equal(await page.locator('.fp-preparation').evaluate((el) => el.open), true);
+  assert.equal(await page.locator('.fp-source-details').evaluate((el) => el.open), true);
   assert.equal((await (await page.request.get(url)).json()).key, before.key);
-  await page.getByRole('button', { name: 'Retry preparation', exact: true }).click();
+  await page.getByRole('button', { name: 'Retry detailed view', exact: true }).click();
   await page.waitForFunction(() => {
     const s = JSON.parse(document.querySelector('.fp-scene')?.dataset.camera || '{}');
     return s.loaded && s.vegetationVisible && s.vegetationTriangles > 0;
@@ -154,7 +147,7 @@ try {
   assert.notEqual(after.key, before.key);
   assert.equal(after.fine_observer_available, true);
   await page.getByText('Lidar-supported inferred vegetation available', { exact: false }).waitFor();
-  assert.equal(await page.locator('.fp-preparation').evaluate((el) => el.open), false);
+  assert.equal(await page.locator('.fp-source-details').evaluate((el) => el.open), false);
   assert.equal(
     await page.getByRole('button', { name: 'Refine standing position', exact: true }).isEnabled(),
     true,

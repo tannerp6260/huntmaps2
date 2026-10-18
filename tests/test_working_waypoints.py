@@ -41,6 +41,16 @@ class WorkingWaypoints(unittest.TestCase):
         self.assertAlmostEqual(mask.sum()*100/1e6,point['metrics']['raw_km2']);self.assertNotIn('baseline_score',point['metrics'])
         p=r.candidate('A0075',True);self.assertEqual(p['longitude'],point['longitude']);self.assertEqual(p['original_analysis']['longitude'],Run(RUN).candidate('A0075')['longitude']);self.assertNotEqual(p['longitude'],p['original_analysis']['longitude'])
         self.assertEqual(r.sectors('A0075')['features'],[])
+    def test_updated_waypoint_tiles_validate_derived_mask_and_original_sources(self):
+        import math
+        from huntmaps_gui.tiles import tile
+        point=self.update();run=w.DisplayRun(RUN,self.jobs)
+        z=15;x=int((point['longitude']+180)/360*2**z);y=int((1-math.asinh(math.tan(math.radians(point['latitude'])))/math.pi)/2*2**z)
+        cold=tile(run,'visible','A0075',z,x,y)
+        self.assertTrue(cold.startswith(b'\x89PNG'))
+        self.assertEqual(tile(run,'visible','A0075',z,x,y),cold)
+        mask=run.visibility_path('A0075');before=mask.read_bytes();changed=bytearray(before);changed[-1]^=1;mask.write_bytes(changed)
+        with self.assertRaises(ValueError):tile(run,'visible','A0075',z,x,y)
     def test_repeat_cache_restore_and_review_do_not_duplicate(self):
         point=self.update();count=len(self.jobs.list());again=w.start(RUN,'A0075',BODY,self.jobs)
         self.assertTrue(again['cached']);self.assertEqual(len(self.jobs.list()),count);self.assertEqual(len(w.snapshot(RUN,self.jobs)['overrides']),1)

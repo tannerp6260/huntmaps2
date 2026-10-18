@@ -24,6 +24,7 @@ export default function ComplementaryViews({
   run,
   selected,
   profile,
+  connectionScreen = '',
   signature,
   paused,
   onResult,
@@ -35,6 +36,7 @@ export default function ComplementaryViews({
   run: string;
   selected: string;
   profile: string;
+  connectionScreen?: string;
   signature: string;
   paused: boolean;
   onResult: (result: Collection | null, signature: string) => void;
@@ -85,7 +87,7 @@ export default function ComplementaryViews({
     setBusy(true);
     api(`/runs/${run}/complementary`, {
       method: 'POST',
-      body: JSON.stringify({ count, profile }),
+      body: JSON.stringify({ count, profile, connection_screen: connectionScreen }),
       signal: controller.signal,
     })
       .then((value: Collection) => {
@@ -110,7 +112,7 @@ export default function ComplementaryViews({
       alive = false;
       controller.abort();
     };
-  }, [run, profile, signature, count, retry, paused]);
+  }, [run, profile, signature, count, retry, paused, connectionScreen]);
   async function add() {
     if (!active) return;
     setAdding(true);

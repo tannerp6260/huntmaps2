@@ -66,3 +66,55 @@ fixtures, separate from timing measurements. The real-area benchmark command is
 `.venv/bin/python -m gui.complementary_performance`; it uses new processes and
 disposable caches, verifies the resulting analytical union independently, forbids
 source downloads, and reports three-repeat cold/warm/resize medians and peak RSS.
+
+## October 17 audit regressions
+
+`test_gui_audit_regressions.py` covers failed job submission cleanup using an actual
+harmless process group; invalid job types without rewriting their bytes; catalog
+quarantine; stale annotation revisions; equal-size/equal-mtime target corruption
+after warm display generation; snapshot restoration and its retained recovery copy;
+and responsive job status under 40 stalled optional browsing requests. Additional
+regressions cover damaged cancellation/waiter/shutdown paths, conservative cache
+cleanup, healthy tile bursts with bounded provider concurrency, and cache hits
+bypassing stalled providers.
+
+`browser-audit-regressions.mjs` exercises per-setup drafts through navigation/reload,
+a delayed real save with further editing, separate/duplicated tabs, starting-revision
+conflicts after reload, explicit recovery of a closed tab's draft, failed required
+foliage, hidden list DOM,
+and 150/600/1500/5000 candidate UI pools. The large pools are controlled API response
+fixtures for rendering/interaction, not analytical performance measurements.
+
+The release runner serves a deterministic optional transportation image locally.
+Analytical coverage and saved scene assets still use actual services. Browser-cache
+journeys must avoid Playwright request interception. Specialist journeys explicitly
+create their required workflow through `browser-fixture.mjs`, so running them alone
+does not require another browser test to have completed. Seeded fixture decisions
+are not evidence of browser rendering; the actual full workflow and required-asset
+failure journeys verify rendering gates independently.
+
+For investigation, `./gui/check --browser-only --keep-going` runs later journeys
+after a browser failure and records `browser-results.json`; its exit status remains
+nonzero if any journey fails. Normal `./gui/check` remains the required release gate.
+
+## Dense first-person recovery and compact controls
+
+`test_gui_scene_recovery.py` uses a known plane with more than 800,000 measured
+ground returns to verify dense local triangulation, tile seams, support and no
+extrapolation. Completed lidar/imagery cache fixtures forbid HTTP, check stale-plan
+reuse and current estimates, reject changed identity/corruption, and verify that
+approval files and cumulative transfer ledgers remain byte-identical.
+
+`browser-scene-recovery-check.mjs` is mandatory in `./gui/check`. It creates its own
+synthetic run, exercises actual download-free basic generation after a controlled
+detailed failure, retains the failed detailed diagnostics, and checks that cancelled
+jobs, failed basic preparation and replies after dialog closure cannot start more
+fallback work. A controlled saved-asset failure exercises **Retry opening view**
+without new preparation jobs. Compact controls and 1500/900/450 px layouts are
+checked separately from the real A0136 cached-data replay. Live acquisition and
+field fidelity remain outside this evidence. See [the recovery report](FIRST_PERSON_RECOVERY_2026-10-18.md).
+
+Browser waits must poll actual job status before checking publication. In particular,
+do not use an async `waitForFunction` predicate for API polling: the installed
+Playwright predicate path can accept a Promise before its boolean result resolves.
+Use explicit request polling with terminal-failure and timeout checks instead.

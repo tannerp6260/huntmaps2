@@ -21,6 +21,8 @@ export default function Viewer({
   onHeading,
   onLook,
   onOpened,
+  onUnavailable,
+  onRetry,
 }: {
   meta: SceneReady;
   url: string;
@@ -39,6 +41,8 @@ export default function Viewer({
   onHeading: (v: number) => void;
   onLook: (v: number) => void;
   onOpened?: () => void;
+  onUnavailable?: () => void;
+  onRetry?: () => void;
 }) {
   const container = useRef<HTMLDivElement>(null),
     plan = useRef<HTMLCanvasElement>(null),
@@ -184,6 +188,7 @@ export default function Viewer({
     ctx.fillText('Saved patch at centre · ' + yards(range) + ' radius', 10, 390);
   };
   useEffect(() => {
+    onUnavailable?.();
     let alive = true,
       renderer: THREE.WebGLRenderer | undefined,
       frame = 0;
@@ -415,6 +420,7 @@ export default function Viewer({
         failed = false,
         dirty = true,
         lastKey = '',
+        acknowledgedKey = '',
         lastDraw = 0;
       const finishImage = () => {
         dirty = true;
@@ -517,9 +523,10 @@ export default function Viewer({
         const desired = s.nearby + ':' + s.scenario;
         if (requestedKey !== desired) {
           requestedKey = desired;
+          onUnavailable?.();
           setLoading(true);
           rebuild(s.nearby, s.scenario).catch((e) => {
-            if (alive) {
+            if (alive && requestedKey === desired) {
               setError(e.message);
               setLoading(false);
             }
@@ -528,6 +535,15 @@ export default function Viewer({
         if (vegetation)
           vegetation.visible = s.foliage && lastNearby === s.nearby && lastScenario === s.scenario;
         renderer.render(scene, camera);
+        if (
+          vegetation &&
+          lastNearby === s.nearby &&
+          lastScenario === s.scenario &&
+          acknowledgedKey !== desired
+        ) {
+          acknowledgedKey = desired;
+          onOpened?.();
+        }
         draws++;
         container.current!.setAttribute(
           'data-camera',
@@ -585,7 +601,6 @@ export default function Viewer({
       };
       paintPlan();
       render();
-      if (alive && container.current) onOpened?.();
     }
     start().catch((e) => {
       if (alive) {
@@ -599,7 +614,8 @@ export default function Viewer({
     });
     const lost = (e: Event) => {
       e.preventDefault();
-      setError('Graphics context lost. Close and reopen the viewer; saved results are unchanged.');
+      onUnavailable?.();
+      setError('Graphics context lost. Retry opening the view; saved results are unchanged.');
     };
     container.current!.addEventListener('webglcontextlost', lost, true);
     return () => {
@@ -698,7 +714,12 @@ export default function Viewer({
         aria-label="Look around terrain"
       />
       {loading && <p>Loading local scene assets…</p>}
-      {error && <p role="alert">{error}</p>}
+      {error && (
+        <div role="alert">
+          <p>{error}</p>
+          {onRetry && <button onClick={onRetry}>Retry opening view</button>}
+        </div>
+      )}
       <div className="plan-inset-label">Plan view · choose a target</div>
       <canvas
         ref={plan}

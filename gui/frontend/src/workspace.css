@@ -1774,7 +1774,7 @@ pre {
 .fp-dialog:has(.fp-workspace) > .fp-source-notes {
   margin: 0 0 8px;
 }
-.fp-dialog:has(.fp-preparation[open]) {
+.fp-dialog:has(.fp-source-details[open]) {
   display: block;
 }
 .scene-view {
@@ -2062,4 +2062,183 @@ pre {
 }
 .collection-suggestion-card > .collection-suggestion {
   grid-column: 1 / -1;
+}
+.connection-screen,
+.approach-no-connection {
+  padding: 10px;
+  margin: 8px 0;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--panel-soft, #f4f7f5);
+}
+.connection-screen > label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.connection-screen input[type='checkbox'] {
+  width: auto;
+}
+.connection-screen > small {
+  display: block;
+  margin-bottom: 6px;
+}
+.connection-screen p,
+.approach-no-connection p {
+  margin: 7px 0;
+}
+
+/* Keep primary results visible; optional batch preparation opens on demand. */
+.sidebar {
+  gap: 6px;
+  padding-top: 12px;
+}
+.sidebar > * {
+  flex-shrink: 0;
+}
+.sidebar > .candidate-list {
+  flex: 1 1 auto;
+  min-height: 160px;
+  overflow: auto;
+}
+.connection-screen {
+  padding: 6px 8px;
+  margin: 0;
+  font-size: 11px;
+}
+.connection-screen p {
+  margin: 2px 0;
+}
+.connection-screen > small {
+  margin: 0 0 3px;
+}
+.connection-screen button {
+  padding: 5px 8px;
+  min-height: 28px;
+  font-size: 11px;
+}
+.connection-screen summary,
+.coverage-options > summary {
+  min-height: 24px;
+  padding: 3px 0;
+  font-size: 11px;
+}
+.find-next-action {
+  padding: 4px 0;
+  background: var(--surface);
+}
+.find-next-action small {
+  display: block;
+}
+.candidate-pagination {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10px;
+}
+.candidate-pagination button {
+  padding: 5px;
+  font-size: 10px;
+}
+@media (max-height: 800px) {
+  .sidebar {
+    overflow: auto;
+  }
+}
+
+/* At narrow effective widths (including browser zoom), use the full width for
+   each task and let the map follow it instead of clipping either pane. */
+@media (max-width: 600px) {
+  .app > header {
+    height: auto;
+    flex: 0 0 auto;
+  }
+  .run-picker {
+    width: 100%;
+    margin: 0;
+    order: 2;
+  }
+  .workflow-bar {
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+  }
+  .workflow-stages {
+    flex: 0 0 100%;
+    position: static;
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+  }
+  .workspace-tools {
+    flex: 0 0 100%;
+    box-sizing: border-box;
+    width: 100%;
+    justify-content: space-between;
+    padding: 4px 0;
+  }
+  .workspace,
+  .is-new-area .workspace {
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+  }
+  .sidebar,
+  .inspector,
+  .saved-collection {
+    width: 100%;
+    box-sizing: border-box;
+    flex: 0 0 auto;
+    max-height: 65dvh;
+    min-height: 240px;
+    overflow: auto;
+  }
+  .sidebar > .candidate-list {
+    min-height: 160px;
+    overflow: auto;
+  }
+  .map-pane {
+    width: 100%;
+    min-height: 65dvh;
+    flex-shrink: 0;
+  }
+  .panel-collapsed .sidebar,
+  .panel-collapsed .inspector,
+  .panel-collapsed .saved-collection {
+    display: none;
+  }
+  .panel-collapsed .map-pane {
+    min-height: 100%;
+  }
+  .coverage-loading {
+    max-width: calc(100% - 24px);
+    box-sizing: border-box;
+  }
+  .brand b {
+    font-size: 18px;
+  }
+  .brand-icon {
+    width: 30px;
+    height: 30px;
+  }
+}
+
+.fp-source-details {
+  margin-top: 8px;
+  font-size: 0.85rem;
+}
+.fp-source-details > summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+.fp-prepare-action {
+  display: grid;
+  gap: 6px;
+}
+.fp-prepare-action > p,
+.fp-error > p {
+  margin: 4px 0;
+}
+.fp-preparation > .fp-job {
+  margin: 6px 0;
 }

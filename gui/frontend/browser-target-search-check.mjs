@@ -1,3 +1,4 @@
+import { workflowFixture } from './browser-fixture.mjs';
 import { openExisting, reloadExisting } from './browser-startup.mjs';
 import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
@@ -16,6 +17,7 @@ page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.url().
 await page.addInitScript(()=>localStorage.setItem('huntmaps-online-imagery','off'));
 await page.route('**/*',r=>r.request().url().startsWith(base)||r.request().url().startsWith('blob:')?r.continue():r.abort());
 try {
+ await workflowFixture(page.request, base);
  await openExisting(page, base); await page.getByLabel('Run selector').selectOption('search-fixture');
  await page.locator('.selected-setup').getByText('matching terrain',{exact:true}).waitFor();
  const run=await (await page.request.get(base+'/api/runs/search-fixture')).json();
@@ -45,10 +47,11 @@ try {
  await page.getByLabel('Run selector').selectOption('workflow-fixture');
  await page.getByRole('button',{name:/Approach.*selected/}).click();
  const scenarios=await (await page.request.get(base+'/api/runs/workflow-fixture/approaches')).json();const saved=scenarios.find(s=>s.results?.results.some(r=>r.alternatives.length));assert.ok(saved);
- await page.locator('.approach-controls select').last().selectOption(saved.scenario.id);
+ await page.getByText('Saved comparison history',{exact:true}).click();
+ await page.getByLabel('Saved approach comparisons',{exact:true}).selectOption(saved.scenario.id);
  const use=page.getByRole('button',{name:'Use this approach & next spot',exact:true}).first(),show=page.getByRole('button',{name:'Show this alternative on map',exact:true}).first();
  assert.equal(await use.isDisabled(),false,'Reloading exact saved inputs must not falsely mark them dirty');
- await page.locator('.approach-settings').waitFor();if (await page.locator('.approach-settings').getAttribute('open') === null) await page.locator('.approach-settings > summary').click();await page.getByText('More options · pinned departure and preferences',{exact:true}).click();await page.getByLabel('Maximum approach slope').fill('45');
+ await page.locator('.approach-settings').waitFor();if (await page.locator('.approach-settings').getAttribute('open') === null) await page.locator('.approach-settings > summary').click();await page.getByText('More options · pinned departure and preferences',{exact:true}).click();await page.getByLabel('Maximum approach slope').fill('30');
  assert.equal(await use.isDisabled(),true);assert.equal(await show.isDisabled(),false);
  await show.click();await page.waitForFunction(()=>document.querySelector('.map')?.dataset.mapState && JSON.parse(document.querySelector('.map').dataset.mapState).loaded);
  await page.screenshot({path:out+'/03-saved-preview-900.png',fullPage:true});

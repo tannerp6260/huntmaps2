@@ -48,14 +48,26 @@ def collection(features):
     return dict(type="FeatureCollection", features=features)
 
 
-def runs():
+def runs(problems=None):
     entries = []
     for root in dict.fromkeys([ROOT.resolve(), WORKSPACE.resolve()]):
         for p in sorted((root / "results").glob("*/scouting.json")):
             if (p.parent / "manifest.json").exists() and (
                 p.parent / "analysis/scores.json"
             ).exists():
-                synthetic = read(p).get("input_kind") == "synthetic_fixture"
+                try:
+                    config = read(p)
+                    if not isinstance(config, dict) or not isinstance(
+                        config.get("work"), str
+                    ):
+                        raise ValueError(
+                            f"Damaged run configuration: {p}; expected an object with a work path"
+                        )
+                except ValueError as error:
+                    if problems is not None:
+                        problems.append(str(error))
+                    continue
+                synthetic = config.get("input_kind") == "synthetic_fixture"
                 entries.append(
                     dict(
                         id=p.parent.name,
@@ -75,6 +87,12 @@ def runs():
             ),
         )
     return entries
+
+
+def run_problems():
+    problems = []
+    runs(problems)
+    return problems
 
 
 @lru_cache(maxsize=128)

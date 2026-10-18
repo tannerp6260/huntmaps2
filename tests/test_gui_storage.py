@@ -129,11 +129,17 @@ class StorageTests(unittest.TestCase):
         boundary = self.root / "imports/original.geojson"
         boundary.parent.mkdir()
         boundary.write_text("original")
-        storage.write(self.root / "jobs/job.json", {"status": "running"})
+        storage.write(
+            self.root / "jobs" / ("d" * 32 + ".json"),
+            dict(id="d" * 32, status="running", started=1, kind="fixture"),
+        )
         self.assertEqual(maintenance.inventory()["reclaimable_bytes"], 0)
         with self.assertRaises(ValueError):
             maintenance.cleanup(maintenance.Cleanup(token="any"))
-        storage.write(self.root / "jobs/job.json", {"status": "failed"})
+        storage.write(
+            self.root / "jobs" / ("d" * 32 + ".json"),
+            dict(id="d" * 32, status="failed", started=1, kind="fixture"),
+        )
         before = maintenance.preview()
         storage.write(self.root / "first-person/ready/B.json", {"key": unused})
         with self.assertRaises(ValueError):

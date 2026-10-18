@@ -1,4 +1,4 @@
-import { openExisting, reloadExisting } from './browser-startup.mjs';
+import { openExisting, reloadExisting, chooseExisting } from './browser-startup.mjs';
 import {chromium} from 'playwright';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
@@ -13,7 +13,9 @@ try {
   await page.route('**/*',route=>route.request().url().startsWith(base)||route.request().url().startsWith('blob:')?route.continue():route.abort());
   const api=base+'/api/runs/soap-creek-decision-review-v2';
   const headers={'X-HuntMaps':'local'};
-  await page.request.put(api+'/annotations/A0075',{headers,data:{status:'keep',notes:'Storage recovery verification'}});
+  const existing = await (await page.request.get(api+'/annotations')).json();
+  const saved = await page.request.put(api+'/annotations/A0075',{headers,data:{status:'keep',notes:'Storage recovery verification',revision:existing.A0075?.revision ?? 0}});
+  assert.equal(saved.status(),200,await saved.text());
   await openExisting(page, base);await page.getByRole('button',{name:'Activity',exact:true}).click();
   const panel=page.locator('.storage-panel');if (!(await page.locator('.activity-drawer').isVisible())) await page.getByRole('button',{name:'Activity',exact:true}).click(); await panel.locator('summary').first().click();
   await panel.getByRole('button',{name:'Back up GUI records',exact:true}).click();
@@ -24,10 +26,12 @@ try {
   await page.getByLabel('Reset confirmation',{exact:true}).fill('RESET GUI RECORDS');
   await panel.getByRole('button',{name:'Reset GUI records',exact:true}).click();
   await page.waitForFunction(()=>!document.querySelector('.storage-panel')?.hasAttribute('open'));
+  await chooseExisting(page);
   assert.deepEqual(await (await page.request.get(api+'/annotations')).json(),{});
   if (!(await page.locator('.activity-drawer').isVisible())) await page.getByRole('button',{name:'Activity',exact:true}).click(); await panel.locator('summary').first().click();await page.getByLabel('Record backup',{exact:true}).selectOption(key);
   await panel.getByRole('button',{name:'Restore selected backup',exact:true}).click();
   await page.waitForFunction(()=>!document.querySelector('.storage-panel')?.hasAttribute('open'));
+  await chooseExisting(page);
   assert.equal((await (await page.request.get(api+'/annotations')).json()).A0075.notes,'Storage recovery verification');
   if (!(await page.locator('.activity-drawer').isVisible())) await page.getByRole('button',{name:'Activity',exact:true}).click(); await panel.locator('summary').first().click();
   await panel.getByRole('button',{name:'Preview cache cleanup',exact:true}).click();

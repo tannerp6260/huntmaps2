@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { Map, ErrorEvent as MapErrorEvent } from 'maplibre-gl';
+import type { RasterTileSource, Map, ErrorEvent as MapErrorEvent } from 'maplibre-gl';
 export default function Transportation({ map }: { map: Map | null }) {
   const [failed, setFailed] = useState(false);
   useEffect(() => {
@@ -41,6 +41,18 @@ export default function Transportation({ map }: { map: Map | null }) {
       {failed
         ? 'General roads/trails unavailable from provider. Verified local networks remain available.'
         : 'USGS general roads and trails · browsing context only'}
+      {failed && (
+        <button
+          onClick={() => {
+            setFailed(false);
+            (map?.getSource('transportation-context') as RasterTileSource | undefined)?.setTiles([
+              location.origin + '/api/browsing/transportation/{z}/{x}/{y}.png?retry=' + Date.now(),
+            ]);
+          }}
+        >
+          Retry general roads/trails
+        </button>
+      )}
     </small>
   );
 }

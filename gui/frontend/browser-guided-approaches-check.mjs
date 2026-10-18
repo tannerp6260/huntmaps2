@@ -1,3 +1,4 @@
+import { workflowFixture } from './browser-fixture.mjs';
 import { openExisting, reloadExisting } from './browser-startup.mjs';
 import { chromium } from 'playwright';
 import fs from 'node:fs';
@@ -28,6 +29,7 @@ async function decide(cid,action,extra={}) {
 }
 async function review() {return(await page.request.get(api+'/approach-review')).json();}
 try {
+ await workflowFixture(page.request, base);
  await openExisting(page, base);await page.getByLabel('Run selector').selectOption('workflow-fixture');
  const run=await(await page.request.get(api)).json();
  const existing=await(await page.request.get(api+'/approaches')).json();
@@ -59,7 +61,7 @@ try {
  assert.equal(requests.length,0,'Valid saved inputs must wait for an explicit calculation');
  assert.equal(await page.getByText('Terrain I want to see',{exact:false}).isVisible(),false);
  await page.getByRole('button',{name:'Calculate approaches for '+first,exact:true}).click();
- await page.getByRole('button',{name:'Use this approach & next spot',exact:true}).waitFor({timeout:60000});
+ await page.getByRole('button',{name:'Use this approach & next spot',exact:true}).first().waitFor({timeout:60000});
  assert.equal(requests.length,1,'Explicit calculation starts one independent comparison');
  assert.deepEqual(requests[0].ids,[first]);
  await page.waitForFunction(ids=>{const s=JSON.parse(document.querySelector('.map').dataset.mapState||'{}');return s.loaded&&JSON.stringify(s.candidateIds?.sort())===JSON.stringify(ids.sort());},['A0001',...ids],{timeout:60000});
@@ -74,7 +76,7 @@ try {
  await page.waitForFunction(ids=>{const s=JSON.parse(document.querySelector('.map').dataset.mapState||'{}');return s.loaded&&s.terrain&&JSON.stringify(s.candidateIds?.sort())===JSON.stringify(ids.sort());},['A0001',...ids],{timeout:60000});
  await page.getByRole('button',{name:'2D',exact:true}).click();
  const active=await page.getByLabel('Focused approach spot').inputValue();
- await page.getByRole('button',{name:'Show this alternative on map',exact:true}).click();
+ await page.getByRole('button',{name:'Show this alternative on map',exact:true}).first().click();
  assert.equal(await page.getByLabel('Focused approach spot').inputValue(),active);
  await page.waitForFunction(()=>{const b=Array.from(document.querySelectorAll('.approach-controls button')).find(b=>b.textContent.includes('Use this approach'));return b&&!b.disabled;});
  await page.locator('.approach-settings').waitFor();if (await page.locator('.approach-settings').getAttribute('open') === null) await page.locator('.approach-settings > summary').click();await page.getByText('More options · pinned departure and preferences',{exact:true}).click();
@@ -84,13 +86,13 @@ try {
  await page.getByRole('button',{name:'Recalculate approaches for '+first,exact:true}).click();
  const recalculation=await recalculated;assert.equal(recalculation.status(),200,await recalculation.text());
  await page.waitForFunction(()=>{const b=Array.from(document.querySelectorAll('.approach-controls button')).find(b=>b.textContent.includes('Use this approach'));return b&&!b.disabled;},undefined,{timeout:60000});
- await page.getByRole('button',{name:'Use this approach & next spot',exact:true}).waitFor();
+ await page.getByRole('button',{name:'Use this approach & next spot',exact:true}).first().waitFor();
  trackApproach=false;await reloadExisting(page);await page.getByLabel('Run selector').selectOption('workflow-fixture');await page.getByRole('button',{name:/Approach.*selected/}).click();
  await page.locator('.approach-settings').waitFor();if (await page.locator('.approach-settings').getAttribute('open') === null) await page.locator('.approach-settings > summary').click();await page.getByText('More options · pinned departure and preferences',{exact:true}).click();
  assert.equal(await page.getByLabel('Approach tree weight').inputValue(),'4','Reload restores individual preferences');
  assert.equal(requests.length,2,'Reload must not compute again');
  trackApproach=true;
- await page.getByRole('button',{name:'Use this approach & next spot',exact:true}).click();
+ await page.getByRole('button',{name:'Use this approach & next spot',exact:true}).first().click();
  await page.waitForFunction(cid=>document.querySelector('[aria-label="Focused approach spot"]')?.value===cid,ids[1]);
  await page.getByText('Boundary needs confirmation',{exact:false}).waitFor();
  assert.equal(requests.length,2,'Next setup must not inherit or calculate another boundary');

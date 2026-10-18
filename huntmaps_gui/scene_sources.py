@@ -240,10 +240,47 @@ def imagery_plan(run, ids, radius):
     return sources
 
 
-def acquire_imagery(source, allow):
+def cached_source(source, kind):
+    """Resolve verified complete cache entries without changing approval metadata."""
     if source.get("cached"):
         fp.verify_file(Path(source["path"]), source["sha256"])
         return source
+    key = source.get("key")
+    if not key:
+        return None
+    if Path(key).name != key:
+        raise ValueError("Invalid scene source key")
+    folder = fp.HOME / kind
+    target = folder / (key + ".tif" if kind == "imagery" else key)
+    record = (
+        read(folder / (key + ".json"))
+        if kind == "imagery"
+        else read(folder / "manifest.json", {}).get(key)
+    )
+    if not target.exists():
+        return None
+    if not record or any(
+        record.get(field) != source[field]
+        for field in ("url", "bytes", "epsg", "bounds", "pixels", "object_ids")
+        if field in source
+    ):
+        raise ValueError(
+            "Cached scene source identity differs from the reviewed plan: " + key
+        )
+    fp.verify_file(target, record["sha256"])
+    return dict(
+        source,
+        path=str(target),
+        sha256=record["sha256"],
+        cached=True,
+        remaining_bytes=0,
+    )
+
+
+def acquire_imagery(source, allow):
+    cached = cached_source(source, "imagery")
+    if cached:
+        return cached
     if not allow:
         return None
     from glassing.acquire import digest

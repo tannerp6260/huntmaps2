@@ -107,7 +107,7 @@ try{
  await page.locator('.approach-boundary-check[data-ready="true"]').waitFor();
  await page.getByRole('button',{name:'Calculate approaches for '+next,exact:true}).click();await page.getByRole('button',{name:'Use this approach & next spot',exact:true}).first().waitFor({timeout:60000});
  await page.getByRole('button',{name:'Use this approach & next spot',exact:true}).first().click();
- await page.getByRole('button',{name:'Inspect current setup',exact:true}).waitFor();
+ await page.getByRole('button',{name:/Open prepared view|Inspect current setup/}).waitFor();
  // Prepare existing terrain for this engineering fixture; no live source acquisition.
  const active=(await state()).points;
  for(const cid of [first,second]){
@@ -115,10 +115,17 @@ try{
   const plan=await(await page.request.get(base+'/api/first-person/plans/'+j.plan)).json();
   const job=await(await page.request.post(base+'/api/first-person/plans/'+j.plan+'/start',{headers,data:{download:true,review_signature:plan.review_signature}})).json();await waitJob(job);
  }
- await page.getByRole('button',{name:'Inspect current setup',exact:true}).click();
+ await page.getByRole('button',{name:/Open prepared view|Inspect current setup/}).click();
  await page.getByRole('dialog',{name:'First-person modeled view',exact:true}).waitFor();
  await page.getByLabel('Inspection map radius',{exact:true}).waitFor();
- const scene=await(await page.request.get(url+'/first-person/'+(await page.getByLabel('First-person setup').inputValue()))).json();
+ await page.waitForFunction(()=>JSON.parse(document.querySelector('.fp-scene')?.getAttribute('data-camera')||'{}').loaded===true);
+ const opened=JSON.parse(await page.locator('.fp-scene').getAttribute('data-camera')).candidate;
+ assert.ok([first,second].includes(opened),'Opened scene belongs to the shortlisted inspection queue');
+ const scene=await(await page.request.get(url+'/first-person/'+opened)).json();
+ const expected=result.candidates.find(p=>p.id===opened);
+ assert.equal(scene.observer.longitude,expected.longitude);
+ assert.equal(scene.observer.latitude,expected.latitude);
+ await page.getByRole('heading',{name:'View from '+opened+' Basic terrain',exact:true}).waitFor();
  assert.equal(Number(await page.getByLabel('Inspection map radius').inputValue()),Math.min(914.4,scene.context_radius_m));
  const planMap=page.getByLabel('Choose inspection target on plan map',{exact:true});await planMap.scrollIntoViewIfNeeded();const planBounds=await planMap.boundingBox();await planMap.click({position:{x:planBounds.width*.6,y:planBounds.height*.45}});
  await page.getByText('Horizontal:',{exact:false}).waitFor();

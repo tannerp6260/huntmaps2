@@ -1,3 +1,11 @@
+import {
+  reviewDraftsReady,
+  readReviewDraft,
+  otherReviewDrafts,
+  writeReviewDraft,
+  acknowledgeReviewDraft,
+  type ReviewDraft,
+} from './review-drafts';
 import DecimalField from './decimal-field';
 import { YardScale } from './yard-scale';
 import { area as areaText, yards } from './units';
@@ -18,6 +26,11 @@ import ScoutingTools, { type AppliedFilter } from './scouting-tools';
 import { updateMapLayers, type CoverageDisplay } from './map-layers';
 import CoverageBatch from './coverage-batch';
 import ComplementaryViews, { type Collection } from './complementary-views';
+import ConnectionControls, {
+  useConnectionScreen,
+  connectionLabel,
+  screenedRecommendations,
+} from './connection-screen';
 import { COVERAGE_REVIEW_ZOOM } from './coverage-cache';
 import AreaSettings from './area-creation';
 import StoragePanel from './storage-panel';
@@ -178,11 +191,17 @@ function App() {
     [overlap, setOverlap] = useState<Overlap[]>([]),
     [exportIds, setExportIds] = useState<string[]>([]),
     [search, setSearch] = useState(''),
+    [candidatePage, setCandidatePage] = useState(0),
     [group, setGroup] = useState('all'),
     [annotations, setAnnotations] = useState<Record<string, Review>>({}),
     [note, setNote] = useState(''),
     [status, setStatus] = useState('unmarked'),
     [saved, setSaved] = useState(''),
+    [savingReview, setSavingReview] = useState(false),
+    [draftStorageReady, setDraftStorageReady] = useState(false),
+    [draftRevision, setDraftRevision] = useState(0),
+    [recoverableDrafts, setRecoverableDrafts] = useState<ReviewDraft[]>([]),
+    [conflictingReview, setConflictingReview] = useState<Review | null>(null),
     [error, setError] = useState(''),
     [loading, setLoading] = useState(false);
   // Keep server revisions authoritative while pending dismissals immediately leave
@@ -205,6 +224,7 @@ function App() {
   const workflowStamp = JSON.stringify([workflow?.revision, dismissingIds]);
   const dismissing = dismissingIds.length > 0;
   const training = useTraining();
+  const [newRun, setNewRun] = useState(training.active && training.progress?.lesson === 'area');
   const [startupOpen, setStartupOpen] = useState(true);
   const [aboutFindOpen, setAboutFindOpen] = useState(false);
   const [generationOpen, setGenerationOpen] = useState(false);
@@ -242,6 +262,25 @@ function App() {
         }
       : p;
   };
+  const connectionEnabled =
+    !!run && !newRun && !training.active && !planningApproaches && !inspectStage && !savedStage;
+  const connections = useConnectionScreen(
+    runId,
+    connectionEnabled && !startupOpen,
+    workingGeometryStamp + manualGeometryStamp,
+    api,
+  );
+  const connectionAllowed = (p: Candidate) =>
+    !connectionEnabled ||
+    connections.showAll ||
+    connections.screen?.points[p.id]?.status === 'connection_found' ||
+    !!workflow?.points[p.id]?.shortlisted ||
+    p.id.startsWith('manual-') ||
+    p.metrics.group === 'manual';
+  const recommendationIds =
+    connectionEnabled && !connections.showAll
+      ? screenedRecommendations(connections.screen, appliedFilter)
+      : (appliedFilter?.recommendation_ids ?? run?.recommendation_ids ?? []);
   const collectionSignature = JSON.stringify([
     runId,
     filterId,
@@ -250,6 +289,7 @@ function App() {
     Object.values(working).map((p) => [p.id, p.revision, p.status]),
     annotations,
     workflowStamp,
+    connections.signature,
     Object.values(workflow?.points || {}).map((p) => [p.point, p.shortlisted, p.dismissed]),
   ]);
   const collection =
@@ -354,8 +394,7 @@ function App() {
     [sectors, setSectors] = useState(false),
     [opacity, setOpacity] = useState(0.5),
     [imageOpacity, setImageOpacity] = useState(1);
-  const [newRun, setNewRun] = useState(training.active && training.progress?.lesson === 'area'),
-    [imported, setImported] = useState<ImportedArea | null>(
+  const [imported, setImported] = useState<ImportedArea | null>(
       training.active && training.progress?.lesson === 'area' ? practiceArea(training.draft) : null,
     ),
     [polygon, setPolygon] = useState(
@@ -475,7 +514,10 @@ function App() {
     currentRunRef = useRef(runId),
     currentSelectedRef = useRef(selected),
     annotationSaveTicket = useRef(0),
+    annotationSaving = useRef(false),
+    reviewEditor = useRef({ note, status }),
     chooseRef = useRef<(id: string) => void>(() => {});
+  reviewEditor.current = { note, status };
   runRef.current = run;
   currentRunRef.current = runId;
   currentSelectedRef.current = selected;
@@ -632,7 +674,10 @@ function App() {
     };
   }, [runId, training.active]);
   useEffect(() => {
-    if (!selected || !runId) return;
+    reviewDraftsReady.then(() => setDraftStorageReady(true));
+  }, []);
+  useEffect(() => {
+    if (!selected || !runId || !draftStorageReady) return;
     let alive = true;
     setDetail(null);
     setError('');
@@ -644,12 +689,34 @@ function App() {
         if (alive) setError(e instanceof Error ? e.message : String(e));
       });
     const a = annotations[selected] || {};
-    setNote(a.notes || '');
-    setStatus(a.status || 'unmarked');
+    let draft: ReviewDraft | null = null;
+    try {
+      const key = reviewDraftKey(runId, selected);
+      draft = readReviewDraft(key);
+      if (draft && draft.notes === (a.notes || '') && draft.status === (a.status || 'unmarked')) {
+        acknowledgeReviewDraft(key, draft, a.revision ?? 0);
+        draft = null;
+      }
+      setRecoverableDrafts(
+        draft
+          ? []
+          : otherReviewDrafts(key).filter(
+              (d) => d.notes !== (a.notes || '') || d.status !== (a.status || 'unmarked'),
+            ),
+      );
+    } catch {
+      setRecoverableDrafts([]);
+      /* Saved records remain available if browser storage is unavailable. */
+    }
+    setNote(draft?.notes ?? a.notes ?? '');
+    setStatus(draft?.status ?? a.status ?? 'unmarked');
+    setDraftRevision(draft?.revision ?? a.revision ?? 0);
+    setSaved(draft ? 'Unsaved draft restored on this computer' : '');
+    setConflictingReview(draft && draft.revision !== (a.revision ?? 0) ? a : null);
     return () => {
       alive = false;
     };
-  }, [selected, runId, workingStamp, training.active]);
+  }, [selected, runId, workingStamp, training.active, draftStorageReady]);
   useEffect(() => {
     if (!compare.length) {
       setCompareData([]);
@@ -836,6 +903,7 @@ function App() {
       )
         return;
       console.error(e.error);
+      if ((e as { sourceId?: string }).sourceId === 'transportation-context') return;
       setError('Map layer could not load: ' + e.error.message);
     });
     return () => m.remove();
@@ -852,6 +920,7 @@ function App() {
     (m.getSource('candidates') as GeoJSONSource).setData({
       type: 'FeatureCollection',
       features: (newRun ? [] : shownCandidates)
+        .filter(connectionAllowed)
         .filter(
           (p) =>
             (planningApproaches || inspectStage || savedStage
@@ -865,7 +934,7 @@ function App() {
               savedStage ||
               group === 'all' ||
               (group === 'recommended' &&
-                !!(appliedFilter?.recommendation_ids ?? run?.recommendation_ids)?.includes(p.id)) ||
+                (recommendationIds.includes(p.id) || !!workflow?.points[p.id]?.shortlisted)) ||
               group === 'dismissed' ||
               (group === 'review'
                 ? run?.review_ids.includes(p.id)
@@ -903,6 +972,7 @@ function App() {
     inspectStage,
     savedStage,
     appliedFilter,
+    connections.signature,
   ]);
   useEffect(() => {
     if (ready)
@@ -1100,31 +1170,76 @@ function App() {
   };
   const toggleExport = (id: string) =>
     setExportIds((a) => (a.includes(id) ? a.filter((v) => v !== id) : [...a, id]));
+  function reviewDraftKey(ident: string, cid: string) {
+    return `huntmaps-review-draft:${training.active ? 'practice' : 'owner'}:${ident}:${cid}`;
+  }
+  function retainReviewDraft(notes: string, decision: string, revision = draftRevision) {
+    try {
+      writeReviewDraft(reviewDraftKey(runId, selected), { notes, status: decision, revision });
+      setRecoverableDrafts([]);
+      setSaved('Unsaved draft retained on this computer');
+    } catch {
+      setSaved('Unsaved draft — browser storage unavailable; save before leaving');
+    }
+  }
   async function save() {
+    if (annotationSaving.current || !draftStorageReady) return;
     const ident = runId,
       cid = selected,
+      payload = { status, notes: note },
+      draftKey = reviewDraftKey(ident, cid),
       ticket = ++annotationSaveTicket.current;
     if (training.active) {
-      training.saveNote(runId, selected, { status, notes: note });
-      setAnnotations((a) => ({ ...a, [selected]: { status, notes: note } }));
+      training.saveNote(ident, cid, payload);
+      setAnnotations((a) => ({ ...a, [cid]: payload }));
+      try {
+        acknowledgeReviewDraft(draftKey, payload, 0);
+      } catch {
+        /* Practice acknowledgement remains valid when browser storage fails. */
+      }
       setSaved('Practice review saved separately');
       return;
     }
+    annotationSaving.current = true;
+    setSavingReview(true);
+    setSaved('Saving review…');
     try {
-      await api(`/runs/${runId}/annotations/${selected}`, {
+      const record: Review = await api(`/runs/${ident}/annotations/${cid}`, {
         method: 'PUT',
-        body: JSON.stringify({ status, notes: note }),
+        body: JSON.stringify({ ...payload, revision: draftRevision }),
       });
-      if (currentRunRef.current !== ident || ticket !== annotationSaveTicket.current) return;
-      setAnnotations((a) => ({ ...a, [cid]: { status, notes: note } }));
-      if (currentSelectedRef.current === cid) setSaved('Saved on this computer');
-    } catch (e: unknown) {
-      if (
+      // Clear only the exact acknowledged draft; edits made during the request survive.
+      let newerDraft =
         currentRunRef.current === ident &&
         currentSelectedRef.current === cid &&
-        ticket === annotationSaveTicket.current
-      )
+        (reviewEditor.current.note !== payload.notes ||
+          reviewEditor.current.status !== payload.status);
+      try {
+        newerDraft = acknowledgeReviewDraft(draftKey, payload, record.revision ?? 0) || newerDraft;
+      } catch {
+        /* Server acknowledgement remains valid when browser storage fails. */
+      }
+      if (currentRunRef.current !== ident || ticket !== annotationSaveTicket.current) return;
+      setAnnotations((a) => ({ ...a, [cid]: record }));
+      if (currentSelectedRef.current === cid) {
+        setDraftRevision(record.revision ?? 0);
+        setConflictingReview(null);
+        setSaved(
+          newerDraft ? 'Saved earlier edit; newer draft is unsaved' : 'Saved on this computer',
+        );
+      }
+    } catch (e: unknown) {
+      if (currentRunRef.current === ident && currentSelectedRef.current === cid) {
         setError(e instanceof Error ? e.message : String(e));
+        if (e instanceof Error && e.message.startsWith('This review changed')) {
+          const latest = await api(`/runs/${ident}/annotations`).catch(() => null);
+          if (latest && currentRunRef.current === ident && currentSelectedRef.current === cid)
+            setConflictingReview(latest[cid] || { notes: '', status: 'unmarked', revision: 0 });
+        }
+      }
+    } finally {
+      annotationSaving.current = false;
+      setSavingReview(false);
     }
   }
   async function importFile(file: File) {
@@ -1315,6 +1430,16 @@ function App() {
         setSavedStage(false);
         setPanelCollapsed(false);
         setListOpen(false);
+        if (j.kind === 'connectivity-screen') {
+          const ident = j.name || (await api('/connectivity-screens/' + j.plan)).run_id;
+          setRunId(ident);
+          setNewRun(false);
+          setPlanningApproaches(false);
+          setInspectStage(false);
+          setPanelMode('results');
+          refreshPolling();
+          return;
+        }
         if (j.kind === 'approach') {
           const v = await api('/approaches/' + j.plan);
           setRunId(v.scenario.run_id);
@@ -1333,6 +1458,12 @@ function App() {
           setInspectStage(false);
           return;
         }
+        if (!['baseline', 'prepare', 'plan'].includes(j.kind))
+          throw Error(
+            'Open the original area and its task panel to recover this ' +
+              j.kind +
+              ' job. Retained results are unchanged.',
+          );
         const p = await api('/plans/' + j.plan);
         setImported(null);
         setPolygon('');
@@ -1371,44 +1502,47 @@ function App() {
       setError(e instanceof Error ? e.message : String(e));
     }
   }
+  const filterRows = new globalThis.Map(appliedFilter?.candidates.map((p) => [p.id, p]) || []);
+  const originalRanks = new globalThis.Map(shownCandidates.map((p, i) => [p.id, i]));
+  const recommendationRanks = new globalThis.Map(recommendationIds.map((id, i) => [id, i]));
   const visibleCandidates =
-    shownCandidates.filter(
-      (p) =>
-        (training.active ||
-          (!planningApproaches && !inspectStage) ||
-          (inspectStage
-            ? !!workflow?.points[p.id]?.approach
-            : !!workflow?.points[p.id]?.shortlisted)) &&
-        (planningApproaches || inspectStage
-          ? !workflow?.points[p.id]?.dismissed
-          : group === 'dismissed'
-            ? !!workflow?.points[p.id]?.dismissed
-            : !workflow?.points[p.id]?.dismissed) &&
-        (planningApproaches ||
-          inspectStage ||
-          group === 'all' ||
-          (group === 'recommended' &&
-            !!(appliedFilter?.recommendation_ids ?? run?.recommendation_ids)?.includes(p.id)) ||
-          group === 'dismissed' ||
-          (group === 'review'
-            ? run?.review_ids.includes(p.id)
-            : group === 'ungrouped'
-              ? !p.neighborhood
-              : p.neighborhood === group)) &&
-        (planningApproaches ||
-          inspectStage ||
-          `${p.id} ${p.parent} ${p.neighborhood || ''}`
-            .toLowerCase()
-            .includes(search.toLowerCase())) &&
-        (planningApproaches ||
-          inspectStage ||
-          !appliedFilter ||
-          appliedFilter.candidates.find((row) => row.id === p.id)?.qualifies === true),
-    ) || [];
+    shownCandidates
+      .filter(connectionAllowed)
+      .filter(
+        (p) =>
+          (training.active ||
+            (!planningApproaches && !inspectStage) ||
+            (inspectStage
+              ? !!workflow?.points[p.id]?.approach
+              : !!workflow?.points[p.id]?.shortlisted)) &&
+          (planningApproaches || inspectStage
+            ? !workflow?.points[p.id]?.dismissed
+            : group === 'dismissed'
+              ? !!workflow?.points[p.id]?.dismissed
+              : !workflow?.points[p.id]?.dismissed) &&
+          (planningApproaches ||
+            inspectStage ||
+            group === 'all' ||
+            (group === 'recommended' &&
+              (recommendationIds.includes(p.id) || !!workflow?.points[p.id]?.shortlisted)) ||
+            group === 'dismissed' ||
+            (group === 'review'
+              ? run?.review_ids.includes(p.id)
+              : group === 'ungrouped'
+                ? !p.neighborhood
+                : p.neighborhood === group)) &&
+          (planningApproaches ||
+            inspectStage ||
+            `${p.id} ${p.parent} ${p.neighborhood || ''}`
+              .toLowerCase()
+              .includes(search.toLowerCase())) &&
+          (planningApproaches ||
+            inspectStage ||
+            !appliedFilter ||
+            filterRows.get(p.id)?.qualifies === true),
+      ) || [];
   const sorted = [...visibleCandidates].sort((a, b) => {
-    const original =
-      shownCandidates.findIndex((p) => p.id === a.id) -
-      shownCandidates.findIndex((p) => p.id === b.id);
+    const original = (originalRanks.get(a.id) ?? -1) - (originalRanks.get(b.id) ?? -1);
     if (sortMode === 'engine')
       return (
         Number(b.metrics.baseline_score ?? b.metrics.selective_score ?? -1) -
@@ -1416,22 +1550,25 @@ function App() {
       );
     if (appliedFilter && !planningApproaches && !inspectStage)
       return (
-        (appliedFilter.candidates.find((p) => p.id === b.id)?.matching_km2 ?? -1) -
-          (appliedFilter.candidates.find((p) => p.id === a.id)?.matching_km2 ?? -1) ||
+        (filterRows.get(b.id)?.matching_km2 ?? -1) - (filterRows.get(a.id)?.matching_km2 ?? -1) ||
         Number(b.metrics.raw_km2 ?? -1) - Number(a.metrics.raw_km2 ?? -1) ||
         a.id.localeCompare(b.id)
       );
     if (group === 'recommended')
-      return (
-        (run?.recommendation_ids?.indexOf(a.id) ?? 0) -
-        (run?.recommendation_ids?.indexOf(b.id) ?? 0)
-      );
+      return (recommendationRanks.get(a.id) ?? -1) - (recommendationRanks.get(b.id) ?? -1);
     return sortMode === 'engine'
       ? Number(b.metrics.baseline_score ?? b.metrics.selective_score ?? -1) -
           Number(a.metrics.baseline_score ?? a.metrics.selective_score ?? -1) || original
       : (typeof b.metrics.raw_km2 === 'number' ? b.metrics.raw_km2 : -1) -
           (typeof a.metrics.raw_km2 === 'number' ? a.metrics.raw_km2 : -1) || original;
   });
+  useEffect(() => {
+    if (!connectionEnabled || connections.showAll || activeManual) return;
+    if (!sorted.some((p) => p.id === selected)) setSelected(sorted[0]?.id || '');
+    setCompare((old) =>
+      old.filter((id) => shownCandidates.some((p) => p.id === id && connectionAllowed(p))),
+    );
+  }, [connections.signature, connectionEnabled, workflowStamp, appliedFilter, group, search]);
   const labelPoint = currentManual || shownCandidates.find((p) => p.id === selected);
   useEffect(() => {
     if (!ready || newRun || !labelPoint || !collectionSelectionVisible) return;
@@ -1626,28 +1763,40 @@ function App() {
   const running =
     jobs.some((j) => ['running', 'cancelling'].includes(j.status)) ||
     (!!planJob && ['running', 'cancelling'].includes(planJob.status));
+  const candidatePageSize = sorted.length <= 250 ? 250 : 100;
+  useEffect(
+    () => setCandidatePage(0),
+    [runId, group, search, sortMode, appliedFilter, planningApproaches, inspectStage],
+  );
+  useEffect(() => {
+    const index = sorted.findIndex((p) => p.id === selected);
+    if (index >= 0) setCandidatePage(Math.floor(index / candidatePageSize));
+  }, [selected, runId]);
+  const pageCount = Math.max(1, Math.ceil(sorted.length / candidatePageSize));
+  const displayedCandidates = sorted.slice(
+    Math.min(candidatePage, pageCount - 1) * candidatePageSize,
+    (Math.min(candidatePage, pageCount - 1) + 1) * candidatePageSize,
+  );
+  const candidateRanks = new globalThis.Map(sorted.map((p, i) => [p.id, i + 1]));
+  const bestCandidateArea = sorted.reduce(
+    (best, p) =>
+      Math.max(best, Number(filterRows.get(p.id)?.matching_km2 ?? p.metrics.raw_km2) || 0),
+    0,
+  );
   const renderCandidate = (p: Candidate) => (
     <CandidateCard
       key={p.id}
       p={p}
-      rank={sorted.findIndex((row) => row.id === p.id) + 1}
-      bestArea={Math.max(
-        ...sorted.map(
-          (row) =>
-            Number(
-              appliedFilter?.candidates.find((f) => f.id === row.id)?.matching_km2 ??
-                row.metrics.raw_km2,
-            ) || 0,
-        ),
-        0,
-      )}
+      rank={candidateRanks.get(p.id) ?? 0}
+      bestArea={bestCandidateArea}
       approach={!!workflow?.points[p.id]?.approach}
       confirmed={!!workflow?.points[p.id]?.confirmed}
       shortlisted={workflow?.points[p.id]?.shortlisted}
       dismissed={workflow?.points[p.id]?.dismissed}
       busy={decisionBusy}
       onDecision={training.active ? undefined : (action) => decide(p.id, action)}
-      matching={appliedFilter?.candidates.find((row) => row.id === p.id)?.matching_km2}
+      matching={filterRows.get(p.id)?.matching_km2}
+      connection={connectionEnabled ? connectionLabel(connections.screen?.points[p.id]) : undefined}
       selected={selected}
       activeManual={!!activeManual}
       compare={compare}
@@ -1659,72 +1808,77 @@ function App() {
     />
   );
   const groupedIds = new Set(Object.values(run?.groups || {}).flat());
-  const candidateCards = sorted
-    .filter((p) => !groupedIds.has(p.id))
-    .map((p) => {
-      const alternatives =
-        group === 'recommended' && !planningApproaches && !inspectStage
-          ? shownCandidates.filter(
-              (q) =>
-                (appliedFilter?.nearby_ids ?? run?.search_summary?.nearby_ids)?.[p.id]?.includes(
-                  q.id,
-                ) && !workflow?.points[q.id]?.dismissed,
-            )
-          : [];
+  const candidateCards = () =>
+    displayedCandidates
+      .filter((p) => !groupedIds.has(p.id))
+      .map((p) => {
+        const alternatives =
+          group === 'recommended' && !planningApproaches && !inspectStage
+            ? shownCandidates
+                .filter(connectionAllowed)
+                .filter(
+                  (q) =>
+                    (appliedFilter?.nearby_ids ?? run?.search_summary?.nearby_ids)?.[
+                      p.id
+                    ]?.includes(q.id) && !workflow?.points[q.id]?.dismissed,
+                )
+            : [];
+        return (
+          <div key={p.id}>
+            {renderCandidate(p)}
+            {!!alternatives.length && (
+              <details>
+                <summary>Nearby alternatives ({alternatives.length})</summary>
+                {alternatives.map(renderCandidate)}
+              </details>
+            )}
+          </div>
+        );
+      });
+  const groupCards = () =>
+    Object.entries(run?.groups || {}).map(([label, ids]) => {
+      const members = displayedCandidates.filter((p) => ids.includes(p.id));
+      if (!members.length) return null;
+      const families = new globalThis.Map<string, Candidate[]>();
+      members.forEach((p) => {
+        const root = p.parent && ids.includes(p.parent) ? p.parent : p.id;
+        families.set(root, [...(families.get(root) || []), p]);
+      });
       return (
-        <div key={p.id}>
-          {renderCandidate(p)}
-          {!!alternatives.length && (
-            <details>
-              <summary>Nearby alternatives ({alternatives.length})</summary>
-              {alternatives.map(renderCandidate)}
-            </details>
-          )}
-        </div>
+        <section className="setup-group" key={label}>
+          <b>{label} · saved neighborhood</b>
+          <small>Original setups shown first; no automatic ranking.</small>
+          {Array.from(families).map(([root, points]) => {
+            const parent =
+                shownCandidates.find((p) => p.id === root && connectionAllowed(p)) || points[0],
+              alternatives = points.filter((p) => p.id !== parent.id);
+            return (
+              <div key={root}>
+                {renderCandidate(parent)}
+                {!!alternatives.length && (
+                  <details
+                    open={
+                      training.active ||
+                      !!search ||
+                      alternatives.some(
+                        (p) =>
+                          p.id === selected || compare.includes(p.id) || exportIds.includes(p.id),
+                      )
+                    }
+                  >
+                    <summary>
+                      {alternatives.length} saved alternative{alternatives.length === 1 ? '' : 's'}{' '}
+                      to {parent.id}
+                    </summary>
+                    {alternatives.map(renderCandidate)}
+                  </details>
+                )}
+              </div>
+            );
+          })}
+        </section>
       );
     });
-  const groupCards = Object.entries(run?.groups || {}).map(([label, ids]) => {
-    const members = sorted.filter((p) => ids.includes(p.id));
-    if (!members.length) return null;
-    const families = new globalThis.Map<string, Candidate[]>();
-    members.forEach((p) => {
-      const root = p.parent && ids.includes(p.parent) ? p.parent : p.id;
-      families.set(root, [...(families.get(root) || []), p]);
-    });
-    return (
-      <section className="setup-group" key={label}>
-        <b>{label} · saved neighborhood</b>
-        <small>Original setups shown first; no automatic ranking.</small>
-        {Array.from(families).map(([root, points]) => {
-          const parent = shownCandidates.find((p) => p.id === root) || points[0],
-            alternatives = points.filter((p) => p.id !== parent.id);
-          return (
-            <div key={root}>
-              {renderCandidate(parent)}
-              {!!alternatives.length && (
-                <details
-                  open={
-                    training.active ||
-                    !!search ||
-                    alternatives.some(
-                      (p) =>
-                        p.id === selected || compare.includes(p.id) || exportIds.includes(p.id),
-                    )
-                  }
-                >
-                  <summary>
-                    {alternatives.length} saved alternative{alternatives.length === 1 ? '' : 's'} to{' '}
-                    {parent.id}
-                  </summary>
-                  {alternatives.map(renderCandidate)}
-                </details>
-              )}
-            </div>
-          );
-        })}
-      </section>
-    );
-  });
 
   const stage: Stage = savedStage
     ? 'save'
@@ -2060,6 +2214,7 @@ function App() {
               </div>
               {stage === 'find' && !training.active && run && workingLoaded && workflow && (
                 <>
+                  <ConnectionControls value={connections} />
                   <label>
                     Recommendation mode{' '}
                     <select
@@ -2079,9 +2234,11 @@ function App() {
                       run={run.id}
                       selected={activeManual ? '' : selected}
                       profile={filterId}
+                      connectionScreen={connections.showAll ? '' : connections.screen?.id || ''}
                       signature={collectionSignature}
                       paused={
                         dismissing ||
+                        (!connections.showAll && connections.screen?.status !== 'complete') ||
                         jobs.some((j) => ['queued', 'running', 'cancelling'].includes(j.status))
                       }
                       api={api}
@@ -2110,13 +2267,11 @@ function App() {
                 </>
               )}
               <div className="find-next-action">
-                <button
-                  className="primary wide"
-                  disabled={!shortlisted.length}
-                  onClick={() => changeStage('approach')}
-                >
-                  Plan approaches ({shortlisted.length} shortlisted)
-                </button>
+                {!!shortlisted.length && (
+                  <button className="primary wide" onClick={() => changeStage('approach')}>
+                    Plan approaches ({shortlisted.length} shortlisted)
+                  </button>
+                )}
                 {!shortlisted.length && <small>Shortlist a setup to plan its approach.</small>}
               </div>
               <div className="result-controls">
@@ -2145,8 +2300,7 @@ function App() {
                   <option value="all">All evaluated setups</option>
                   {(!!run.recommendation_ids?.length || !!appliedFilter) && (
                     <option value="recommended">
-                      Recommended setups (
-                      {(appliedFilter?.recommendation_ids ?? run.recommendation_ids)?.length ?? 0})
+                      Recommended setups ({recommendationIds.length})
                     </option>
                   )}
                   <option value="dismissed">Dismissed</option>
@@ -2174,37 +2328,61 @@ function App() {
                 visibility &&
                 !compare.length &&
                 !activeManual && (
-                  <CoverageBatch
-                    map={map.current!}
-                    run={run.id}
-                    collection={collection?.id}
-                    points={
-                      collection
-                        ? [
-                            ...collection.kept
-                              .filter((p) => p.total_km2 !== null)
-                              .map((p) => ({ id: p.id, ...p.point, additional: false })),
-                            ...collection.suggestions.map((p) => ({
-                              id: p.id,
-                              ...p.point,
-                              additional: true,
-                            })),
-                          ].slice(0, 20)
-                        : sorted.filter(
-                            (p) =>
-                              !workflow?.points[p.id]?.dismissed &&
-                              typeof p.metrics.raw_km2 === 'number',
-                          )
-                    }
-                    selected={selected}
-                    working={working}
-                    filter={filterId}
-                    wholeArea={run.bounds}
-                    paused={jobs.some((j) =>
-                      ['queued', 'running', 'cancelling'].includes(j.status),
-                    )}
-                  />
+                  <details className="coverage-options">
+                    <summary>Prepare more coverage</summary>
+                    <CoverageBatch
+                      map={map.current!}
+                      run={run.id}
+                      collection={collection?.id}
+                      points={
+                        collection
+                          ? [
+                              ...collection.kept
+                                .filter((p) => p.total_km2 !== null)
+                                .map((p) => ({ id: p.id, ...p.point, additional: false })),
+                              ...collection.suggestions.map((p) => ({
+                                id: p.id,
+                                ...p.point,
+                                additional: true,
+                              })),
+                            ].slice(0, 20)
+                          : sorted.filter(
+                              (p) =>
+                                !workflow?.points[p.id]?.dismissed &&
+                                typeof p.metrics.raw_km2 === 'number',
+                            )
+                      }
+                      selected={selected}
+                      working={working}
+                      filter={filterId}
+                      wholeArea={run.bounds}
+                      paused={jobs.some((j) =>
+                        ['queued', 'running', 'cancelling'].includes(j.status),
+                      )}
+                    />
+                  </details>
                 )}
+              {pageCount > 1 && (
+                <nav className="candidate-pagination" aria-label="Setup pages">
+                  <button
+                    disabled={candidatePage === 0}
+                    onClick={() => setCandidatePage((p) => Math.max(0, p - 1))}
+                  >
+                    Previous setups
+                  </button>
+                  <span role="status">
+                    {Math.min(candidatePage, pageCount - 1) * candidatePageSize + 1}–
+                    {Math.min((candidatePage + 1) * candidatePageSize, sorted.length)} of{' '}
+                    {sorted.length}
+                  </span>
+                  <button
+                    disabled={candidatePage >= pageCount - 1}
+                    onClick={() => setCandidatePage((p) => p + 1)}
+                  >
+                    Next setups
+                  </button>
+                </nav>
+              )}
               <div className="ranking-caption">
                 <span>
                   {sortMode === 'engine'
@@ -2238,14 +2416,19 @@ function App() {
                             Reset result filters
                           </button>
                         )}
+                        {connectionEnabled && !connections.showAll && (
+                          <button onClick={() => connections.setShowAll(true)}>
+                            Show all setups, including unchecked
+                          </button>
+                        )}
                       </EmptyState>
                     )}
                     {['all', 'recommended'].includes(group) && !training.active ? (
-                      sorted.map(renderCandidate)
+                      (showResults || training.active) && displayedCandidates.map(renderCandidate)
                     ) : (
                       <>
-                        {groupCards}
-                        {candidateCards}
+                        {(showResults || training.active) && groupCards()}
+                        {(showResults || training.active) && candidateCards()}
                       </>
                     )}
                   </>
@@ -3515,6 +3698,11 @@ function App() {
                         </details>
                         <section data-tour="review-fields">
                           <h3>{training.active ? 'Practice review' : 'Your review'}</h3>
+                          <p className="hint">
+                            {training.active
+                              ? 'Practice notes are saved separately from your scouting records.'
+                              : 'Keep can also carry a setup into Approach. Use Shortlist or Remove from shortlist to control that choice. Export selection is separate; only inspected, confirmed setups enter the collection.'}
+                          </p>
                           <Meaning topic="review" />
                           <label>
                             Decision
@@ -3523,7 +3711,7 @@ function App() {
                               value={status}
                               onChange={(e) => {
                                 setStatus(e.target.value);
-                                setSaved('');
+                                retainReviewDraft(note, e.target.value);
                               }}
                             >
                               {['unmarked', 'keep', 'reject', 'needs inspection'].map((s) => (
@@ -3540,15 +3728,67 @@ function App() {
                               rows={3}
                               onChange={(e) => {
                                 setNote(e.target.value);
-                                setSaved('');
+                                retainReviewDraft(e.target.value, status);
                               }}
                               placeholder="Foreground gaps, approach questions, setup checks…"
                             />
                           </label>
-                          <button className="primary" onClick={save}>
+                          <button
+                            className="primary"
+                            onClick={save}
+                            disabled={savingReview || !draftStorageReady}
+                          >
                             Save review
                           </button>
                           <small role="status">{saved}</small>
+                          {!!recoverableDrafts.length && (
+                            <details className="technical">
+                              <summary>
+                                Other drafts on this computer ({recoverableDrafts.length})
+                              </summary>
+                              {recoverableDrafts.map((draft, index) => (
+                                <div key={index}>
+                                  <p>
+                                    {draft.status}: {draft.notes || 'No notes'}
+                                  </p>
+                                  <button
+                                    onClick={() => {
+                                      setNote(draft.notes);
+                                      setStatus(draft.status);
+                                      setDraftRevision(draft.revision);
+                                      retainReviewDraft(draft.notes, draft.status, draft.revision);
+                                      const latest = annotations[selected] || {};
+                                      setConflictingReview(
+                                        draft.revision !== (latest.revision ?? 0) ? latest : null,
+                                      );
+                                    }}
+                                  >
+                                    Restore this draft
+                                  </button>
+                                </div>
+                              ))}
+                            </details>
+                          )}
+                          {conflictingReview && (
+                            <div className="notice" role="status">
+                              <b>Latest saved review: {conflictingReview.status}</b>
+                              <p>{conflictingReview.notes || 'No saved notes'}</p>
+                              <button
+                                onClick={() => {
+                                  setAnnotations((a) => ({ ...a, [selected]: conflictingReview }));
+                                  setDraftRevision(conflictingReview.revision ?? 0);
+                                  retainReviewDraft(note, status, conflictingReview.revision ?? 0);
+                                  setConflictingReview(null);
+                                  setError('');
+                                  setSaved(
+                                    'Your draft is retained. Save review explicitly replaces the displayed saved version.',
+                                  );
+                                }}
+                              >
+                                Keep my draft for the next save
+                              </button>
+                            </div>
+                          )}
                         </section>
                         <details className="technical">
                           <summary>Sources, formulas & technical diagnostics</summary>
@@ -3599,10 +3839,7 @@ function App() {
                   {p.parent ? ' · alternative to ' + p.parent : ''}
                 </button>
                 <span>
-                  {areaText(
-                    appliedFilter?.candidates.find((row) => row.id === p.id)?.matching_km2 ??
-                      p.metrics.raw_km2,
-                  )}{' '}
+                  {areaText(filterRows.get(p.id)?.matching_km2 ?? p.metrics.raw_km2)}{' '}
                   {appliedFilter ? 'matching terrain' : 'terrain'} ·{' '}
                   {areaText(p.metrics.tree_lt10_km2)} {appliedFilter ? 'original terrain ' : ''}
                   under 10% trees

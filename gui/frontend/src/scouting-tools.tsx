@@ -16,6 +16,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Map, GeoJSONSource } from 'maplibre-gl';
 import { Drawing } from './drawing';
 import { trackJob, useJobs } from './polling';
+import type { ConnectionEvidence } from './connection-screen';
 type Polygon = GeoJSON.Polygon | GeoJSON.MultiPolygon;
 type FilterRow = {
   id: string;
@@ -188,6 +189,13 @@ export default function ScoutingTools({
     displayed?: boolean;
   } | null>(null);
   const [submittedJob, setSubmittedJob] = useState<import('./types').Job | null>(null);
+  const [connectionDiagnostics, setConnectionDiagnostics] = useState<{
+    scenario: string;
+    points: Record<string, ConnectionEvidence>;
+  } | null>(null);
+  const [diagnosingConnections, setDiagnosingConnections] = useState(false);
+  const [connectionDiagnosticError, setConnectionDiagnosticError] = useState('');
+  const [retryingSlope, setRetryingSlope] = useState<number | null>(null);
   const [networkOverride, setNetworkOverride] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
   const [scenarios, setScenarios] = useState<Scenario[]>([]),
@@ -953,17 +961,24 @@ export default function ScoutingTools({
       throw Error('Use longitude,latitude for network points');
     return p;
   }
-  async function planApproaches() {
+  async function planApproaches(overrideLimit?: number) {
     const clicked = performance.now();
+    const submittedMaximum = overrideLimit ?? maximum;
     await attempt(async () => {
-      if (!preferencesValid || maximum <= 0 || maximum > 35)
+      if (
+        !preferencesValid ||
+        !Number.isFinite(submittedMaximum) ||
+        submittedMaximum <= 0 ||
+        submittedMaximum > 35
+      )
         throw Error('Enter a complete slope limit between 1 and 35 degrees');
       if (!area || editing) throw Error('Save an explicit travel polygon first');
       setAttempted(true);
       setSubmittedJob(null);
       if (!boundaryReady)
         throw Error('Check and confirm this setup’s search boundary before calculating.');
-      await saveReview({ ...draft(), attempted: true });
+      if (overrideLimit !== undefined) setMaximum(overrideLimit);
+      await saveReview({ ...draft(), maximum_slope_deg: submittedMaximum, attempted: true });
       const run = runId;
       const cid = focusedId;
       const pointRevision = workflow?.points[cid]?.point.revision;
@@ -979,7 +994,7 @@ export default function ScoutingTools({
           travel_area: area,
           exclusions,
           weights,
-          maximum_slope_deg: maximum,
+          maximum_slope_deg: submittedMaximum,
           start: includeWalk ? coordinate(start) : null,
           pinned: pinned.trim() ? coordinate(pinned) : null,
         }),
@@ -1071,6 +1086,29 @@ export default function ScoutingTools({
     });
   }
   const scenario = scenarios.find((s) => s.scenario.id === scenarioId);
+  useEffect(() => {
+    setConnectionDiagnostics(null);
+    setConnectionDiagnosticError('');
+    setDiagnosingConnections(false);
+    if (!scenario?.results?.results.some((r) => !r.alternatives.length) || scenario.stale) return;
+    const controller = new AbortController();
+    setDiagnosingConnections(true);
+    api('/approaches/' + scenarioId + '/connection-diagnostics', {
+      method: 'POST',
+      body: '{}',
+      signal: controller.signal,
+    })
+      .then((value) => {
+        if (!controller.signal.aborted) setConnectionDiagnostics(value);
+      })
+      .catch((e) => {
+        if (!controller.signal.aborted) setConnectionDiagnosticError(String(e));
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setDiagnosingConnections(false);
+      });
+    return () => controller.abort();
+  }, [scenarioId, scenario?.results, scenario?.stale]);
   const scenarioJob = busy
     ? undefined
     : jobs.find((j) => j.id === submittedJob?.id && j.plan === scenarioId) ||
@@ -1851,7 +1889,7 @@ export default function ScoutingTools({
                 !hydrated ||
                 !workflow?.points[focusedId]?.shortlisted
               }
-              onClick={planApproaches}
+              onClick={() => void planApproaches()}
             >
               {busy
                 ? 'Submitting approach calculation…'
@@ -1900,6 +1938,7 @@ export default function ScoutingTools({
             <label>
               Saved approach comparisons
               <select
+                aria-label="Saved approach comparisons"
                 value={scenarioId}
                 disabled={busy || active || savingApproach}
                 onChange={(e) => {
@@ -1922,7 +1961,10 @@ export default function ScoutingTools({
           </details>
           {scenario && (
             <div>
-              <p className="notice">{imperialNotice(scenario.scenario.notice)}</p>
+              <details>
+                <summary>Model limits and source scale</summary>
+                <p>{imperialNotice(scenario.scenario.notice)}</p>
+              </details>
               {scenario.stale && (
                 <p className="error">Stale: {scenario.stale_reasons.join('; ')}</p>
               )}
@@ -1936,16 +1978,67 @@ export default function ScoutingTools({
                       <h4>
                         {r.point.id} · original terrain-visible {areaText(r.point.coverage)}
                       </h4>
-                      {r.message && (
-                        <p>
-                          {r.message} No path found does not certify inaccessibility. Change the
-                          travel boundary/preferences or remove this setup from the shortlist.
-                        </p>
-                      )}
                       {r.pinned_status && <p>{r.pinned_status}</p>}
                       {r.message && (
                         <>
-                          <p className="error">{explainNoPath(r.limiting_evidence)}</p>
+                          <section className="approach-no-connection" role="status">
+                            <b>
+                              {connectionDiagnostics?.scenario === scenarioId &&
+                              connectionDiagnostics.points[r.point.id]?.status === 'unavailable'
+                                ? 'Connection check unavailable for this setup.'
+                                : `No modeled connection at your ${scenario.scenario.maximum_slope_deg}° limit.`}
+                            </b>
+                            <p>
+                              {connectionDiagnostics?.scenario === scenarioId
+                                ? connectionDiagnostics.points[r.point.id]?.message ||
+                                  explainNoPath(r.limiting_evidence)
+                                : explainNoPath(r.limiting_evidence)}
+                            </p>
+                            {diagnosingConnections && (
+                              <p>Checking whether a higher slope limit reconnects this setup…</p>
+                            )}
+                            {connectionDiagnosticError && (
+                              <small>
+                                Additional connection check unavailable. {connectionDiagnosticError}
+                              </small>
+                            )}
+                            {connectionDiagnostics?.scenario === scenarioId &&
+                              connectionDiagnostics.points[r.point.id]?.next_limit_deg && (
+                                <>
+                                  <p>
+                                    A modeled connection appears at{' '}
+                                    {connectionDiagnostics.points[r.point.id].next_limit_deg}°.
+                                  </p>
+                                  <button
+                                    disabled={
+                                      busy ||
+                                      active ||
+                                      savingApproach ||
+                                      scenarioDirty ||
+                                      !boundaryReady
+                                    }
+                                    onClick={async () => {
+                                      const next =
+                                        connectionDiagnostics.points[r.point.id].next_limit_deg!;
+                                      setRetryingSlope(next);
+                                      try {
+                                        await planApproaches(next);
+                                      } finally {
+                                        setRetryingSlope(null);
+                                      }
+                                    }}
+                                  >
+                                    {retryingSlope
+                                      ? `Recalculating at ${retryingSlope}°…`
+                                      : `Recalculate at ${connectionDiagnostics.points[r.point.id].next_limit_deg}°`}
+                                  </button>
+                                </>
+                              )}
+                            <small>
+                              The current limit stays unchanged until you choose to recalculate.
+                              Distance and climbing effort still need review.
+                            </small>
+                          </section>
                           <details>
                             <summary>Technical evidence</summary>
                             <pre>{JSON.stringify(r.limiting_evidence, null, 2)}</pre>

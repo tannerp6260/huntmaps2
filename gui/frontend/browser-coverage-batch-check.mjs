@@ -56,7 +56,9 @@ try {
  const order=await page.locator('.candidate-select strong').allTextContents();
  const selected=await page.locator('.candidate-select[aria-pressed="true"] strong').textContent();
  const expected=order.slice(Math.max(0,order.indexOf(selected)),Math.max(0,order.indexOf(selected))+10);
+ if (await page.locator('.coverage-options').getAttribute('open') === null) await page.locator('.coverage-options > summary').click();
  assert.equal(await page.getByLabel('Coverage batch size').inputValue(),'10');
+ if (await page.locator('.coverage-options').getAttribute('open') === null) await page.locator('.coverage-options > summary').click();
  await page.getByRole('button',{name:'Prepare coverage',exact:true}).click();
  await page.waitForFunction(()=>document.querySelector('.coverage-preparation small')?.textContent.match(/^[1-9]/));
  await page.getByRole('button',{name:'Cancel preparation',exact:true}).click();
@@ -78,6 +80,7 @@ try {
  await page.screenshot({path:out+'/batch-desktop.png',fullPage:true});
  await page.setViewportSize({width:1902,height:862});
  await page.getByLabel('Coverage batch size').selectOption('5');
+ if (await page.locator('.coverage-options').getAttribute('open') === null) await page.locator('.coverage-options > summary').click();
  await page.getByRole('button',{name:'Prepare coverage',exact:true}).click();
  await page.locator('.coverage-preparation[data-phase="ready"]').waitFor({timeout:180000});
  await page.screenshot({path:out+'/batch-current-window.png',fullPage:true});

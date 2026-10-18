@@ -71,8 +71,8 @@ class GuiTests(unittest.TestCase):
   long=jobs.start([sys.executable,'-u','-c','import time;print("STAGE bounded synthetic hold");time.sleep(15)'],'synthetic')
   with self.assertRaisesRegex(ValueError,'Another job'):jobs.start([sys.executable,'-c','pass'],'synthetic')
   time.sleep(.15);self.assertEqual(jobs.list()[0]['stage'],'bounded synthetic hold');jobs.cancel(long['id']);self.assertEqual(wait(long)['status'],'cancelled')
-  write(state/'jobs'/'interrupted.json',dict(id='interrupted',status='running',started=time.time(),stage='old job',kind='synthetic'))
-  recovered=Jobs(state);self.assertEqual(next(j for j in recovered.list() if j['id']=='interrupted')['status'],'interrupted')
+  write(state/'jobs'/('e'*32+'.json'),dict(id='e'*32,status='running',started=time.time(),stage='old job',kind='synthetic'))
+  recovered=Jobs(state);self.assertEqual(next(j for j in recovered.list() if j['id']=='e'*32)['status'],'interrupted')
 
  def test_cancellation_kills_descendants_that_ignore_term(self):
   state=Path(tempfile.mkdtemp(prefix='huntmaps-kill-'));jobs=Jobs(state);pidfile=state/'child.pid'

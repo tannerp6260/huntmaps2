@@ -464,16 +464,15 @@ def parallel_ranges(s, part, offset):
 
 def acquire(s, allow):
     signal.alarm(900) if __name__ == "__main__" else None
-    if s["cached"]:
-        fp.verify_file(Path(s["path"]), s["sha256"])
-        return Path(s["path"]), s["sha256"]
+    from .scene_sources import cached_source
+
+    cached = cached_source(s, "sources")
+    if cached:
+        return Path(cached["path"]), cached["sha256"]
     folder = fp.HOME / "sources"
     folder.mkdir(parents=True, exist_ok=True)
     manifest = read(folder / "manifest.json", {})
     path = folder / s["key"]
-    if path.exists() and s["key"] in manifest:
-        fp.verify_file(path, manifest[s["key"]]["sha256"])
-        return path, manifest[s["key"]]["sha256"]
     if not allow:
         return None, None
     part = path.with_suffix(".partial")
@@ -616,10 +615,10 @@ def fine_grid(points):
     bins = np.floor(ground[:, :2] * 4).astype(int)
     _, ids = np.unique(bins, axis=0, return_index=True)
     ground = ground[np.sort(ids)]
-    if len(ground) > 800000:
-        raise ValueError("Ground-return mesh exceeds bounded triangulation memory")
     # Bounded local triangulations. A 10 m halo exceeds the 5 m allowed edge,
-    # and limits Qhull working memory instead of triangulating ~650k points at once.
+    # and limits Qhull working memory. Total ground count is not a Qhull input:
+    # dense clouds use the same bounded tiles as smaller clouds. The raw-return
+    # and process address-space guards still bound selection/indexing memory.
     heights = np.full((601, 601), np.nan, dtype=np.float32)
     for r0 in range(0, 601, 60):
         for c0 in range(0, 601, 60):
@@ -636,6 +635,13 @@ def fine_grid(points):
                 & (ground[:, 1] <= ymax + 10)
             )
             local = ground[keep]
+            # One return per quarter-metre bin bounds a full tile plus halos to
+            # at most 100,489 inputs, independent of the whole cloud's size.
+            bin_bound = (int((xmax - xmin + 20) * 4) + 1) * (
+                int((ymax - ymin + 20) * 4) + 1
+            )
+            if len(local) > bin_bound:
+                raise ValueError("Ground tile exceeds its measured-return bin bound")
             if len(local) < 3:
                 continue
             try:
@@ -1322,7 +1328,10 @@ def prepare(ident, allow, review_signature=None):
 
         if point(p["run_id"], cid) != snapshot:
             raise ValueError("Waypoint changed; review a new scene plan")
-    if allow and p["estimated_new_bytes"] > p.get("download_cap_bytes", fp.LIMIT):
+    from .scene_storage import effective_plan
+
+    current = effective_plan(p)
+    if allow and current["estimated_new_bytes"] > p.get("download_cap_bytes", fp.LIMIT):
         raise ValueError("Estimated new sources exceed the reviewed transfer allowance")
     if allow and p.get("errors"):
         raise ValueError("; ".join(p["errors"]))
@@ -1336,7 +1345,7 @@ def prepare(ident, allow, review_signature=None):
     fp.LIMIT = ceiling
     from .progress import start_download, emit, flush_download
 
-    start_download(p["estimated_new_bytes"] if allow else 0)
+    start_download(current["estimated_new_bytes"] if allow else 0)
     sources = []
     for s in p["sources"]:
         path, h = acquire(s, allow)
