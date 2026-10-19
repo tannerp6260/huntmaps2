@@ -1,3 +1,4 @@
+import { adjusted, acres, type HabitatMetric } from './habitat';
 import { Icon } from './workspace-ui';
 import { area } from './units';
 import type { Candidate, Review } from './types';
@@ -13,6 +14,7 @@ export default function CandidateCard({
   busy,
   onDecision,
   matching,
+  habitat,
   connection,
   selected,
   activeManual,
@@ -33,6 +35,7 @@ export default function CandidateCard({
   busy?: boolean;
   onDecision?: (action: string) => void;
   matching?: number;
+  habitat?: HabitatMetric;
   connection?: string;
   selected: string;
   activeManual: boolean;
@@ -56,7 +59,18 @@ export default function CandidateCard({
         onClick={() => chooseOriginal(p.id)}
       >
         <span className="candidate-topline">
-          <span className="candidate-rank">{rank > 0 ? String(rank).padStart(2, '0') : '—'}</span>
+          <span
+            className="candidate-rank"
+            title={
+              habitat && habitat.effective_m2 == null
+                ? 'No habitat rank: insufficient data or unavailable current mask'
+                : undefined
+            }
+          >
+            {rank > 0 && !(habitat && habitat.effective_m2 == null)
+              ? String(rank).padStart(2, '0')
+              : '—'}
+          </span>
           <strong>
             {p.id}
             {p.working_revision ? ' · updated' : ''}
@@ -69,16 +83,26 @@ export default function CandidateCard({
           </span>
         )}
         <span className="candidate-area">
-          <b>{area(matching ?? p.metrics.raw_km2)}</b>
-          <small>{matching !== undefined ? 'matching view' : 'visible terrain'}</small>
+          <b>{habitat ? adjusted(habitat.effective_m2) : area(matching ?? p.metrics.raw_km2)}</b>
+          <small>
+            {habitat
+              ? `${acres(habitat.priority_m2)} priority glassing`
+              : matching !== undefined
+                ? 'matching view'
+                : 'visible terrain'}
+          </small>
         </span>
         <span
           className="coverage-meter"
-          title="Visible area relative to the largest view in this list"
+          title={
+            habitat
+              ? 'Quality-adjusted area relative to the largest in this list'
+              : 'Visible area relative to the largest view in this list'
+          }
         >
           <i
             style={{
-              width: `${bestArea > 0 ? Math.min(100, ((Number(matching ?? p.metrics.raw_km2) || 0) / bestArea) * 100) : 0}%`,
+              width: `${bestArea > 0 ? Math.min(100, ((Number(habitat ? (habitat.effective_m2 ?? 0) / 1e6 : (matching ?? p.metrics.raw_km2)) || 0) / bestArea) * 100) : 0}%`,
             }}
           />
         </span>
@@ -90,7 +114,17 @@ export default function CandidateCard({
               : 'Cover to inspect'}
           </small>
         </span>
-        {matching !== undefined && <small>{area(p.metrics.raw_km2)} total terrain view</small>}
+        {habitat && (
+          <small>
+            {acres(habitat.current_visible_m2)} current original visible targets
+            {(habitat.scorable_fraction ?? 0) < 0.95
+              ? ` · ${acres(habitat.habitat_unknown_m2)} habitat/neighbor unknown`
+              : ''}
+          </small>
+        )}
+        {!habitat && matching !== undefined && (
+          <small>{area(p.metrics.raw_km2)} total terrain view</small>
+        )}
         {annotations[p.id]?.status && annotations[p.id].status !== 'unmarked' && (
           <small>Review: {annotations[p.id].status}</small>
         )}

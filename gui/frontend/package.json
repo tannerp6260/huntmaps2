@@ -15,7 +15,8 @@
     "test:nearby-observer": "node browser-nearby-observer-check.mjs",
     "test:working-waypoint": "node browser-working-waypoint-check.mjs",
     "format": "prettier --write src",
-    "format:check": "prettier --check src"
+    "format:check": "prettier --check src",
+    "test:habitat": "node browser-habitat-check.mjs"
   },
   "dependencies": {
     "@types/three": "0.180.0",

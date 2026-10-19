@@ -304,7 +304,10 @@ class DisplayRun:
         if key not in self.working:
             return self.base.visibility_path(key)
         folder = home(self.id)
-        cached(folder, self.working[key]["revision"], self.base)
+        if cached(folder, self.working[key]["revision"], self.base) is None:
+            raise ValueError(
+                "Current working mask is unavailable; retry the waypoint update"
+            )
         return folder / "cache" / self.working[key]["revision"] / "mask.tif"
 
     def mask(self, key):
@@ -312,6 +315,20 @@ class DisplayRun:
             return self.base.mask(key)
         path = self.visibility_path(key)
         mask = gdal.Open(str(path)).ReadAsArray() == 1
+        self.validate(self.analysis / "target.tif")
+        target = gdal.Open(str(self.analysis / "target.tif")).ReadAsArray() == 1
+        p = self.working[key]
+        from glassing.transfer import project
+
+        x, y = project(4326, self.config["epsg"])(p["longitude"], p["latitude"])
+        gt = self.dem.GetGeoTransform()
+        rr, cc = np.indices(mask.shape)
+        outside = (
+            (gt[0] + (cc + 0.5) * gt[1] - x) ** 2
+            + (gt[3] + (rr + 0.5) * gt[5] - y) ** 2
+        ) > self.config["radius_m"] ** 2 + 1e-5
+        if np.any(mask & (~target | outside)):
+            raise ValueError("Working mask exceeds current target/radius eligibility")
         if (
             abs(
                 float(mask.sum())

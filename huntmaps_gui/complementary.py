@@ -57,6 +57,22 @@ class Packed:
     def additional(self, union):
         return int(POPCOUNT[self.data & ~self.window(union)].sum())
 
+    def weighted(self, union, weights):
+        """Exact float64 reduction of cropped, newly covered bits; bounded rows."""
+        total = 0.0
+        width = min(self.data.shape[1] * 8, weights.shape[1] - self.byte * 8)
+        for start in range(0, self.data.shape[0], 64):
+            bits = self.data[start : start + 64]
+            if union is not None:
+                bits = bits & ~self.window(union)[start : start + 64]
+            selected = np.unpackbits(bits, axis=1)[:, :width].astype(bool)
+            window = weights[
+                self.row + start : self.row + start + len(bits),
+                self.byte * 8 : self.byte * 8 + width,
+            ]
+            total += float(np.sum(window[selected], dtype=np.float64))
+        return total
+
     def include(self, union):
         self.window(union)[:] |= self.data
 
@@ -78,20 +94,36 @@ def pack(mask):
     return Packed(row, byte, data, int(mask.sum()))
 
 
-def greedy(rows, kept, loader, shape, count, separation):
+def greedy(rows, kept, loader, shape, count, separation, weights=None, priority=None):
     """Count includes retained positions. Rank order is supplied by the adapter."""
     union = np.zeros((shape[0], (shape[1] + 7) // 8), dtype=np.uint8)
     included, retained, suggestions, deltas = list(kept), [], [], {}
 
     def evidence(p, coverage, additional):
         total = coverage.total if coverage is not None else None
-        return dict(
+        value = dict(
             id=p["id"],
             total_cells=total,
             additional_cells=additional,
             overlap_percent=(100 * (total - additional) / total if total else None),
             point=p["point"],
         )
+        if weights is not None:
+            for name, raster in (("effective", weights), ("priority", priority)):
+                value[f"total_{name}_m2"] = (
+                    coverage.weighted(None, raster) if coverage is not None else None
+                )
+                value[f"additional_{name}_m2"] = (
+                    coverage.weighted(union, raster) if coverage is not None else None
+                )
+            total_e, added_e = (
+                value["total_effective_m2"],
+                value["additional_effective_m2"],
+            )
+            value["weighted_overlap_percent"] = (
+                100 * (total_e - added_e) / total_e if total_e else None
+            )
+        return value
 
     for p in kept:
         coverage = loader(p)
@@ -100,6 +132,20 @@ def greedy(rows, kept, loader, shape, count, separation):
         if coverage is not None:
             coverage.include(union)
     initial = int(POPCOUNT[union].sum())
+    initial_effective = (
+        pack(np.unpackbits(union, axis=1)[:, : shape[1]].astype(bool)).weighted(
+            None, weights
+        )
+        if weights is not None
+        else None
+    )
+    initial_priority = (
+        pack(np.unpackbits(union, axis=1)[:, : shape[1]].astype(bool)).weighted(
+            None, priority
+        )
+        if weights is not None
+        else None
+    )
     remaining = [p for p in rows if p["id"] not in {q["id"] for q in kept}]
     while len(included) < count:
         best, maximum = None, 0
@@ -110,7 +156,15 @@ def greedy(rows, kept, loader, shape, count, separation):
             ):
                 continue
             coverage = loader(p)
-            additional = coverage.additional(union) if coverage is not None else 0
+            additional = (
+                (
+                    coverage.weighted(union, weights)
+                    if weights is not None
+                    else coverage.additional(union)
+                )
+                if coverage is not None
+                else 0
+            )
             # Strict > keeps the pre-existing individual order, then stable ID.
             if additional > maximum:
                 best, maximum = p, additional
@@ -118,17 +172,26 @@ def greedy(rows, kept, loader, shape, count, separation):
             break
         coverage = loader(best)
         deltas[best["id"]] = coverage.delta(union)
-        suggestions.append(evidence(best, coverage, maximum))
+        suggestions.append(evidence(best, coverage, coverage.additional(union)))
         coverage.include(union)
         included.append(best)
         remaining = [p for p in remaining if p["id"] != best["id"]]
+    result = dict(
+        kept=retained,
+        suggestions=suggestions,
+        initial_cells=initial,
+        combined_cells=int(POPCOUNT[union].sum()),
+    )
+    if weights is not None:
+        packed_union = pack(np.unpackbits(union, axis=1)[:, : shape[1]].astype(bool))
+        result.update(
+            initial_effective_m2=initial_effective,
+            initial_priority_m2=initial_priority,
+            combined_effective_m2=packed_union.weighted(None, weights),
+            combined_priority_m2=packed_union.weighted(None, priority),
+        )
     return (
-        dict(
-            kept=retained,
-            suggestions=suggestions,
-            initial_cells=initial,
-            combined_cells=int(POPCOUNT[union].sum()),
-        ),
+        result,
         union,
         deltas,
     )
@@ -147,7 +210,7 @@ def decision_state(run):
 
 
 class Context:
-    def __init__(self, ident, profile, jobs, connection_screen=""):
+    def __init__(self, ident, profile, jobs, connection_screen="", habitat_profile=""):
         self.run = DisplayRun(ident, jobs)
         r = self.run
         self.connection_screen = connection_screen
@@ -182,6 +245,34 @@ class Context:
                 dem_sha256=r.hashes[str(r.dem_path.resolve())],
             )
         self.filtered = filters.FilteredRun(r, self.profile)
+        self.habitat_profile = habitat_profile
+        from .habitat_service import selection as habitat_selection
+
+        self.habitat_selection = habitat_selection(ident)
+        self.habitat = None
+        self.weights = self.priority = None
+        if habitat_profile:
+            from . import habitat_service, habitat
+
+            selected = habitat_service.selection(ident)
+            if selected["profile"] != habitat_profile:
+                raise ValueError("Habitat preference changed; calculate again")
+            spec = habitat_service.load(habitat_profile, ident)
+            if spec["target_profile"] != profile:
+                raise ValueError(
+                    "Habitat and target profiles differ; apply the current preference"
+                )
+            self.habitat = habitat_service.HabitatRun(r, spec)
+            layers = self.habitat.layers
+            area_m2 = self.habitat.area
+            self.weights = np.where(
+                layers["known"] & self.filtered.matching, layers["q"] * area_m2, 0
+            )
+            self.priority = np.where(
+                layers["known"] & self.filtered.matching,
+                habitat.priority(layers, spec["settings"]) * area_m2,
+                0,
+            )
         self.shape = (r.dem.RasterYSize, r.dem.RasterXSize)
         self.cell_km2 = (
             abs(r.dem.GetGeoTransform()[1] * r.dem.GetGeoTransform()[5]) / 1e6
@@ -189,6 +280,11 @@ class Context:
         self.separation = options.get("recommendation_separation_m", 0)
         self.paths = {}
         self.sources = {}
+        if self.habitat:
+            for source in self.habitat.sources.values():
+                self.sources[source["path"]] = [source["sha256"], source["filesystem"]]
+            selection_path = STATE / "habitat-selections" / f"{ident}.json"
+            self.sources[str(selection_path)] = [None, identity(selection_path)]
         # Include source content hashes AND filesystem identity. Cached masks cannot
         # hide corruption or replacement even when size and mtime are preserved.
         for name in ("dem", "target", "tree", "shrub", "observer"):
@@ -221,8 +317,35 @@ class Context:
         decisions = self.state["workflow"]["points"]
         ids = sorted(set(r.points) | set(self.state["manual"]) | set(r.working))
         for cid in ids:
-            p = r.candidate(cid)
-            point = workflow.point(ident, cid, jobs, r)
+            try:
+                p = r.candidate(cid)
+                point = workflow.point(ident, cid, jobs, r)
+            except (ValueError, FileNotFoundError) as error:
+                if not self.habitat or (
+                    not isinstance(error, FileNotFoundError)
+                    and not any(
+                        message in str(error)
+                        for message in (
+                            "No saved visibility",
+                            "Current working mask is unavailable",
+                        )
+                    )
+                ):
+                    raise
+                if cid in r.working:
+                    p = r.working[cid]
+                    revision = p["revision"]
+                else:
+                    saved = r.points[cid]
+                    lon, lat = r.ll(saved["x"], saved["y"])
+                    p = dict(longitude=lon, latitude=lat, metrics=r.rows[cid])
+                    revision = workflow.digest([lon, lat])
+                point = dict(
+                    id=cid,
+                    longitude=p["longitude"],
+                    latitude=p["latitude"],
+                    revision=revision,
+                )
             x, y = xy(point["longitude"], point["latitude"])
             if cid in r.points and cid not in r.working:
                 # Preserve the original exact projected coordinates, including
@@ -245,16 +368,46 @@ class Context:
             )
             uncalculated = cid.startswith("manual-") and cid not in r.working
             if not uncalculated:
-                path = r.visibility_path(
-                    cid
-                )  # validates saved/working source integrity
-                self.paths[cid] = path
-                self.sources[str(path)] = [
-                    r.hashes.get(
-                        str(path.resolve()), r.working.get(cid, {}).get("revision")
-                    ),
-                    identity(path),
-                ]
+                try:
+                    path = r.visibility_path(cid)
+                    self.paths[cid] = path
+                    self.sources[str(path)] = [
+                        r.hashes.get(
+                            str(path.resolve()), r.working.get(cid, {}).get("revision")
+                        ),
+                        identity(path),
+                    ]
+                except (ValueError, FileNotFoundError) as error:
+                    if not self.habitat or (
+                        not isinstance(error, FileNotFoundError)
+                        and not any(
+                            message in str(error)
+                            for message in (
+                                "No saved visibility",
+                                "Current working mask is unavailable",
+                            )
+                        )
+                    ):
+                        raise
+                    uncalculated = True
+                    parent = (
+                        (
+                            STATE
+                            / "working-waypoints"
+                            / ident
+                            / "cache"
+                            / r.working[cid]["revision"]
+                        )
+                        if cid in r.working
+                        else (
+                            r.vegetation / "viewsheds"
+                            if r.experimental and cid.startswith("V")
+                            else r.analysis / "additional_visibility"
+                        )
+                    )
+                    while not parent.exists():
+                        parent = parent.parent
+                    self.sources[str(parent)] = [None, identity(parent)]
             gt = r.dem.GetGeoTransform()
             row, col = math.floor((y - gt[3]) / gt[5]), math.floor((x - gt[0]) / gt[1])
             eligible = (
@@ -285,7 +438,9 @@ class Context:
                 point=point,
                 x=x,
                 y=y,
-                eligible=bool(eligible and not dismissed and not manual),
+                eligible=bool(
+                    eligible and not dismissed and not manual and not uncalculated
+                ),
                 raw_km2=p.get("metrics", {}).get("raw_km2", 0),
                 foreground_category=r.points.get(cid, {}).get(
                     "foreground_category", "insufficient coverage"
@@ -316,6 +471,11 @@ class Context:
                 config=r.config,
                 rows=self.rows,
                 connection_screen=connection_screen,
+                habitat_profile=habitat_profile,
+                habitat_selection=self.habitat_selection,
+                habitat_identity=(
+                    self.habitat.prepared["identity"] if self.habitat else None
+                ),
             )
         )
 
@@ -351,6 +511,16 @@ class Context:
         rows = [
             dict(p, matching_km2=p["matching_cells"] * self.cell_km2) for p in self.rows
         ]
+        if self.habitat:
+            for p in rows:
+                coverage = self.coverage(p)
+                m = (
+                    self.habitat.candidate_metrics(p["id"])
+                    if coverage is not None
+                    else dict(effective_m2=None)
+                )
+                p["habitat"] = m
+            return rank(rows)
         # Historical pre-filter search uses its saved individual cover ordering.
         if (
             not self.profile_id
@@ -381,12 +551,14 @@ def write_mask(path, packed, run, width):
     rgba_file(path, rgba, run.dem)
 
 
-def calculate(ident, count=5, profile="", jobs=None, connection_screen=""):
+def calculate(
+    ident, count=5, profile="", jobs=None, connection_screen="", habitat_profile=""
+):
     if type(count) is not int or count not in (3, 4, 5):
         raise ValueError("Choose a collection size from three to five positions")
     started = time.perf_counter()
     with CALCULATION:
-        context = Context(ident, profile, jobs, connection_screen)
+        context = Context(ident, profile, jobs, connection_screen, habitat_profile)
         token = digest([context.stamp, count])[:32]
         home = folder(token)
         cached = read_json(home / "result.json")
@@ -400,6 +572,8 @@ def calculate(ident, count=5, profile="", jobs=None, connection_screen=""):
             context.shape,
             count,
             context.separation,
+            weights=context.weights,
+            priority=context.priority,
         )
         area = context.cell_km2
         for p in [*result["kept"], *result["suggestions"]]:
@@ -411,6 +585,15 @@ def calculate(ident, count=5, profile="", jobs=None, connection_screen=""):
                 if p["additional_cells"] is not None
                 else None
             )
+            if context.habitat and p["id"] in context.paths:
+                metrics = context.habitat.candidate_metrics(p["id"])
+                p.update(
+                    habitat_status=metrics["status"],
+                    scorable_m2=metrics["scorable_m2"],
+                    habitat_unknown_m2=metrics["habitat_unknown_m2"],
+                )
+                if metrics["effective_m2"] is None:
+                    p["total_effective_m2"] = p["additional_effective_m2"] = None
         members = [*result["kept"], *result["suggestions"]]
         counts = np.zeros(context.shape, dtype=np.uint16)
         masks = {}
@@ -424,6 +607,18 @@ def calculate(ident, count=5, profile="", jobs=None, connection_screen=""):
             counts += mask
             masks[member["id"]] = full
         shared = np.packbits(counts >= 2, axis=1)
+        if context.habitat:
+            covered = counts > 0
+            known = context.habitat.layers["known"]
+            result.update(
+                combined_scorable_m2=float((covered & known).sum()) * area * 1e6,
+                combined_habitat_unknown_m2=float((covered & ~known).sum())
+                * area
+                * 1e6,
+                habitat_status=(
+                    "scored" if (covered & known).any() else "insufficient_data"
+                ),
+            )
         unique = {
             cid: np.packbits(
                 (np.unpackbits(full, axis=1)[:, : context.shape[1]] > 0)
@@ -442,6 +637,11 @@ def calculate(ident, count=5, profile="", jobs=None, connection_screen=""):
             id=token,
             run_id=ident,
             profile=profile,
+            habitat_profile=habitat_profile,
+            habitat_selection=context.habitat_selection,
+            habitat_identity=(
+                context.habitat.prepared["identity"] if context.habitat else None
+            ),
             connection_screen=connection_screen,
             connection_eligible=context.connection_ids,
             count=count,
@@ -510,6 +710,12 @@ def load_result(ident, token):
         raise ValueError(
             "Decisions or waypoints changed; calculate the collection again"
         )
+    from .habitat_service import selection as habitat_selection
+
+    if result.get(
+        "habitat_selection", dict(profile="", revision=0)
+    ) != habitat_selection(ident):
+        raise ValueError("Habitat preference changed; calculate the collection again")
     if result.get("connection_screen"):
         from .connectivity import eligible
 
@@ -518,6 +724,17 @@ def load_result(ident, token):
             raise ValueError(
                 "Connection eligibility changed; calculate the collection again"
             )
+    if result.get("habitat_profile"):
+        from . import habitat_service
+
+        if habitat_service.selection(ident)["profile"] != result["habitat_profile"]:
+            raise ValueError(
+                "Habitat preference changed; calculate the collection again"
+            )
+        habitat_service.HabitatRun(
+            DisplayRun(ident, None),
+            habitat_service.load(result["habitat_profile"], ident),
+        )
     for path, (_, expected) in result["sources"].items():
         if identity(path) != expected:
             raise ValueError(
@@ -547,7 +764,11 @@ def add(ident, token, jobs):
     with CALCULATION, locked(STATE / "maintenance"), locked(workflow.path(ident)):
         result = load_result(ident, token)
         context = Context(
-            ident, result["profile"], jobs, result.get("connection_screen", "")
+            ident,
+            result["profile"],
+            jobs,
+            result.get("connection_screen", ""),
+            result.get("habitat_profile", ""),
         )
         if context.stamp != result["stamp"]:
             raise ValueError(

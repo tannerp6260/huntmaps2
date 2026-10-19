@@ -390,7 +390,10 @@ class CoverageAPI(unittest.TestCase):
         home.mkdir(parents=True)
         mask = np.zeros((self.r.dem.RasterYSize, self.r.dem.RasterXSize), np.uint8)
         target = gdal.Open(str(self.r.analysis / "target.tif")).ReadAsArray() == 1
-        row, col = np.argwhere(target)[0]
+        # A replacement fixture must obey the current target AND radius contract.
+        row, col = np.argwhere(self.r.mask(cid)[0])[
+            len(np.argwhere(self.r.mask(cid)[0])) // 2
+        ]
         mask[row, col] = 1
         from glassing.core import write_raster, digest
 

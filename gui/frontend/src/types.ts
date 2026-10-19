@@ -25,6 +25,7 @@ export type Run = {
     options?: {
       ranking_version?: number;
       target_filters?: import('./target-criteria').TargetCriteria;
+      habitat?: import('./habitat').HabitatSettings | null;
       avoid_dense_vegetation?: boolean;
       nearby_radius_m?: number;
       tree_threshold_percent?: number;
@@ -34,6 +35,8 @@ export type Run = {
     unused_budget: number;
     sampling?: { spacing_m: number | null };
     nearby_ids?: Record<string, string[]>;
+    established_ids?: string[];
+    established_nearby_ids?: Record<string, string[]>;
     recommendation_note?: string;
     exhaustion_reason?: string | null;
   };
@@ -136,6 +139,7 @@ export type BaselinePlan = DownloadReviewInfo & {
     candidate_count: number;
     search?: {
       target_filters?: import('./target-criteria').TargetCriteria;
+      habitat?: import('./habitat').HabitatSettings | null;
       avoid_dense_vegetation?: boolean;
       ranking_version?: number;
       recommendation_count: number;

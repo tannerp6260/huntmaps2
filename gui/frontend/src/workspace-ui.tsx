@@ -1,3 +1,4 @@
+import type { HabitatMetric } from './habitat';
 import { Component, useState } from 'react';
 import type { Candidate } from './types';
 import type { Workflow } from './workflow';
@@ -164,6 +165,7 @@ export function SelectedSetup({
   id,
   name,
   matching,
+  habitat,
   workflow,
   busy,
   onDetails,
@@ -175,6 +177,7 @@ export function SelectedSetup({
   id: string;
   name?: string;
   matching?: number;
+  habitat?: HabitatMetric;
   workflow: Workflow | null;
   busy: boolean;
   onApproach: () => void;
@@ -196,8 +199,20 @@ export function SelectedSetup({
         </div>
       </div>
       <div className="selection-metric">
-        <strong>{area(matching ?? candidate?.metrics.raw_km2)}</strong>
-        <small>{matching !== undefined ? 'matching terrain' : 'visible terrain'}</small>
+        <strong>
+          {habitat
+            ? habitat.effective_m2 == null
+              ? 'Insufficient data'
+              : (habitat.effective_m2 / 4046.8564224).toFixed(1)
+            : area(matching ?? candidate?.metrics.raw_km2)}
+        </strong>
+        <small>
+          {habitat
+            ? 'quality-adjusted acre equivalents'
+            : matching !== undefined
+              ? 'matching terrain'
+              : 'visible terrain'}
+        </small>
       </div>
       <div className="selection-evidence">
         <b>

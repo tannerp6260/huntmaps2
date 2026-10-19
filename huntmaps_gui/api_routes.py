@@ -579,6 +579,10 @@ def api_router(jobs: Jobs):
             manual_points=None,
             download_bytes=budget * 1000000,
         )
+        if body.get("habitat") is not None:
+            from .habitat import validate as validate_habitat
+
+            c["search"]["habitat"] = validate_habitat(body["habitat"])
         config = folder / (ident + "-config.json")
         write(config, c)
         p = dict(

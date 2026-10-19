@@ -135,3 +135,37 @@ pool. **Prepare more coverage** opens the optional display batch controls. Requi
 scene geometry must render before a view counts as inspected. Missing aerial
 imagery is explicitly disclosed while shaded terrain remains usable; a failed
 required foliage asset cannot silently attest a complete lidar inspection.
+
+## Experimental habitat preference
+
+In Find, choose **Fall mixed habitat — experimental** for the GMU 54 fall use case,
+or leave **Off** for established terrain/filter behavior. Custom exposes bounded
+neighborhoods, weights, vegetation penalties and priority thresholds. Start without
+extra tree/shrub hard exclusions unless intentionally restricting targets. Retain
+conservative observer and approach constraints and inspect leading views before
+relying on mapped glassability.
+
+Cards and details distinguish quality-adjusted acre equivalents from physical
+priority acres and current original visible targets. Material habitat/neighborhood
+unknowns remain visible; unknown cover is not open habitat. Advanced settings and
+**Habitat coverage and export** explain sources, components and units. The optional
+green priority overlay keeps hidden cells transparent, gray nonpriority cells and
+amber unknown habitat; the original viewshed remains available separately.
+
+Completed-run changes use verified saved sources and exact current working masks;
+they never acquire sources or calculate another viewshed. Preferences restore per
+run independently of review drafts. New-run opt-in uses the same objective to choose
+refinement leaders and recommendations. Connection screening remains independent;
+both individual and complementary choices use the full connected scored pool before
+spacing/count selection. Previewing changes no shortlist or confirmation decisions.
+Find preferences scroll within their own region when space is limited, leaving the
+setup list visible. Off also restores established recommendations on habitat-generated
+runs when Show original terrain has removed the current review-filter profile; this
+compares the evaluated pool and does not repeat generation.
+
+Complementary habitat mode counts shared cells once, reports unique quality-adjusted
+coverage and priority physical area, and retains existing points including unknown
+coverage. Incremental at inclusion differs from final exclusive area. Suggestions
+use deterministic greedy selection, not a global optimum or visiting order. Explicit
+**Add suggestions to shortlist** still checks current decisions, mask revisions,
+profiles and connection eligibility. See [habitat methods](HABITAT_METHODS.md).

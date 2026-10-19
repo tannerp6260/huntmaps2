@@ -1,4 +1,15 @@
 import {
+  useHabitat,
+  HabitatSelector,
+  HabitatDetails,
+  adjusted,
+  acres,
+  type HabitatSettings,
+  canonicalHabitat,
+  habitatSignature,
+  validHabitat,
+} from './habitat';
+import {
   reviewDraftsReady,
   readReviewDraft,
   otherReviewDrafts,
@@ -140,6 +151,7 @@ function App() {
   const [treeThreshold, setTreeThreshold] = useState(10);
   const [targets, setTargets] = useState<TargetCriteria>(defaultCriteria);
   const [avoidDense, setAvoidDense] = useState(false);
+  const [newHabitat, setNewHabitat] = useState<HabitatSettings | null>(null);
   const [coverageDisplay, setCoverageDisplay] = useState<CoverageDisplay>({
     phase: 'idle',
     ids: [],
@@ -262,6 +274,18 @@ function App() {
         }
       : p;
   };
+  const habitat = useHabitat(
+    runId,
+    filterId,
+    workingGeometryStamp + manualGeometryStamp,
+    !!run && !newRun && !training.active,
+    api,
+  );
+  const habitatRows = new globalThis.Map(habitat.result?.candidates.map((p) => [p.id, p]) || []);
+  const habitatRanks = new globalThis.Map(
+    habitat.result?.candidates.map((p, i) => [p.id, i]) || [],
+  );
+  const habitatId = habitat.result?.profile.id || '';
   const connectionEnabled =
     !!run && !newRun && !training.active && !planningApproaches && !inspectStage && !savedStage;
   const connections = useConnectionScreen(
@@ -279,11 +303,17 @@ function App() {
     p.metrics.group === 'manual';
   const recommendationIds =
     connectionEnabled && !connections.showAll
-      ? screenedRecommendations(connections.screen, appliedFilter)
-      : (appliedFilter?.recommendation_ids ?? run?.recommendation_ids ?? []);
+      ? screenedRecommendations(connections.screen, appliedFilter, habitat.result)
+      : (habitat.result?.recommendation_ids ??
+        appliedFilter?.recommendation_ids ??
+        run?.search_summary?.established_ids ??
+        run?.recommendation_ids ??
+        []);
   const collectionSignature = JSON.stringify([
     runId,
     filterId,
+    habitat.signature,
+    habitatId,
     workingGeometryStamp,
     manualPoints.map((p) => [p.id, p.longitude, p.latitude, p.status]),
     Object.values(working).map((p) => [p.id, p.revision, p.status]),
@@ -419,6 +449,7 @@ function App() {
     count >= 12 &&
     count <= 5000 &&
     validCriteria(targets) &&
+    validHabitat(newHabitat) &&
     Number.isInteger(recommendationCount) &&
     recommendationCount >= 1 &&
     recommendationCount <= Math.min(200, count) &&
@@ -446,6 +477,7 @@ function App() {
       count !== plan.settings?.candidate_count ||
       inputSignature(targets) !==
         inputSignature({ ...defaultCriteria(), ...plan.settings?.search?.target_filters }) ||
+      habitatSignature(newHabitat) !== habitatSignature(plan.settings?.search?.habitat ?? null) ||
       avoidDense !== (plan.settings?.search?.avoid_dense_vegetation ?? false) ||
       recommendationCount !==
         (plan.settings?.search?.recommendation_count ??
@@ -480,6 +512,7 @@ function App() {
     budget,
     separation,
     targets,
+    newHabitat,
     avoidDense,
     sampling,
     includeNetwork,
@@ -1074,6 +1107,7 @@ function App() {
         run,
         working,
         filterId,
+        habitatId: habitat.overlay ? habitatId : '',
         collection: collection
           ? {
               id: collection.id,
@@ -1127,6 +1161,8 @@ function App() {
     inspectStage,
     collectionSelectionVisible,
     filterId,
+    habitatId,
+    habitat.overlay,
     workflowStamp,
   ]);
   useEffect(() => {
@@ -1314,6 +1350,7 @@ function App() {
           observation_minutes: minutes,
           candidate_count: count,
           target_filters: targets,
+          habitat: canonicalHabitat(newHabitat),
           avoid_dense_vegetation: avoidDense,
           recommendation_count: recommendationCount,
           recommendation_separation_m: separation,
@@ -1381,6 +1418,7 @@ function App() {
     setMinutes(30);
     setIncludeNetwork(true);
     setTargets(defaultCriteria());
+    setNewHabitat(null);
     setAvoidDense(false);
     setSampling({
       network_ids: [],
@@ -1478,6 +1516,7 @@ function App() {
         setSeparation(p.settings.search?.recommendation_separation_m ?? 150);
         setTreeThreshold(p.settings.search?.tree_threshold_percent ?? 10);
         setTargets({ ...defaultCriteria(), ...p.settings.search?.target_filters });
+        setNewHabitat(p.settings.search?.habitat ?? null);
         setAvoidDense(p.settings.search?.avoid_dense_vegetation ?? false);
         setBudget(p.max_download_mb);
         const recoveredSampling = p.access_sampling
@@ -1543,6 +1582,8 @@ function App() {
       ) || [];
   const sorted = [...visibleCandidates].sort((a, b) => {
     const original = (originalRanks.get(a.id) ?? -1) - (originalRanks.get(b.id) ?? -1);
+    if (habitat.result && !planningApproaches && !inspectStage && sortMode === 'coverage')
+      return (habitatRanks.get(a.id) ?? Infinity) - (habitatRanks.get(b.id) ?? Infinity);
     if (sortMode === 'engine')
       return (
         Number(b.metrics.baseline_score ?? b.metrics.selective_score ?? -1) -
@@ -1780,7 +1821,14 @@ function App() {
   const candidateRanks = new globalThis.Map(sorted.map((p, i) => [p.id, i + 1]));
   const bestCandidateArea = sorted.reduce(
     (best, p) =>
-      Math.max(best, Number(filterRows.get(p.id)?.matching_km2 ?? p.metrics.raw_km2) || 0),
+      Math.max(
+        best,
+        Number(
+          habitat.result
+            ? (habitatRows.get(p.id)?.effective_m2 ?? 0) / 1e6
+            : (filterRows.get(p.id)?.matching_km2 ?? p.metrics.raw_km2),
+        ) || 0,
+      ),
     0,
   );
   const renderCandidate = (p: Candidate) => (
@@ -1795,6 +1843,7 @@ function App() {
       dismissed={workflow?.points[p.id]?.dismissed}
       busy={decisionBusy}
       onDecision={training.active ? undefined : (action) => decide(p.id, action)}
+      habitat={habitatRows.get(p.id)}
       matching={filterRows.get(p.id)?.matching_km2}
       connection={connectionEnabled ? connectionLabel(connections.screen?.points[p.id]) : undefined}
       selected={selected}
@@ -1818,9 +1867,11 @@ function App() {
                 .filter(connectionAllowed)
                 .filter(
                   (q) =>
-                    (appliedFilter?.nearby_ids ?? run?.search_summary?.nearby_ids)?.[
-                      p.id
-                    ]?.includes(q.id) && !workflow?.points[q.id]?.dismissed,
+                    (habitat.result?.nearby_ids ??
+                      appliedFilter?.nearby_ids ??
+                      run?.search_summary?.established_nearby_ids ??
+                      run?.search_summary?.nearby_ids)?.[p.id]?.includes(q.id) &&
+                    !workflow?.points[q.id]?.dismissed,
                 )
             : [];
         return (
@@ -1829,7 +1880,13 @@ function App() {
             {!!alternatives.length && (
               <details>
                 <summary>Nearby alternatives ({alternatives.length})</summary>
-                {alternatives.map(renderCandidate)}
+                {alternatives
+                  .sort((a, b) =>
+                    habitat.result
+                      ? (habitatRanks.get(a.id) ?? Infinity) - (habitatRanks.get(b.id) ?? Infinity)
+                      : 0,
+                  )
+                  .map(renderCandidate)}
               </details>
             )}
           </div>
@@ -1870,7 +1927,14 @@ function App() {
                       {alternatives.length} saved alternative{alternatives.length === 1 ? '' : 's'}{' '}
                       to {parent.id}
                     </summary>
-                    {alternatives.map(renderCandidate)}
+                    {alternatives
+                      .sort((a, b) =>
+                        habitat.result
+                          ? (habitatRanks.get(a.id) ?? Infinity) -
+                            (habitatRanks.get(b.id) ?? Infinity)
+                          : 0,
+                      )
+                      .map(renderCandidate)}
                   </details>
                 )}
               </div>
@@ -2213,7 +2277,46 @@ function App() {
                 </button>
               </div>
               {stage === 'find' && !training.active && run && workingLoaded && workflow && (
-                <>
+                <div className="find-preferences" aria-label="Find preferences">
+                  <HabitatSelector
+                    value={habitat.settings}
+                    onChange={habitat.setSettings}
+                    disabled={habitat.loading}
+                  />
+                  {habitat.loading && <p role="status">Loading habitat preferences…</p>}
+                  {habitat.busy && <p role="status">Scoring saved habitat…</p>}
+                  {habitat.error && (
+                    <p role="alert">
+                      {habitat.error} <button onClick={habitat.retry}>Retry habitat scoring</button>
+                    </p>
+                  )}
+                  {habitat.result && (
+                    <>
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={habitat.overlay}
+                          onChange={(e) => habitat.setOverlay(e.target.checked)}
+                        />
+                        Priority-visible habitat overlay
+                      </label>
+                      <details>
+                        <summary>Habitat coverage and export</summary>
+                        <small>
+                          Green priority · gray nonpriority · amber unknown · hidden transparent.
+                          Habitat support {habitat.result.source_support_m} m; overview pixels
+                          summarize coarse evidence.
+                        </small>
+                        <a
+                          href={`/api/runs/${runId}/habitat/${habitatId}/export`}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Export current habitat metrics and metadata
+                        </a>
+                      </details>
+                    </>
+                  )}
                   <ConnectionControls value={connections} />
                   <label>
                     Recommendation mode{' '}
@@ -2234,10 +2337,12 @@ function App() {
                       run={run.id}
                       selected={activeManual ? '' : selected}
                       profile={filterId}
+                      habitatProfile={habitatId}
                       connectionScreen={connections.showAll ? '' : connections.screen?.id || ''}
                       signature={collectionSignature}
                       paused={
                         dismissing ||
+                        (habitat.enabled && !habitat.result) ||
                         (!connections.showAll && connections.screen?.status !== 'complete') ||
                         jobs.some((j) => ['queued', 'running', 'cancelling'].includes(j.status))
                       }
@@ -2264,7 +2369,7 @@ function App() {
                       }}
                     />
                   )}
-                </>
+                </div>
               )}
               <div className="find-next-action">
                 {!!shortlisted.length && (
@@ -2287,7 +2392,9 @@ function App() {
                   value={sortMode}
                   onChange={(e) => setSortMode(e.target.value)}
                 >
-                  <option value="coverage">Visible area</option>
+                  <option value="coverage">
+                    {habitat.result ? 'Quality-adjusted area' : 'Visible area'}
+                  </option>
                   <option value="engine">Inspection score</option>
                 </select>
               </div>
@@ -2385,13 +2492,17 @@ function App() {
               )}
               <div className="ranking-caption">
                 <span>
-                  {sortMode === 'engine'
-                    ? 'Saved inspection score'
-                    : appliedFilter || group === 'recommended'
-                      ? 'Matching terrain first'
-                      : 'Largest terrain view first'}
+                  {habitat.result && sortMode === 'coverage'
+                    ? 'Quality-adjusted habitat area first'
+                    : sortMode === 'engine'
+                      ? 'Saved inspection score'
+                      : appliedFilter || group === 'recommended'
+                        ? 'Matching terrain first'
+                        : 'Largest terrain view first'}
                 </span>
-                <span>Area · mi²</span>
+                <span>
+                  {habitat.result ? 'Adjusted equivalents / physical acres' : 'Area · mi²'}
+                </span>
               </div>
               <div className="candidate-list" data-tour="observer-list">
                 {loading ? (
@@ -2905,6 +3016,9 @@ function App() {
                       : 'Terrain-visible area'}
                 </span>
               )}
+              {habitat.overlay && habitatId && !planningApproaches && !collection && (
+                <span>Green priority · gray nonpriority · amber unknown · hidden transparent</span>
+              )}
               {visibility && !planningApproaches && collection && (
                 <span>
                   <i style={{ background: '#aa6fff' }} />
@@ -2936,6 +3050,11 @@ function App() {
           )}
           {!newRun && !training.active && collectionSelectionVisible && (
             <SelectedSetup
+              habitat={
+                !planningApproaches && !inspectStage
+                  ? habitatRows.get(activeManual?.id || selected)
+                  : undefined
+              }
               candidate={workingSelected || (activeManual ? null : detail)}
               id={activeManual?.id || selected}
               name={currentManual?.name || working[selected]?.name}
@@ -3135,6 +3254,7 @@ function App() {
                 </label>
               )}
               {drawing && <p className="notice">Confirm this boundary to continue.</p>}
+              <HabitatSelector value={newHabitat} onChange={setNewHabitat} />
               <AreaSettings
                 onValidity={setSpacingValid}
                 targets={targets}
@@ -3486,6 +3606,10 @@ function App() {
                 />
               )}
               <div hidden={planningApproaches || inspectStage || panelMode === 'filters'}>
+                <HabitatDetails
+                  metric={habitatRows.get(activeManual?.id || selected)}
+                  rank={(originalRanks.get(selected) ?? 0) + 1}
+                />
                 {workingSelected ? (
                   <WorkingWaypoint
                     key={workingSelected.revision}
@@ -3583,6 +3707,7 @@ function App() {
                         )}
                         <details className="setup-evidence">
                           <summary>Visibility, vegetation & tradeoffs</summary>
+
                           {typeof detail.metrics.foreground_category === 'string' && (
                             <div className="notice">
                               <strong>
@@ -3844,6 +3969,12 @@ function App() {
                   {areaText(p.metrics.tree_lt10_km2)} {appliedFilter ? 'original terrain ' : ''}
                   under 10% trees
                 </span>
+                {habitatRows.get(p.id) && (
+                  <small>
+                    {adjusted(habitatRows.get(p.id)?.effective_m2)} ·{' '}
+                    {acres(habitatRows.get(p.id)?.priority_m2)} priority glassing
+                  </small>
+                )}
                 <small>
                   {p.latitude.toFixed(7)}, {p.longitude.toFixed(7)}
                 </small>

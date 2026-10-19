@@ -53,11 +53,17 @@ export async function generateSetups(
     options.onJob(job);
   }
   while (!intent.cancelled) {
-    const [plan, job] = await Promise.all([
+    let [plan, job] = await Promise.all([
       api(`/plans/${intent.planId}`),
       intent.jobId ? api(`/jobs/${intent.jobId}`) : Promise.resolve(null),
     ]);
     if (intent.cancelled) return;
+    // The completed job may be newer than the concurrent plan read. Verify a
+    // fresh plan before declaring incomplete preparation or authorizing a start.
+    if (job?.status === 'complete' && !plan.prepared) {
+      plan = await api(`/plans/${intent.planId}`);
+      if (intent.cancelled) return;
+    }
 
     if (job) {
       intent.jobId = job.id;

@@ -1,8 +1,17 @@
+import { adjusted, acres } from './habitat';
 import { useEffect, useRef, useState } from 'react';
 import { area } from './units';
 import type { Workflow } from './workflow';
 export type Contribution = {
   id: string;
+  habitat_status?: string;
+  scorable_m2?: number;
+  habitat_unknown_m2?: number;
+  total_effective_m2?: number | null;
+  additional_effective_m2?: number | null;
+  total_priority_m2?: number | null;
+  additional_priority_m2?: number | null;
+  weighted_overlap_percent?: number | null;
   total_km2: number | null;
   additional_km2: number | null;
   overlap_percent: number | null;
@@ -17,6 +26,14 @@ export type Collection = {
   suggestions: Contribution[];
   unknown_ids: string[];
   combined_km2: number;
+  habitat_profile?: string;
+  habitat_status?: string;
+  combined_scorable_m2?: number;
+  combined_habitat_unknown_m2?: number;
+  combined_effective_m2?: number;
+  combined_priority_m2?: number;
+  initial_effective_m2?: number;
+  initial_priority_m2?: number;
   initial_km2: number;
   separation_m: number;
 };
@@ -25,6 +42,7 @@ export default function ComplementaryViews({
   selected,
   profile,
   connectionScreen = '',
+  habitatProfile = '',
   signature,
   paused,
   onResult,
@@ -37,6 +55,7 @@ export default function ComplementaryViews({
   selected: string;
   profile: string;
   connectionScreen?: string;
+  habitatProfile?: string;
   signature: string;
   paused: boolean;
   onResult: (result: Collection | null, signature: string) => void;
@@ -87,7 +106,12 @@ export default function ComplementaryViews({
     setBusy(true);
     api(`/runs/${run}/complementary`, {
       method: 'POST',
-      body: JSON.stringify({ count, profile, connection_screen: connectionScreen }),
+      body: JSON.stringify({
+        count,
+        profile,
+        connection_screen: connectionScreen,
+        habitat_profile: habitatProfile,
+      }),
       signal: controller.signal,
     })
       .then((value: Collection) => {
@@ -96,6 +120,7 @@ export default function ComplementaryViews({
           currentSignature.current !== signature ||
           value.run_id !== run ||
           value.profile !== profile ||
+          (value.habitat_profile || '') !== habitatProfile ||
           value.count !== count
         )
           return;
@@ -112,7 +137,7 @@ export default function ComplementaryViews({
       alive = false;
       controller.abort();
     };
-  }, [run, profile, signature, count, retry, paused, connectionScreen]);
+  }, [run, profile, signature, count, retry, paused, connectionScreen, habitatProfile]);
   async function add() {
     if (!active) return;
     setAdding(true);
@@ -167,12 +192,23 @@ export default function ComplementaryViews({
       {active && (
         <>
           <div className="collection-total" role="status">
-            <b>Combined matching terrain: {area(active.combined_km2)}</b>
+            <b>
+              {habitatProfile
+                ? `Unique useful coverage: ${adjusted(active.habitat_status === 'insufficient_data' ? null : active.combined_effective_m2)} · ${acres(active.combined_priority_m2)} priority`
+                : `Combined matching terrain: ${area(active.combined_km2)}`}
+            </b>
             <small>
               Counted once across {active.kept.length} retained + {active.suggestions.length}{' '}
               suggested positions.
             </small>
           </div>
+          {habitatProfile && (
+            <small>
+              {acres(active.combined_scorable_m2)} scorable matching union ·{' '}
+              {acres(active.combined_habitat_unknown_m2)} habitat/neighborhood unknown in the
+              matching union.
+            </small>
+          )}
           {active.unknown_ids.length > 0 && (
             <p className="notice">
               Retained {active.unknown_ids.join(', ')}. No calculated coverage at these current
@@ -188,6 +224,8 @@ export default function ComplementaryViews({
               {active.kept.map((p) => (
                 <p key={p.id}>
                   {p.id}:{' '}
+                  {habitatProfile &&
+                    `${adjusted(p.total_effective_m2)} total · ${adjusted(p.additional_effective_m2)} incremental at inclusion · ${acres(p.total_priority_m2)} total priority · ${acres(p.additional_priority_m2)} incremental priority · ${acres(p.habitat_unknown_m2)} habitat/neighbor unknown. `}{' '}
                   {p.total_km2 === null
                     ? 'Contribution unknown'
                     : area(p.total_km2) + ' total matching terrain'}
@@ -207,6 +245,15 @@ export default function ComplementaryViews({
                   <b>{p.id}</b>
                   <span>Total matching: {area(p.total_km2)}</span>
                   <strong>Additional: {area(p.additional_km2)}</strong>
+                  {habitatProfile && (
+                    <small>
+                      {adjusted(p.total_effective_m2)} total · {adjusted(p.additional_effective_m2)}{' '}
+                      incremental at inclusion · {acres(p.total_priority_m2)} total priority ·{' '}
+                      {acres(p.additional_priority_m2)} incremental priority ·{' '}
+                      {p.weighted_overlap_percent?.toFixed(1)}% weighted overlap (of this member’s
+                      E) · {acres(p.habitat_unknown_m2)} habitat/neighbor unknown in matching area
+                    </small>
+                  )}
                   <small>
                     Overlap: {p.overlap_percent?.toFixed(1)}% of this position’s matching area
                   </small>

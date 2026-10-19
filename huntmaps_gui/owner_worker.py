@@ -220,6 +220,8 @@ def main():
                 source_reuse,
                 rcmap_sources,
                 radius_support,
+                habitat,
+                habitat_service,
             )
             from .storage import read_json
 
@@ -239,6 +241,8 @@ def main():
                             source_reuse,
                             rcmap_sources,
                             radius_support,
+                            habitat,
+                            habitat_service,
                         ]
                     }
                 )

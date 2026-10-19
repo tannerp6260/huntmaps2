@@ -30,6 +30,8 @@ def implementation():
                 "sampling.py",
                 "evaluation.py",
                 "target_filters.py",
+                "habitat.py",
+                "habitat_service.py",
                 "storage.py",
             ]
         ).encode()
@@ -42,6 +44,10 @@ def validate(c):
     count = options.get("recommendation_count")
     threshold = options.get("tree_threshold_percent")
     target_filters.validate(options.get("target_filters"))
+    if options.get("habitat") is not None:
+        from .habitat import validate as validate_habitat
+
+        validate_habitat(options["habitat"])
     if (
         options.get("version") != VERSION
         or type(budget) is not int
@@ -94,6 +100,10 @@ def nearby_cover(tree, shrub, gt, point, radius=30, threshold=10):
 
 
 def rank(rows):
+    if rows and "habitat" in rows[0]:
+        from .habitat import order
+
+        return sorted(rows, key=order)
     if rows and "matching_km2" in rows[0]:
         return sorted(rows, key=lambda p: (-p["matching_km2"], -p["raw_km2"], p["id"]))
     order = {
@@ -118,6 +128,7 @@ def spread_recommendations(rows, count, separation):
             if p["group"] != "manual"
             and p.get("standing_eligible", True)
             and p.get("matching_km2", p["raw_km2"]) > 0
+            and ("habitat" not in p or (p["habitat"].get("effective_m2") or 0) > 0)
         ]
     ):
         if all(
@@ -329,6 +340,23 @@ def score(c):
     matching, unknown = target_filters.masks(
         grid[1], grid[2], options.get("target_filters"), tree, shrub
     )
+    habitat_prepared = None
+    if options.get("habitat") is not None:
+        from . import habitat_service, habitat
+
+        sources = habitat_service.source_inventory(
+            c, lambda p: Path(p) if Path(p).is_absolute() else Path.cwd() / p
+        )
+        habitat_prepared = habitat_service.prepare(sources, options["habitat"], grid[0])
+        transfer.dump(
+            root / "habitat-provenance.json",
+            dict(
+                algorithm=habitat.VERSION,
+                settings=habitat.validate(options["habitat"]),
+                sources=habitat_service.authoritative(sources),
+                **{k: v for k, v in habitat_prepared.items() if k != "layers"},
+            ),
+        )
     if options.get("avoid_dense_vegetation"):
         grid[3]["observer"] &= target_filters.standing_mask(
             tree,
@@ -391,7 +419,7 @@ def score(c):
                         options["tree_threshold_percent"],
                     )
                 )
-            if options.get("ranking_version") == 2:
+            if options.get("ranking_version") == 2 or habitat_prepared is not None:
                 from glassing.review_maps import visible_mask
 
                 area = abs(grid[2][1] * grid[2][5]) / 1e6
@@ -412,6 +440,14 @@ def score(c):
                         standing_eligible=not options.get("avoid_dense_vegetation")
                         or p["foreground_category"] == "low mapped tree cover",
                     )
+                    if habitat_prepared is not None:
+                        p["habitat"] = habitat.metrics(
+                            habitat_prepared["layers"],
+                            visible,
+                            matching,
+                            area * 1e6,
+                            options["habitat"],
+                        )
             rows.extend(scored)
             patches.update(ps)
             done.update(p["id"] for p in scored)
@@ -449,6 +485,7 @@ def score(c):
             if p["group"] == "automated"
             and p.get("standing_eligible", True)
             and p.get("matching_km2", p["raw_km2"]) > 0
+            and ("habitat" not in p or (p["habitat"].get("effective_m2") or 0) > 0)
         ]
     )
     extras = refine(
@@ -468,6 +505,31 @@ def score(c):
         options["recommendation_count"],
         options.get("recommendation_separation_m", 0),
     )
+    # Keep the established comparator available when habitat is switched Off.
+    # This ranks the same evaluated pool; it does not repeat terrain search.
+    established = {}
+    if habitat_prepared is not None:
+        terrain_rows = [{k: v for k, v in p.items() if k != "habitat"} for p in rows]
+        terrain_recommended = spread_recommendations(
+            terrain_rows,
+            options["recommendation_count"],
+            options.get("recommendation_separation_m", 0),
+        )
+        terrain_ids = {p["id"] for p in terrain_recommended}
+        established = dict(
+            established_ids=[p["id"] for p in terrain_recommended],
+            established_nearby_ids={
+                p["id"]: [
+                    q["id"]
+                    for q in rank(terrain_rows)
+                    if q["id"] not in terrain_ids
+                    and q["group"] != "manual"
+                    and math.hypot(q["x"] - p["x"], q["y"] - p["y"])
+                    < options.get("recommendation_separation_m", 0)
+                ]
+                for p in terrain_recommended
+            },
+        )
     selected = {p["id"] for p in recommended}
     for p in rows:
         p["recommended"] = p["id"] in selected
@@ -492,6 +554,7 @@ def score(c):
         root / "recommendations.json",
         dict(
             version=VERSION,
+            **established,
             options=options,
             evaluated_count=len(rows),
             budget=requested_total,
@@ -569,7 +632,18 @@ def guidance(c, root):
     text += "Recommendations: " + ", ".join(summary["ids"]) + ".\n\n"
     text += f"Broad terrain sampling uses 80% of the automated budget. The remaining 20% tests distinct nearby grid cells within 150 m of up to ten leading setups, at 50 m offsets. A small area may leave refinement budget unused.\n\n"
     text += f"Effective broad spacing: {summary['sampling']['spacing_m']} m. Spacing decreases for small observer areas, down to the analysis grid resolution. {summary.get('exhaustion_reason') or ''}\n\n"
-    if c["search"].get("ranking_version") == 2:
+    if c["search"].get("habitat") is not None:
+        from . import habitat
+
+        text += f"Experimental habitat objective {habitat.VERSION}: sum physical cell area × current terrain visibility × hard-target match × known neighborhood support × H × G. E is quality-adjusted area, never deer probability or literal acreage searched. The same objective selected refinement leaders and spaced recommendations.\n\n"
+        text += f"Canonical settings: {habitat.validate(c['search']['habitat'])}. Source identities/year/grid and unknown processing-release labels: analysis/habitat-provenance.json. No additional sources were acquired by habitat scoring.\n\n"
+        text += "| Setup | Quality-adjusted m² | Priority physical m² | Matching physical m² | Habitat/neighbor unknown m² |\n| --- | ---: | ---: | ---: | ---: |\n"
+        rows = {p["id"]: p for p in transfer.read(Path(c["work"]) / "scores.json")}
+        for cid in summary["ids"]:
+            h = rows[cid]["habitat"]
+            text += f"| {cid} | {h['effective_m2']} | {h['priority_m2']} | {h['matching_m2']} | {h['habitat_unknown_m2']} |\n"
+        text += "\nPriority H/G thresholds affect physical summaries only. Missing vegetation is not open habitat. This is a science-informed structural proxy; inspect leading views, retain conservative observer/approach constraints, and initially avoid extra tree/shrub hard exclusions unless intentional.\n\n"
+    elif c["search"].get("ranking_version") == 2:
         text += "Recommendations rank by visible area meeting all configured target-terrain criteria, then original visible area and stable point ID. Unknown required data does not count as matching area. Nearby vegetation eligibility applies only when enabled; zero-match points remain available but are not recommended.\n\n"
         text += f"Saved target criteria: {c['search'].get('target_filters')}. Avoid standing in dense vegetation: {c['search'].get('avoid_dense_vegetation', False)}.\n\n"
     else:

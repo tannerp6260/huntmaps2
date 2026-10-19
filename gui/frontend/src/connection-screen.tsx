@@ -1,3 +1,4 @@
+import type { HabitatResult } from './habitat';
 import { useEffect, useRef, useState } from 'react';
 import DecimalField from './decimal-field';
 import DownloadReview from './download-review';
@@ -51,20 +52,34 @@ export function connectionLabel(e?: ConnectionEvidence) {
 export function screenedRecommendations(
   screen: ConnectionScreen | null,
   filter: AppliedFilter | null,
+  habitat: HabitatResult | null = null,
 ) {
+  const metricRows = new Map(filter?.candidates.map((p) => [p.id, p]) || []);
+  const habitatRows = new Map(habitat?.candidates.map((p) => [p.id, p]) || []);
+  const habitatOrder = new Map(habitat?.candidates.map((p, i) => [p.id, i]) || []);
   const rows = (screen?.recommendation_pool || [])
     .filter(
       (p) =>
         screen?.points[p.id]?.status === 'connection_found' &&
         p.group !== 'manual' &&
-        p.standing_eligible !== false,
+        (habitat
+          ? !!habitatRows.get(p.id)?.qualifies && !p.id.startsWith('manual-')
+          : p.standing_eligible !== false),
     )
     .map((p) => {
-      const f = filter?.candidates.find((f) => f.id === p.id);
+      const f = metricRows.get(p.id);
       return {
         ...p,
-        matching_km2: f ? f.matching_km2 : p.matching_km2,
-        qualifies: !filter || !!f?.qualifies,
+        matching_km2: habitat
+          ? (habitatRows.get(p.id)?.matching_m2 ?? 0) / 1e6
+          : f
+            ? f.matching_km2
+            : p.matching_km2,
+        raw_km2: habitat ? (habitatRows.get(p.id)?.current_visible_m2 ?? 0) / 1e6 : p.raw_km2,
+        qualifies:
+          (!filter || !!f?.qualifies) &&
+          (!habitat ||
+            (!!habitatRows.get(p.id)?.qualifies && (habitatRows.get(p.id)?.effective_m2 ?? 0) > 0)),
       };
     })
     .filter((p) => p.qualifies && (p.matching_km2 ?? p.raw_km2 ?? 0) > 0);
@@ -74,14 +89,16 @@ export function screenedRecommendations(
     'insufficient coverage': 2,
   };
   rows.sort((a, b) =>
-    a.matching_km2 !== undefined && b.matching_km2 !== undefined
-      ? b.matching_km2 - a.matching_km2 ||
-        (b.raw_km2 || 0) - (a.raw_km2 || 0) ||
-        a.id.localeCompare(b.id)
-      : (cover[a.foreground_category || 'insufficient coverage'] ?? 2) -
-          (cover[b.foreground_category || 'insufficient coverage'] ?? 2) ||
-        (b.raw_km2 || 0) - (a.raw_km2 || 0) ||
-        a.id.localeCompare(b.id),
+    habitat
+      ? (habitatOrder.get(a.id) ?? Infinity) - (habitatOrder.get(b.id) ?? Infinity)
+      : a.matching_km2 !== undefined && b.matching_km2 !== undefined
+        ? b.matching_km2 - a.matching_km2 ||
+          (b.raw_km2 || 0) - (a.raw_km2 || 0) ||
+          a.id.localeCompare(b.id)
+        : (cover[a.foreground_category || 'insufficient coverage'] ?? 2) -
+            (cover[b.foreground_category || 'insufficient coverage'] ?? 2) ||
+          (b.raw_km2 || 0) - (a.raw_km2 || 0) ||
+          a.id.localeCompare(b.id),
   );
   const selected: typeof rows = [];
   for (const p of rows)

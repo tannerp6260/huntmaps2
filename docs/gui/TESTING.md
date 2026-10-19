@@ -118,3 +118,60 @@ Browser waits must poll actual job status before checking publication. In partic
 do not use an async `waitForFunction` predicate for API polling: the installed
 Playwright predicate path can accept a Promise before its boolean result resolves.
 Use explicit request polling with terminal-failure and timeout checks instead.
+
+## Habitat scoring checks
+
+`test_gui_habitat.py` is discovered by the existing `test_gui*.py` release group.
+It uses independent scalar/geometry/packed references, known zero versus unknown,
+source-boundary and isolated patch checks, strict settings, metric transfer and
+visibility alignment, exact weighted unions, actual saved API/overlay services,
+source/derived corruption with unchanged size/mtime, current missing retained masks,
+profile restore/isolation, stale preference/addition rejection, dedicated tile bursts,
+lock ordering and an actual opt-in owner/search worker with provenance products.
+
+`browser-habitat-check.mjs` is registered both as `test:habitat` and in the release
+runner's explicit browser list. Its independent synthetic source/run tests the real
+source→search→ranking→connection→collection→tile path. Actual connection exclusions
+block the highest-ranked setups; all connected alternatives must still be selected
+from the full pool. A controlled response fixture supplies stale original individual
+ranking fields alongside actual connection evidence. It checks actual priority pixels,
+Off/on/reload, a retained unsaved draft and the same mounted notes editor, actual
+weighted totals, error/retry, late old-profile replies, 1500/900/450 CSS px layouts,
+and unchanged decisions. Off is checked after removing the review-filter adapter on
+a habitat-generated run, against its separately published established recommendations.
+The order selector identifies quality-adjusted area explicitly; an independent UI
+response fixture checks that an insufficient-data card has no numbered habitat rank.
+The actual saved 549-area path is exercised read-only when available. Results must
+remain visible at 900px while scoring and after completion; Find preferences scroll
+within a bounded region. Controlled delays/errors are engineering fixtures, not live
+provider or wildlife validation. Existing scene recovery and multi-tab draft journeys
+remain mandatory in the normal release gate.
+
+The existing scouting journey uses an independent disposable fixture. It holds an
+actual automatic proposal across an explicit network import, then verifies the late
+proposal cannot clear that selection. Its download-only AOI is outside already cached
+fixture inventory, so the original download-cap/approval assertions exercise a genuine
+uncovered area even after earlier source-reuse journeys.
+
+Find's generation journey also delivers an older unprepared plan alongside a newly
+completed job. It must re-read the plan and start exactly once; a genuinely unprepared
+fresh plan must still fail without a start. Transition failures retain condition,
+fixture state, body and screenshot diagnostics. Existing duplicate/cancel/stale-input/
+reload/provider/cap assertions and their time limits remain intact.
+
+Read-only measurement helper:
+`.venv/bin/python -m gui.habitat_performance --out /tmp/habitat-performance.json`.
+It uses disposable state, forbids downloads/visibility generation, applies the same
+saved hard filters to both arms, independently recomputes weighted collection totals,
+and reports context, scoring, setting-change, overlay and collection timings. Exact
+scenario greedy collections are evaluated under common default settings. Spatially
+varying synthetic packed pools include 549/1500/5000 masks, with densities, bytes,
+three repetitions and cumulative process peak RSS. Synthetic packed-reduction timing
+excludes saved-mask validation; real-area scoring includes that service boundary.
+A saved 600-location real pool is not substituted if unavailable. Protected sources,
+owner records, prepared scenes and historical masks must be byte/path-audited separately.
+
+The completed habitat release evidence, observed counts, exact commands, screenshots,
+performance and preservation audit are in
+[HABITAT_IMPLEMENTATION_REPORT.md](HABITAT_IMPLEMENTATION_REPORT.md); counts are
+observations for that release, not fixed discovery targets for future checks.

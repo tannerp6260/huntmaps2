@@ -26,6 +26,77 @@ def router(jobs):
     from . import complementary
 
     from . import connectivity
+    from . import habitat_service
+
+    @r.get("/runs/{ident}/habitat")
+    def habitat_selection(ident):
+        from .catalog import Run
+
+        run = Run(ident)
+        selected = habitat_service.selection(ident)
+        return dict(
+            selected,
+            profile_spec=(
+                habitat_service.load(selected["profile"], ident)
+                if selected["profile"]
+                else None
+            ),
+            initial_settings=(
+                run.config.get("search", {}).get("habitat")
+                if selected["revision"] == 0
+                else None
+            ),
+        )
+
+    @r.put("/runs/{ident}/habitat")
+    async def habitat_choose(ident, body: dict = Body(...)):
+        return await habitat_service.background(habitat_service.choose, ident, body)
+
+    @r.get("/runs/{ident}/habitat/{profile}")
+    async def habitat_results(ident, profile):
+        return await habitat_service.background(habitat_service.score, ident, profile)
+
+    @r.get("/runs/{ident}/habitat/{profile}/export")
+    async def habitat_export(ident, profile):
+        value = await habitat_service.background(habitat_service.score, ident, profile)
+        return dict(
+            value,
+            units="Physical m² and quality-adjusted m² equivalents; not probability",
+            method="Experimental structural habitat and shared target glassability proxy",
+        )
+
+    @r.get("/runs/{ident}/habitat-tiles/{profile}/{revision}/{cid}/{z}/{x}/{y}.png")
+    async def habitat_tile(
+        ident,
+        profile,
+        revision,
+        cid,
+        z: int,
+        x: int,
+        y: int,
+        x_huntmaps_prefetch: bool = Header(False),
+    ):
+        def render():
+            run = DisplayRun(ident, jobs)
+            if run.working.get(cid, {}).get("revision", "original") != revision:
+                raise ValueError("Working habitat layer revision changed")
+            if habitat_service.selection(ident)["profile"] != profile:
+                raise ValueError("Habitat preference changed")
+            return tile(
+                habitat_service.HabitatRun(run, habitat_service.load(profile, ident)),
+                "habitat",
+                cid,
+                z,
+                x,
+                y,
+                background=x_huntmaps_prefetch,
+            )
+
+        return Response(
+            await habitat_service.background_tile(render),
+            media_type="image/png",
+            headers={"Cache-Control": "private, max-age=31536000, immutable"},
+        )
 
     @r.get("/connectivity-screens/{token}")
     def recover_connection_screen(token):
@@ -49,14 +120,16 @@ def router(jobs):
         return connectivity.diagnose(ident, jobs)
 
     @r.post("/runs/{ident}/complementary")
-    def complementary_calculate(ident, body: dict = Body(...)):
+    async def complementary_calculate(ident, body: dict = Body(...)):
         return complementary.public_result(
-            complementary.calculate(
+            await habitat_service.background(
+                complementary.calculate,
                 ident,
                 body.get("count", 5),
                 body.get("profile", ""),
                 jobs,
                 body.get("connection_screen", ""),
+                body.get("habitat_profile", ""),
             )
         )
 

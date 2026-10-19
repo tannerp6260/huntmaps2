@@ -91,6 +91,8 @@ def main():
                 "recommendations.json",
             ],
         }.get(stage, [])
+        if stage == "score" and c["search"].get("habitat") is not None:
+            names.append("habitat-provenance.json")
         products = {} if stage == "prepare" else transfer.read(root / "products.json")
         for name in names:
             products[name] = transfer.digest(root / name)
@@ -123,6 +125,8 @@ def main():
                 Path(search.__file__).with_name("evaluation.py"),
                 Path(search.__file__).with_name("storage.py"),
                 Path(search.target_filters.__file__),
+                Path(__file__).with_name("habitat.py"),
+                Path(__file__).with_name("habitat_service.py"),
                 Path(__file__).with_name("manual_packet.py"),
             ]
             + list(Path("glassing").glob("transfer*.py"))

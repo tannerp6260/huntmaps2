@@ -25,6 +25,8 @@ def records():
             *(STATE / "manual-observers").glob("*.json"),
             *(STATE / "working-waypoints").glob("*/state.json"),
             *(STATE / "filter-profiles").glob("*.json"),
+            *(STATE / "habitat-profiles").glob("*.json"),
+            *(STATE / "habitat-selections").glob("*.json"),
             *(STATE / "approaches").glob("*/*.json"),
             *(STATE / "networks").glob("*/*"),
         ]
@@ -103,6 +105,8 @@ def reset(body: Reset):
                 or path.is_relative_to(STATE / "approaches")
                 or path.is_relative_to(STATE / "networks")
                 or path.is_relative_to(STATE / "filter-profiles")
+                or path.is_relative_to(STATE / "habitat-profiles")
+                or path.is_relative_to(STATE / "habitat-selections")
             ):
                 continue
             # Explicit reset is also available for damaged records; retain exact bytes.
@@ -148,6 +152,8 @@ def restore(body: Restore):
                     "approaches",
                     "networks",
                     "filter-profiles",
+                    "habitat-profiles",
+                    "habitat-selections",
                     "workflows",
                     "approach-reviews",
                     "first-person",
@@ -281,8 +287,9 @@ def inventory():
         add(path, "Guided approach review", True)
     for path in (STATE / "workflows").glob("*.json"):
         add(path, "saved workflow decisions and referenced results", True)
-    for path in (STATE / "filter-profiles").glob("*.json"):
-        add(path, "saved filter profile", True)
+    for namespace in ("filter-profiles", "habitat-profiles", "habitat-selections"):
+        for path in (STATE / namespace).glob("*.json"):
+            add(path, "saved preference profile", True)
     return dict(
         items=items,
         total_bytes=sum(v["bytes"] for v in items),

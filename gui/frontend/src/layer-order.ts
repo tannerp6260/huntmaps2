@@ -12,6 +12,7 @@ export function orderRasterLayers(map: Map) {
     (id: string) => id.startsWith('raster-imagery-'),
     (id: string) => id.startsWith('raster-visible-'),
     (id: string) => id.startsWith('raster-classes-'),
+    (id: string) => id.startsWith('raster-habitat-'),
   ];
   for (const matches of roles)
     for (const layer of layers) if (matches(layer.id)) map.moveLayer(layer.id, 'boundary-fill');

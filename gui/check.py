@@ -15,6 +15,7 @@ import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
 BROWSER_CHECKS = (
+    "browser-habitat-check",
     "browser-scene-recovery-check",
     "browser-audit-regressions",
     "browser-connectivity-check",
@@ -72,6 +73,8 @@ def owner_records():
         "networks",
         "approaches",
         "filter-profiles",
+        "habitat-profiles",
+        "habitat-selections",
         "first-person/ready",
         "first-person/bundles",
     ):

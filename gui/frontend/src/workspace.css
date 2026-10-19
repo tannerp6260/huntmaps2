@@ -2101,6 +2101,21 @@ pre {
   min-height: 160px;
   overflow: auto;
 }
+.sidebar > .find-preferences {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 0 1 auto;
+  min-height: 100px;
+  max-height: min(32dvh, 240px);
+  overflow: auto;
+}
+.find-preferences > * {
+  flex-shrink: 0;
+}
+.find-preferences > p {
+  margin: 0;
+}
 .connection-screen {
   padding: 6px 8px;
   margin: 0;

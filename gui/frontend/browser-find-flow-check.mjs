@@ -7,7 +7,8 @@ fs.mkdirSync(out, {recursive:true});
 const browser = await chromium.launch({executablePath:process.env.HUNTMAPS_BROWSER || '/usr/bin/google-chrome',headless:true,args:['--no-sandbox','--enable-unsafe-swiftshader','--use-gl=angle','--use-angle=swiftshader']});
 const geometry = {type:'Polygon',coordinates:[[[-107.3,38.7],[-107.29,38.7],[-107.29,38.71],[-107.3,38.71],[-107.3,38.7]]]};
 const errors=[];
-async function fixture({estimated=0,blocked=false,preparationError=false}={}) {
+const fixtureStates=new Map();
+async function fixture({estimated=0,blocked=false,preparationError=false,tornPreparedRead=false}={}) {
   const page=await browser.newPage({viewport:{width:1280,height:900}});
   page.on('pageerror', e=>errors.push(e.message));
   await page.addInitScript(()=>{
@@ -15,6 +16,7 @@ async function fixture({estimated=0,blocked=false,preparationError=false}={}) {
     localStorage.setItem('huntmaps-training-v2',JSON.stringify({notes:{},current:'review',lessons:{review:{lesson:'review',step:'select',paused:false,complete:false}},draft:null}));
   });
   const state={jobs:[],prepared:false,creates:0,starts:0,cancels:0,runLoads:0,refreshRequired:false,refreshes:0,inputs:null,estimated,blocked,preparationError};
+  fixtureStates.set(page,state);
   const id='c'.repeat(32);
   const makeJob=(kind,status)=>({id:kind+'-job',plan:id,kind,status,name:state.inputs?.name || 'fixture',stage:kind==='prepare'?'Preparing sources':'Downloading sources',elapsed_s:2});
   const plan=()=>({id,name:state.inputs.name,prepared:state.prepared,source_refresh_required:state.refreshRequired,sources_ready:!estimated,max_download_mb:state.inputs.max_download_mb,review_signature:'checked-signature',include_network:true,access_sampling:state.inputs.access_sampling,
@@ -44,7 +46,7 @@ async function fixture({estimated=0,blocked=false,preparationError=false}={}) {
       state.jobs=[makeJob('baseline','running'),...state.jobs];value=state.jobs[0];
     }
     else if(path===`/api/plans/${id}/prepare`){state.refreshes++;state.refreshRequired=false;state.prepared=false;state.jobs=[makeJob('prepare','running')];value=state.jobs[0];}
-    else if(path===`/api/plans/${id}`)value=plan();
+    else if(path===`/api/plans/${id}`){value=plan();if(tornPreparedRead&&state.prepared&&!state.tornDelivered){state.tornDelivered=true;value={...value,prepared:false};}}
     else if(path.endsWith('/cancel')){state.cancels++;state.jobs[0].status='cancelled';value=state.jobs[0];}
     await route.fulfill({json:value});
   });
@@ -67,7 +69,7 @@ async function begin(f) {
   await waitFor(f.page,()=>f.state.creates===1);
   assert.equal(f.state.creates,1);assert.equal(f.state.starts,0);
 }
-async function waitFor(page,fn){await page.waitForFunction(()=>true);for(let n=0;n<80;n++){if(fn())return;await page.waitForTimeout(100);}throw Error('Expected transition did not happen');}
+async function waitFor(page,fn){await page.waitForFunction(()=>true);for(let n=0;n<80;n++){if(fn())return;await page.waitForTimeout(100);}await page.screenshot({path:out+'/transition-failure.png',fullPage:true});fs.writeFileSync(out+'/transition-failure.json',JSON.stringify({condition:String(fn),state:fixtureStates.get(page),body:await page.locator('body').innerText()},null,2));throw Error('Expected transition did not happen: '+String(fn));}
 try {
   const start=await fixture();
   assert.equal(start.state.runLoads,0);
@@ -101,6 +103,10 @@ try {
   assert.equal(await start.page.locator('.training-coach').count(),0);
   await start.page.close();
 
+  // Model an older plan response paired with the newly completed job response.
+  // Concurrent polling cannot assume those two reads describe one atomic instant.
+  const torn=await fixture({tornPreparedRead:true});await begin(torn);torn.ready();await waitFor(torn.page,()=>torn.state.starts===1);assert.equal(torn.state.tornDelivered,true);assert.equal(torn.state.creates,1);await torn.page.close();
+  const incomplete=await fixture();await begin(incomplete);incomplete.state.jobs[0].status='complete';await incomplete.page.getByRole('dialog',{name:'Generating setups',exact:true}).getByText('Source preparation is incomplete. Retry to refresh the source plan.',{exact:true}).waitFor();assert.equal(incomplete.state.starts,0);await incomplete.page.close();
   const success=await fixture({estimated:1000000});await begin(success);success.ready();await waitFor(success.page,()=>success.state.starts===1);
   await success.page.getByRole('button',{name:'Continue in background',exact:true}).click();
   await success.page.getByRole('button',{name:'Show generation progress',exact:true}).click();

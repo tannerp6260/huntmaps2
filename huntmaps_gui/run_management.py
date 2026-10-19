@@ -75,6 +75,7 @@ def preview(ident):
         ("workflows", ".json"),
         ("approach-reviews", ".json"),
         ("annotations", ".json"),
+        ("habitat-selections", ".json"),
         ("manual-observers", ".json"),
         ("working-waypoints", ""),
         ("filter-profiles", ""),
@@ -82,6 +83,9 @@ def preview(ident):
     ]:
         path = Path(STATE) / group / (ident + suffix)
         if path.exists():
+            candidates.append(path)
+    for path in (Path(STATE) / "habitat-profiles").glob("*.json"):
+        if read_json(path, {}).get("run_id") == ident:
             candidates.append(path)
     for path in (Path(STATE) / "approaches").glob("*/scenario.json"):
         if read_json(path, {}).get("run_id") == ident:

@@ -14,6 +14,7 @@ const displayed = new WeakMap<Map, string>();
 type LayerState = {
   run: Run;
   filterId?: string;
+  habitatId?: string;
   collection?: { id: string; selected: string };
   working: Record<string, { revision: string }>;
   imagery: boolean;
@@ -35,6 +36,7 @@ export function updateMapLayers(
   {
     run,
     filterId,
+    habitatId,
     collection,
     working,
     imagery,
@@ -64,10 +66,10 @@ export function updateMapLayers(
   retained.set(m, recent);
   const coverage: { key: string; alpha: number }[] = [];
   const addRaster = (layer: string, id: string, alpha: number, color = 0) => {
-    const key = `raster-${layer}-${id}-${run.id}-${collection && layer === 'visible' ? collection.id : ''}-${['visible', 'classes'].includes(layer) ? filterId || 'base' : 'base'}-${working[id]?.revision || 'original'}-${color}-${layer === 'visible' ? retry : 0}-${COVERAGE_DISPLAY_VERSION}`;
+    const key = `raster-${layer}-${id}-${run.id}-${collection && layer === 'visible' ? collection.id : ''}-${['visible', 'classes'].includes(layer) ? filterId || 'base' : 'base'}-${working[id]?.revision || 'original'}-${color}-${layer === 'visible' ? retry : 0}-${COVERAGE_DISPLAY_VERSION}-${layer === 'habitat' ? habitatId || 'off' : ''}`;
     wanted.add(key);
     if (layer === 'visible') recent.set(key, Date.now());
-    if (layer === 'visible') coverage.push({ key, alpha });
+    if (layer === 'visible' || layer === 'habitat') coverage.push({ key, alpha });
     if (m.getSource(key)) {
       m.setLayoutProperty(key, 'visibility', 'visible');
       m.setPaintProperty(key, 'raster-opacity', alpha);
@@ -77,9 +79,11 @@ export function updateMapLayers(
     m.addSource(key, {
       type: 'raster',
       tiles: [
-        collection && layer === 'visible'
-          ? `${location.origin}/api/runs/${run.id}/collection-tiles/${collection.id}/${id}/{z}/{x}/{y}.png?display=collection-v2`
-          : `${location.origin}/api/runs/${run.id}/${filterId && ['visible', 'classes'].includes(layer) ? `filtered-tiles/${filterId}` : useWorking ? 'working-tiles' : 'tiles'}/${layer}/${id}/{z}/{x}/{y}.png?color=${color}&revision=${working[id]?.revision || 'original'}&display=${COVERAGE_DISPLAY_VERSION}`,
+        layer === 'habitat'
+          ? `${location.origin}/api/runs/${run.id}/habitat-tiles/${habitatId}/${working[id]?.revision || 'original'}/${id}/{z}/{x}/{y}.png`
+          : collection && layer === 'visible'
+            ? `${location.origin}/api/runs/${run.id}/collection-tiles/${collection.id}/${id}/{z}/{x}/{y}.png?display=collection-v2`
+            : `${location.origin}/api/runs/${run.id}/${filterId && ['visible', 'classes'].includes(layer) ? `filtered-tiles/${filterId}` : useWorking ? 'working-tiles' : 'tiles'}/${layer}/${id}/{z}/{x}/{y}.png?color=${color}&revision=${working[id]?.revision || 'original'}&display=${COVERAGE_DISPLAY_VERSION}`,
       ],
       tileSize: 256,
       maxzoom: 20,
@@ -90,7 +94,7 @@ export function updateMapLayers(
         type: 'raster',
         source: key,
         paint: {
-          'raster-opacity': layer === 'visible' ? 0 : alpha,
+          'raster-opacity': ['visible', 'habitat'].includes(layer) ? 0 : alpha,
           'raster-resampling': layer === 'imagery' ? 'linear' : 'nearest',
           'raster-fade-duration': 0,
           'raster-opacity-transition': { duration: 0, delay: 0 },
@@ -122,6 +126,8 @@ export function updateMapLayers(
   ids.forEach((id, i) => {
     if (!collection && visibility && (!compare.length || !hiddenViews.includes(id)))
       addRaster('visible', id, opacity, i);
+    if (habitatId && !collection && visibility && (!compare.length || !hiddenViews.includes(id)))
+      addRaster('habitat', id, opacity);
     const sectorKey = `sector-${run.id}-${id}`;
     if (sectors && !working[id] && (!compare.length || !hiddenViews.includes(id))) {
       wanted.add(sectorKey);
@@ -199,12 +205,15 @@ export function updateMapLayers(
   let awaitingRender = false;
   const signature = coverage.map(({ key }) => key).join('|');
   let initial = displayed.get(m) !== signature;
-  const report = (phase: CoverageDisplay['phase']) =>
+  const report = (phase: CoverageDisplay['phase']) => {
+    m.getContainer().dataset.coverageIdentity = signature;
+    m.getContainer().dataset.coveragePhase = phase;
     setCoverage({
       phase,
       ids: collection ? ['collection', collection.selected].filter(Boolean) : ids,
       initial,
     });
+  };
   const pending = () => {
     revealed = false;
     if (!coverage.length) {

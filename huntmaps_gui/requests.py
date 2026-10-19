@@ -68,9 +68,19 @@ class Preparation(Payload):
     nearby_radius_m: Literal[10, 30, 60, 120] = 30
     tree_threshold_percent: float = Field(default=10, ge=0, le=100)
     target_filters: dict | None = None
+    habitat: dict | None = None
     avoid_dense_vegetation: StrictBool = False
     access_sampling: dict | None = None
     include_network: StrictBool = False
+
+    @field_validator("habitat")
+    @classmethod
+    def habitat_settings(cls, value):
+        if value is None:
+            return None
+        from .habitat import validate
+
+        return validate(value)
 
     @field_validator("radius_m")
     @classmethod

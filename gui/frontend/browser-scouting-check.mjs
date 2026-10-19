@@ -1,3 +1,5 @@
+import {execFileSync} from 'node:child_process';
+import path from 'node:path';
 import { openExisting, reloadExisting, openNetworks } from './browser-startup.mjs';
 import { chromium } from 'playwright';
 import fs from 'node:fs';
@@ -9,23 +11,37 @@ const page=await browser.newPage({viewport:{width:1500,height:1050}});const erro
 page.on('pageerror',e=>errors.push(e.message));
 await page.addInitScript(()=>localStorage.setItem('huntmaps-online-imagery','off'));
 await page.route('**/*',r=>r.request().url().startsWith(base)||r.request().url().startsWith('blob:')?r.continue():r.abort());
-const rid='soap-creek-decision-review-v2', headers={'X-HuntMaps':'local'};
+const fixture=JSON.parse(execFileSync(path.resolve('../../.venv/bin/python'),['-m','gui.scouting_fixture'],{cwd:process.env.HUNTMAPS_WORKSPACE,encoding:'utf8'}).trim().split('\n').at(-1));
+const rid=fixture.run,cid=fixture.cid, headers={'X-HuntMaps':'local'};
 const old=await (await page.request.get(`${base}/api/runs/${rid}/annotations`)).json();
-const p=await (await page.request.get(`${base}/api/runs/${rid}/candidates/A0075`)).json();
+const p=await (await page.request.get(`${base}/api/runs/${rid}/candidates/${cid}`)).json();
 const lon=p.longitude,lat=p.latitude;
 const area={type:'Polygon',coordinates:[[[lon-.003,lat-.003],[lon+.003,lat-.003],[lon+.003,lat+.003],[lon-.003,lat+.003],[lon-.003,lat-.003]]]};
 const network={type:'Feature',properties:{trail_name:'Synthetic trail',terra_motorized:'N'},geometry:{type:'LineString',coordinates:[[lon-.001,lat-.002],[lon-.001,lat+.002]]}};
-await openExisting(page, base);await page.getByLabel('Select A0075',{exact:true}).click();await page.getByRole('button',{name:'Setup details',exact:true}).click();await page.getByLabel('Candidate decision',{exact:true}).selectOption('keep');await page.getByRole('button',{name:'Save review',exact:true}).click();
+await openExisting(page, base);await page.getByLabel('Run selector').selectOption(rid);await page.getByLabel('Select '+cid,{exact:true}).click();await page.getByRole('button',{name:'Setup details',exact:true}).click();await page.getByLabel('Candidate decision',{exact:true}).selectOption('keep');await page.getByRole('button',{name:'Save review',exact:true}).click();
+let proposalArrived,releaseProposal;const proposalHeld=new Promise(r=>proposalArrived=r),proposalGate=new Promise(r=>releaseProposal=r);
+await page.route(`**/api/runs/${rid}/approach-suggestion`,async route=>{const response=await route.fetch();proposalArrived();await proposalGate;await route.fulfill({response});});
 await page.locator('.workflow-task').getByRole('button',{name:'Shortlist',exact:true}).click();await page.getByRole('button',{name:/Approach.*selected/}).click();
-await page.getByLabel('Focused approach spot').selectOption('A0075');
+await page.getByLabel('Focused approach spot').waitFor();if(await page.getByLabel('Focused approach spot').inputValue()!==cid)await page.getByLabel('Focused approach spot').selectOption(cid);
+await proposalHeld;
+const importedNetwork=page.waitForResponse(r=>r.url().includes('/networks/import?')&&r.request().method()==='POST');
 await page.getByLabel('Import road trail network',{exact:true}).setInputFiles({name:'synthetic-network.geojson',mimeType:'application/geo+json',buffer:Buffer.from(JSON.stringify(network))});
+assert.ok((await importedNetwork).ok());
+const selectedNetwork=page.locator('.scouting-tools label').filter({hasText:'trails: synthetic-network.geojson'}).locator('input[type="checkbox"]');
+await page.waitForFunction(()=>[...document.querySelectorAll('.scouting-tools label')].some(l=>l.textContent.includes('trails: synthetic-network.geojson')&&l.querySelector('input')?.checked));
+releaseProposal();await page.getByText('Suggesting a boundary within 2,000 m of this setup…',{exact:true}).waitFor({state:'hidden'});
+await page.waitForTimeout(100);
+assert.ok(await selectedNetwork.isChecked(),'A late automatic boundary/source suggestion must retain the explicitly imported network');
+
 await page.getByLabel('Import travel area',{exact:true}).setInputFiles({name:'synthetic-travel.geojson',mimeType:'application/geo+json',buffer:Buffer.from(JSON.stringify(area))});
 
 await page.locator('.approach-settings').waitFor();if (await page.locator('.approach-settings').getAttribute('open') === null) await page.locator('.approach-settings > summary').click();await page.getByText('More options · pinned departure and preferences',{exact:true}).click();await page.getByLabel('Maximum approach slope',{exact:true}).fill('35');
 await page.getByRole('button',{name:'Confirm approach search boundary',exact:true}).click();
 await page.getByText('Boundary confirmed for this setup',{exact:false}).waitFor();
-await page.locator('.approach-boundary-check[data-ready="true"]').waitFor();
-await page.getByRole('button',{name:'Calculate approaches for A0075',exact:true}).click();
+await page.locator('.approach-boundary-check[data-ready="true"]').waitFor().catch(async error=>{
+ fs.mkdirSync(out,{recursive:true});await page.screenshot({path:out+'/preflight-failure.png',fullPage:true});fs.writeFileSync(out+'/preflight-failure.txt',await page.locator('body').innerText());throw error;
+});
+await page.getByRole('button',{name:'Calculate approaches for '+cid,exact:true}).click();
 await page.getByRole('link',{name:'Provisional approach GeoJSON',exact:true}).first().waitFor({timeout:60000});
 const href=await page.getByRole('link',{name:'Provisional approach GeoJSON',exact:true}).first().getAttribute('href');
 const data=await (await page.request.get(base+href)).json();
@@ -62,7 +78,10 @@ await page.getByLabel('Trail dataset: synthetic-network.geojson',{exact:true}).w
 assert.equal(await page.getByLabel('Trail dataset: synthetic-network.geojson',{exact:true}).isChecked(),false);
 await page.getByLabel('New run name',{exact:true}).fill('unsubmitted-scouting-check');
 await page.getByRole('button',{name:'Import file',exact:true}).click();
-await page.getByLabel('Import observer polygon',{exact:true}).setInputFiles({name:'synthetic-observer.geojson',mimeType:'application/geo+json',buffer:Buffer.from(JSON.stringify(area))});
+// This separate source-review AOI deliberately lies beyond prior synthetic
+// inventory coverage; an already covered AOI correctly has no download action.
+const downloadArea={type:'Polygon',coordinates:area.coordinates.map(ring=>ring.map(([x,y])=>[x+.1,y]))};
+await page.getByLabel('Import observer polygon',{exact:true}).setInputFiles({name:'synthetic-observer.geojson',mimeType:'application/geo+json',buffer:Buffer.from(JSON.stringify(downloadArea))});
 const planId = '12345678901234567890123456789012';
 await page.route('**/api/network-plans', async route => {
   const body = route.request().postDataJSON();
@@ -82,6 +101,6 @@ await controls.getByRole('button',{name:'Download mapped roads/trails',exact:tru
 await controls.getByRole('alert').filter({hasText:'Synthetic network acquisition failure'}).waitFor();
 await page.screenshot({path:out+'/23-network-download-900.png',fullPage:true});
 const currentReview=await (await page.request.get(`${base}/api/runs/${rid}/annotations`)).json();
-const restoredReview=await page.request.put(`${base}/api/runs/${rid}/annotations/A0075`,{headers,data:{...(old.A0075||{status:'unmarked',notes:''}),revision:currentReview.A0075?.revision ?? 0}});
+const restoredReview=await page.request.put(`${base}/api/runs/${rid}/annotations/${cid}`,{headers,data:{...(old[cid]||{status:'unmarked',notes:''}),revision:currentReview[cid]?.revision ?? 0}});
 assert.equal(restoredReview.status(),200,await restoredReview.text());
 assert.deepEqual(errors,[]);await browser.close();console.log('Scouting filter/keep/travel/approach/export/stale preferences and 600 MB allowance browser checks passed');

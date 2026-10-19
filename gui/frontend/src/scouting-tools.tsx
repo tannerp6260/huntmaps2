@@ -197,6 +197,8 @@ export default function ScoutingTools({
   const [connectionDiagnosticError, setConnectionDiagnosticError] = useState('');
   const [retryingSlope, setRetryingSlope] = useState<number | null>(null);
   const [networkOverride, setNetworkOverride] = useState(false);
+  const networkChoice = useRef(0),
+    boundaryChoice = useRef(0);
   const [suggesting, setSuggesting] = useState(false);
   const [scenarios, setScenarios] = useState<Scenario[]>([]),
     [scenarioId, setScenarioId] = useState(''),
@@ -386,6 +388,8 @@ export default function ScoutingTools({
     }
   }
   function restoreDraft(cid: string, v: any) {
+    networkChoice.current++;
+    boundaryChoice.current++;
     const d = draftCache.current[cid] || v?.drafts[cid];
     setNetworkOverride(!!d?.network_ids?.length);
     if (d) {
@@ -898,6 +902,7 @@ export default function ScoutingTools({
     }
   }
   async function importNetwork(file: File) {
+    networkChoice.current++;
     setNetworkOverride(true);
     await attempt(async () => {
       const form = new FormData();
@@ -908,6 +913,7 @@ export default function ScoutingTools({
     });
   }
   async function importPolygon(file: File, excluded: boolean) {
+    if (!excluded) boundaryChoice.current++;
     await attempt(async () => {
       const form = new FormData();
       form.append('file', file);
@@ -1162,14 +1168,16 @@ export default function ScoutingTools({
       return;
     let alive = true;
     setSuggesting(true);
+    const networkVersion = networkChoice.current,
+      boundaryVersion = boundaryChoice.current;
     api(`/runs/${runId}/approach-suggestion`, {
       method: 'POST',
       body: JSON.stringify({ id: focusedId, exclusions }),
     })
       .then((v) => {
-        if (alive) {
+        if (alive && boundaryVersion === boundaryChoice.current) {
           setArea(v.travel_area);
-          setSelectedNetworks(v.network_ids);
+          if (networkVersion === networkChoice.current) setSelectedNetworks(v.network_ids);
           setEditing(true);
         }
       })
@@ -1186,6 +1194,7 @@ export default function ScoutingTools({
   const networkJob = jobs.find((j) => j.kind === 'network-acquisition' && j.plan === networkPlanId);
   useEffect(() => {
     if (networkOverride) return;
+    const networkVersion = networkChoice.current;
     const geometries =
       planning && area ? [area] : observerBoundary?.features.map((f) => f.geometry) || [];
     const coordinates: number[][] = [];
@@ -1206,7 +1215,7 @@ export default function ScoutingTools({
     let alive = true;
     api('/networks/resolve', { method: 'POST', body: JSON.stringify({ bounds }) })
       .then((v) => {
-        if (alive) setSelectedNetworks(v.network_ids);
+        if (alive && networkVersion === networkChoice.current) setSelectedNetworks(v.network_ids);
       })
       .catch((e) => {
         if (alive) setError(String(e));
@@ -1431,6 +1440,7 @@ export default function ScoutingTools({
               disabled={busy || active}
               checked={selectedNetworks.includes(n.id)}
               onChange={(e) => {
+                networkChoice.current++;
                 setNetworkOverride(true);
                 setSelectedNetworks((v) =>
                   e.target.checked ? [...v, n.id] : v.filter((id) => id !== n.id),
@@ -1578,6 +1588,7 @@ export default function ScoutingTools({
                   onRestore={() => setEditing(false)}
                   onEditing={(value) => {
                     if (focusRef.current === focusedId) {
+                      if (value && !drawingExclusion) boundaryChoice.current++;
                       setEditing(value);
                       setDrawingBoundaryActive(value);
                     }

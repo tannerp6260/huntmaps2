@@ -88,6 +88,11 @@ def rgba_file(path, rgba, ds):
 
 
 def sources(run, layer, ident, color):
+    if layer == "habitat":
+        from .habitat_service import overlay
+
+        path = overlay(run, ident)
+        return [path], fingerprint([path])
     if getattr(run, "collection_preview", False):
         paths = [run.visibility_path(ident)]
         return paths, fingerprint(paths)
@@ -254,6 +259,8 @@ def tile(run, layer, ident, z, x, y, color=0, background=False):
             data = png.getvalue()
             cache.parent.mkdir(parents=True, exist_ok=True)
             with locked(STATE / "maintenance"), LOCK:
+                if hasattr(run, "validate_snapshot"):
+                    run.validate_snapshot()
                 if not cache.exists():
                     changed()
                     temp = cache.with_suffix(".tmp")
