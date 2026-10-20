@@ -1,0 +1,2 @@
+# TrailScout
+Additive local application; do not mutate the owner's `.gui`, sources, analytical controls or inherited code. Explicit read-only source root; all derived data/jobs/saves live in TrailScout state. Use the existing `.venv/bin/python` without package upgrades. Mapped travel uses along-route grade; off-trail uses terrain slope/grade/cover limits. Count every traversal, union coverage cells. Results are provisional desktop scenarios, never access permission, deer predictions or field validation.

@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+TRAILSCOUT_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+export PYTHONDONTWRITEBYTECODE=1 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1
+export TRAILSCOUT_SOURCE_ROOT="${TRAILSCOUT_SOURCE_ROOT:-/home/tanner/Desktop/huntmaps2}"
+TRAILSCOUT_PYTHON="${TRAILSCOUT_PYTHON:-$TRAILSCOUT_SOURCE_ROOT/.venv/bin/python}"
+cd "$TRAILSCOUT_ROOT"
+if [[ ! -x "$TRAILSCOUT_PYTHON" ]]; then
+  echo "Set TRAILSCOUT_PYTHON to a compatible GIS interpreter; see docs/trail-planner/README.md" >&2
+  exit 1
+fi
+if [[ "${1:-}" == check ]]; then
+  exec "$TRAILSCOUT_PYTHON" -m trail_scout.gate
+fi
+if [[ "${1:-}" == build ]]; then
+  exec "$TRAILSCOUT_PYTHON" -m trail_scout.build
+fi
+if [[ ! -f trail_scout/web/dist/index.html && "${1:-serve}" == serve ]]; then
+  "$TRAILSCOUT_PYTHON" -m trail_scout.build
+fi
+exec "$TRAILSCOUT_PYTHON" -m trail_scout.app "$@"

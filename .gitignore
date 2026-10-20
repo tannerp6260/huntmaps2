@@ -15,3 +15,6 @@ inputs/
 .gui/
 gui/frontend/node_modules/
 gui/frontend/dist/
+
+# Isolated TrailScout runtime
+.trailscout/
