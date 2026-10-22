@@ -1,0 +1,108 @@
+{
+  "type": "object",
+  "properties": {
+    "stage": {
+      "type": "integer",
+      "enum": [
+        1,
+        2,
+        3,
+        4
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "complete",
+        "blocked",
+        "failed"
+      ]
+    },
+    "branch": {
+      "type": "string"
+    },
+    "source_identity": {
+      "type": "object",
+      "properties": {
+        "head": {
+          "type": "string"
+        },
+        "tracked_diff_sha256": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "head",
+        "tracked_diff_sha256",
+        "notes"
+      ],
+      "additionalProperties": false
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "command",
+          "outcome",
+          "evidence"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "blockers": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "remaining_tasks": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "launch": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "stage",
+    "status",
+    "branch",
+    "source_identity",
+    "artifacts",
+    "checks",
+    "findings",
+    "blockers",
+    "remaining_tasks",
+    "launch"
+  ],
+  "additionalProperties": false
+}

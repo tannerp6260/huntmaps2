@@ -1,0 +1,16 @@
+OpenAI Codex v0.163.0
+--------
+workdir: /home/tanner/Desktop/huntmaps2
+model: gpt-6-astra
+provider: openai
+approval: on-request
+sandbox: workspace-write [workdir, /tmp, $TMPDIR] (network access enabled)
+reasoning effort: ultra
+reasoning summaries: none
+session id: 01a163b0-a391-7d51-b843-9df85980d191
+--------
+
+Terminal error (reported twice):
+ERROR: Selected model is at capacity. Please try a different model.
+
+CLI exit: 1. No structured model handoff produced.

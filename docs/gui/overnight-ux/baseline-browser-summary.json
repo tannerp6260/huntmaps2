@@ -1,0 +1,137 @@
+{
+  "steps": [
+    "Select Flattop Bench entry",
+    "Expand timed practical settings",
+    "Opt into timed practical plans",
+    "Compare",
+    "Open foreground inspection",
+    "Open Schedule to read observation/return",
+    "Name plan",
+    "Save",
+    "Export GPX"
+  ],
+  "positions": {
+    "compare": {
+      "x": 24,
+      "y": 1278.796875,
+      "width": 256,
+      "height": 50
+    },
+    "firstOption": {
+      "x": 334,
+      "y": 746.796875,
+      "width": 242,
+      "height": 182
+    },
+    "selectedOption": {
+      "x": 334,
+      "y": 746.796875,
+      "width": 242,
+      "height": 182
+    },
+    "save": {
+      "x": 617,
+      "y": 2788.984375,
+      "width": 700,
+      "height": 38
+    }
+  },
+  "elapsedAnalysisUiMs": 18384.701224,
+  "errors": [],
+  "external": [],
+  "overflow": {
+    "scroll": 820,
+    "viewport": 820
+  },
+  "analysisId": "e6183fec77594e1fa7f83987f98c35e3",
+  "recommended": {
+    "am": "8865d096a44376b7094c6a3822cf9f07",
+    "pm": "9779d39be307bf56030cce6be738ad7a"
+  },
+  "sourceRevision": "999aa8aef68940d701abe8bd1e8f771d9e8f37310beb3b0cad87fa2c182b3d31",
+  "implementation": "a02cf9470646739694de7bdc75fb536045fee6eb4abdf2e5a139d44b9a0e9389",
+  "status": "baseline_only_before_implementation",
+  "viewport": {
+    "laptop": [
+      1366,
+      900
+    ],
+    "narrow": [
+      820,
+      900
+    ]
+  },
+  "task_time_caveat": "Analysis-to-region UI elapsed time only; no participant or before/after usability timing.",
+  "artifacts": [
+    {
+      "name": "01-start-laptop.png",
+      "bytes": 172153,
+      "sha256": "c0984b631464c7c795d73b13c87780b9c5fac810439cf6603f4ecf0d9b41dd7e"
+    },
+    {
+      "name": "01-start-laptop.txt",
+      "bytes": 2468,
+      "sha256": "fd5d69f40c1d8eff5ea8a89a4ffac054c611cdac3112cc41aeb14f18320dc7eb"
+    },
+    {
+      "name": "02-result-laptop.png",
+      "bytes": 779705,
+      "sha256": "9967b897e101cb081a360a7ca74b58006006d37de4f4436f7662c49373908bb1"
+    },
+    {
+      "name": "02-result-laptop.txt",
+      "bytes": 7005,
+      "sha256": "639ff5bd7491ca88f528276e0a143d67e221011764c0a23e9b620d537be81c25"
+    },
+    {
+      "name": "02-result-viewport.png",
+      "bytes": 434894,
+      "sha256": "f00bb75c292775b155260f8842a5f3d70a4c434f20ac8596b97546165c9e4460"
+    },
+    {
+      "name": "03-inspection.png",
+      "bytes": 919499,
+      "sha256": "283c99b395b70027474d5cb7573a84b3ab2a3e164b6bc8763752ed703b1467cb"
+    },
+    {
+      "name": "03-inspection.txt",
+      "bytes": 8912,
+      "sha256": "6f03d91a082b7d06de96b677bb4e4ba137084509e5207e09c90617e74633c427"
+    },
+    {
+      "name": "04-schedule.png",
+      "bytes": 901190,
+      "sha256": "92921b67c6b0dd7a7b1f1bfb6594a4a9046708303943cc6353393d8daf2671dc"
+    },
+    {
+      "name": "04-schedule.txt",
+      "bytes": 8604,
+      "sha256": "7c9c99fda82b022bea1d2ccd54fbee0d8ecd84d20d6fab0fb9b8b3dad60319cf"
+    },
+    {
+      "name": "05-narrow.png",
+      "bytes": 764402,
+      "sha256": "49589c6856b26c593389f61ea8e9d089147f9b5c224f29a4d8af4644bbaec38c"
+    },
+    {
+      "name": "05-narrow.txt",
+      "bytes": 8667,
+      "sha256": "fcd5362b1a1920a6e9e2a223b31b3e4c015e190d63ba05a7c342803e15b41c8d"
+    },
+    {
+      "name": "analysis.json",
+      "bytes": 18022841,
+      "sha256": "68ec4e6f631591bda95d9d71b9133d50717338835be02726dc4d2b3db4125281"
+    },
+    {
+      "name": "baseline.gpx",
+      "bytes": 17894,
+      "sha256": "b20ffac5be0d3843d4409a27cc9dc8dc5d1f2dd5bdd8cd0e3a604fa8b88c8fda"
+    },
+    {
+      "name": "evidence.json",
+      "bytes": 1155055,
+      "sha256": "5e827662300e975c641e027ca469152d152d7d943336c75d1b6e6f426b184a02"
+    }
+  ]
+}

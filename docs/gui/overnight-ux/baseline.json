@@ -1,0 +1,14 @@
+{
+  "captured_utc": "2026-10-22T05:33:57.495829+00:00",
+  "base_head": "111e2af713a716eecdc4f4f11c20e12e6ba0bd37",
+  "branch": "feature/hunter-workflow-ux",
+  "status_before_handoffs": "## feature/practical-glassing-plans\n?? HuntMaps2_Overnight_UX_Coordinator_Prompt.md",
+  "staged_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "unstaged_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "worktrees": "worktree /home/tanner/Desktop/huntmaps2\nHEAD 111e2af713a716eecdc4f4f11c20e12e6ba0bd37\nbranch refs/heads/feature/hunter-workflow-ux\n\nworktree /home/tanner/Desktop/huntmaps2-trailscout\nHEAD 48eb71010dc1d24a5214b5bf4976e72d8557fa49\nbranch refs/heads/feature/trail-glassing-planner",
+  "remotes": "origin\tgit@github.com:tannerp6260/huntmaps2.git (fetch)\norigin\tgit@github.com:tannerp6260/huntmaps2.git (push)",
+  "workflow_filename_requested": "OVERNIGHT_UX.md (absent)",
+  "workflow_actual": "HuntMaps2_Overnight_UX_Coordinator_Prompt.md",
+  "workflow_sha256": "6469ac12e84ac948de2004f59f8b14db9eec0d89130bad0698173c6e87ede1e6",
+  "prior_inventory_sha256": "783129d3b9a374774bbcd5da422b1838d343dfef6a72fc11fd1e9325f180fab7"
+}

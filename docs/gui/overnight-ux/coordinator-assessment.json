@@ -1,0 +1,26 @@
+{
+  "stage": 1,
+  "status": "blocked",
+  "assessment_author": "coordinator; not a model-generated handoff",
+  "exact_blocker": "ERROR: Selected model is at capacity. Please try a different model.",
+  "model_verified": "gpt-6-astra",
+  "effort_verified": "ultra",
+  "cli_exit": 1,
+  "handoff_present": false,
+  "implementation_diff": "",
+  "head": "111e2af713a716eecdc4f4f11c20e12e6ba0bd37",
+  "tracked_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stage2": "not started; requires accepted Stage1",
+  "stage3": "not started",
+  "repair_run": "not used",
+  "preservation": {
+    "files": 45980,
+    "bytes": 8976127263,
+    "changed": [],
+    "missing": [],
+    "added": [],
+    "outside_root_skipped": [],
+    "seconds": 9.87101518100826
+  },
+  "browser_scope": "Real prepared GMU54 Flattop baseline only. Save/GPX export and narrow layout exercised; no UX implementation or independent review completed."
+}
