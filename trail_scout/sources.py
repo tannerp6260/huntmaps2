@@ -262,6 +262,37 @@ class Pack:
         active_path = self.paths.state / "imports/active.json"
         active = read(active_path, {})
         if not p.exists() and key not in active:
+            # Only an entirely absent legacy archive may use the compiled snapshot.
+            # A damaged/partial archive never silently falls back to other bytes.
+            if not (folder / "manifest.json").exists():
+                from practical_glassing.package import CommunityPackage, installed_root
+
+                if not hasattr(self, "_compiled_access"):
+                    root = installed_root(self.paths)
+                    self._compiled_access = (
+                        CommunityPackage(root)
+                        if (root / "active.json").exists()
+                        else None
+                    )
+                package = self._compiled_access
+                if package is not None and key in package.spec.get("extra_sources", {}):
+                    if (
+                        package.spec["base_manifest_sha256"]
+                        != read(self.folder / "seal.json")["sha256"]
+                    ):
+                        raise ValueError(
+                            "Compiled access snapshot belongs to another base pack"
+                        )
+                    record = package.spec["extra_sources"][key]
+                    source = package.access_object(record)
+                    self.files[source] = identity(source)
+                    self.files[package.folder / "manifest.json"] = identity(
+                        package.folder / "manifest.json"
+                    )
+                    self.files[package.root / "active.json"] = identity(
+                        package.root / "active.json"
+                    )
+                    return read(source)["features"], record["original_metadata"]
             raise FileNotFoundError(p)
         spec = manifest.get(p.name, {})
         rows = []

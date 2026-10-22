@@ -20,6 +20,14 @@ GDAL's default approximate transform; errorThreshold=0 and no automatic overview
 selection make nested window reads consistent. DEM/observer/target/access domains
 remain separate. Excluding a target cannot remove obstruction terrain or its NoData.
 
+Package recipe 2 copies six verified access/ownership source snapshots into shared
+content-addressed objects, retaining their original query URLs, checksums, dates and
+licensing gaps. Indexed ownership/context layers accompany the network in GeoPackage.
+An entirely absent historical scouting archive can use those exact bytes; a damaged
+or partial archive is not silently substituted. An offline test runs a real corridor
+from a source root containing only the installed base pack and companion. Source
+revision remains identical because the underlying source identities are identical.
+
 `practical_glassing/traits_lf2025.json` records exact class codes, official names,
 lifeforms and a small release-specific trait grouping. A changed class meaning or
 foreign legend fails. Unsupported natural/agricultural classes remain unknown.

@@ -386,6 +386,57 @@ class PracticalNumerical(unittest.TestCase):
 
 
 class InstalledPackage(unittest.TestCase):
+    def test_real_corridor_works_without_historical_archives(self):
+        from trail_scout.storage import Paths, seal
+        from trail_scout.sources import Pack
+        from trail_scout.network import starts
+        from trail_scout.planner import calculate
+
+        if not self.pack.spec.get("extra_sources"):
+            self.skipTest(
+                "Portable access snapshot not prepared; run explicit companion preparation"
+            )
+        with tempfile.TemporaryDirectory(
+            prefix="huntmaps-practical-archive-free-"
+        ) as td:
+            root = Path(td) / "source"
+            (root / "data").mkdir(parents=True)
+            (root / ".trailscout").mkdir()
+            (root / "data/unit-packs").symlink_to(
+                ROOT / "data/unit-packs", target_is_directory=True
+            )
+            (root / ".trailscout/community").symlink_to(
+                self.root, target_is_directory=True
+            )
+            paths = Paths(source=root, state=Path(td) / "state")
+            with patch(
+                "urllib.request.urlopen",
+                side_effect=AssertionError(
+                    "No providers in normal archived-free analysis"
+                ),
+            ):
+                pack = Pack(paths)
+                self.assertFalse((root / "data/scouting").exists())
+                self.assertTrue(pack.extra["mvum_roads"])
+                self.assertTrue(pack.extra["ownership"])
+                self.assertFalse(
+                    any(p.is_relative_to(ROOT / "data/scouting") for p in pack.files)
+                )
+                entry = next(
+                    r
+                    for r in starts(pack, date(2026, 10, 31))
+                    if r["label"] == "Soap Creek · entry"
+                )
+                result = calculate(
+                    paths,
+                    pack,
+                    dict(start_id=entry["id"], candidate_budget=16, practical={}),
+                    paths.artifact("analyses", "a" * 32),
+                )
+                self.assertTrue(result["options"])
+                self.assertTrue(result["practical"]["rows"])
+                self.assertEqual(result["source_revision"], Pack(Paths()).revision)
+
     @classmethod
     def setUpClass(cls):
         cls.root = ROOT / ".trailscout/community"

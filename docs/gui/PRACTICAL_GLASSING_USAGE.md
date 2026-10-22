@@ -52,6 +52,10 @@ driveability and parking are different evidence.
 The separate package lives under `.trailscout/community`. It depends on the existing
 immutable `co-gmu54 / 20261019-v2` core pack. Its source objects, official LF2025
 legends, categorical COGs, indexed GeoPackage and sealed manifest are retained.
+Recipe 2 also carries six verified access/ownership source objects with their
+original September 2026 metadata. Normal corridor analysis can use those objects
+when the historical `data/scouting` archive is absent. These bounded snapshots are
+not a fresh closure check or a complete GMU-wide rights inventory.
 Older terrain/RCMAP sources and historical products are not rewritten.
 
 If the companion is absent, ordinary scouting still works; its experimental control

@@ -145,7 +145,7 @@ def indexed_vectors(path, pack):
     ds = ogr.GetDriverByName("GPKG").CreateDataSource(str(path))
     sr = osr.SpatialReference()
     sr.ImportFromEPSG(32613)
-    for name, geom_type, records in (
+    layers = [
         (
             "unit",
             ogr.wkbMultiPolygon,
@@ -174,7 +174,21 @@ def indexed_vectors(path, pack):
                 for r in pack.network
             ],
         ),
-    ):
+    ]
+    for key in ("ownership", "surface_management"):
+        from shapely.geometry import shape
+
+        projector = Transformer.from_crs(4326, 32613, always_xy=True).transform
+        records = []
+        for i, feature in enumerate(pack.extra.get(key, [])):
+            props = feature.get("properties", {})
+            ident = str(props.get("GlobalID", props.get("OBJECTID", i)))
+            records.append(
+                (ident, transform(projector, shape(feature["geometry"])), props)
+            )
+        if records:
+            layers.append((key, ogr.wkbUnknown, records))
+    for name, geom_type, records in layers:
         layer = ds.CreateLayer(name, sr, geom_type, options=["SPATIAL_INDEX=YES"])
         for field in ("source_id", "attributes_json"):
             layer.CreateField(ogr.FieldDefn(field, ogr.OFTString))
@@ -189,6 +203,47 @@ def indexed_vectors(path, pack):
             if layer.CreateFeature(f) != 0:
                 raise ValueError("Failed to preserve vector feature")
     ds = None
+
+
+def freeze_access(pack, root):
+    """Portable exact source objects; no dependency on analysis archives at runtime."""
+    result = {}
+    objects = root / "objects"
+    objects.mkdir(exist_ok=True)
+    for key, features in pack.extra.items():
+        metadata = pack.extra_specs.get(key)
+        if not metadata:
+            continue
+        original = pack.paths.source / "data/scouting" / (key + ".geojson")
+        if metadata.get("sha256") and original.is_file():
+            verify(original, metadata["sha256"])
+            raw = original.read_bytes()
+            recipe = (
+                "exact verified raw source bytes; dates and original metadata retained"
+            )
+        else:
+            raw = json.dumps(
+                dict(type="FeatureCollection", features=features), sort_keys=True
+            ).encode()
+            recipe = "normalized current attributed feature collection; original merged source identities retained in original_metadata"
+        import hashlib
+
+        sha = hashlib.sha256(raw).hexdigest()
+        target = objects / sha
+        if target.exists():
+            verify(target, sha)
+        else:
+            atomic(target, raw, binary=True)
+        result[key] = dict(
+            object_sha256=sha,
+            bytes=len(raw),
+            features=len(features),
+            original_metadata=metadata,
+            processing=recipe,
+            coverage="bounded dated inventory; query footprint and provider restrictions retained in original metadata; not complete unit access or current closure coverage",
+        )
+    pack.recheck()
+    return result
 
 
 def prepare(pack, root, progress=lambda *a: None, cancel=lambda: None):
@@ -297,7 +352,16 @@ def prepare(pack, root, progress=lambda *a: None, cancel=lambda: None):
                 "Product update year is not per-pixel acquisition date",
             ],
         )
-    token = digest(dict(contract=1, base=pack.revision, sources=sources))
+    extra_sources = freeze_access(pack, root)
+    token = digest(
+        dict(
+            contract=1,
+            recipe=2,
+            base=pack.revision,
+            sources=sources,
+            extra_sources=extra_sources,
+        )
+    )
     final = root / "versions" / token
     if final.exists():
         spec = CommunityPackage(root, token).spec
@@ -339,6 +403,8 @@ def prepare(pack, root, progress=lambda *a: None, cancel=lambda: None):
         base_pack_revision=pack.revision,
         base_manifest_sha256=file_hash(pack.folder / "pack.json"),
         sources=sources,
+        recipe_version=2,
+        extra_sources=extra_sources,
         vectors=dict(path=vp.name, sha256=file_hash(vp), bytes=vp.stat().st_size),
         source_received_bytes=receiver.ledger["received_bytes"],
         known_gaps=[
@@ -380,6 +446,16 @@ class CommunityPackage:
             self.legend[product] = legends(lp.read_bytes(), product)
             self.asset(source["cog"])
         self.asset(self.spec["vectors"])
+        for record in self.spec.get("extra_sources", {}).values():
+            self.access_object(record)
+
+    def access_object(self, record):
+        sha = record.get("object_sha256", "")
+        if len(sha) != 64 or any(c not in "0123456789abcdef" for c in sha):
+            raise ValueError("Invalid portable access object identity")
+        path = self.root / "objects" / sha
+        verify(path, sha)
+        return path
 
     def asset(self, record):
         p = self.folder / record["path"]
