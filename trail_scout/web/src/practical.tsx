@@ -292,6 +292,40 @@ export function TimedResult({
               {option.inspection?.[i]?.status || "unknown/uninspected"}
             </summary>
             <p>{option.inspection?.[i]?.source}</p>
+            <p>
+              Within 150 m:{" "}
+              {option.inspection?.[i]?.valid_fraction == null
+                ? "unknown"
+                : `${Math.round(option.inspection[i].valid_fraction * 100)}%`}{" "}
+              coarse-source coverage;{" "}
+              {option.inspection?.[i]?.elevated_cover_fraction == null
+                ? "unknown"
+                : `${Math.round(option.inspection[i].elevated_cover_fraction * 100)}%`}{" "}
+              of supported samples exceed the existing 35% tree / 50% shrub
+              screen. This is cover evidence, not a fraction of blocked
+              sightlines.
+            </p>
+            <ul aria-label="Coarse foreground directions">
+              {v.patches
+                .filter(
+                  (s: RecordValue, n: number, all: RecordValue[]) =>
+                    all.findIndex(
+                      (p) => p.azimuth_start === s.azimuth_start,
+                    ) === n,
+                )
+                .map((s: RecordValue) => (
+                  <li key={s.azimuth_start}>
+                    Grid {s.azimuth_start}–{s.azimuth_end}°:{" "}
+                    {s.foreground_transects
+                      ?.map(
+                        (t: RecordValue) =>
+                          `${t.from_m}–${t.to_m} m: ${Math.round(t.valid_fraction * 100)}% source coverage, ${t.elevated_cover_fraction == null ? "unknown" : Math.round(t.elevated_cover_fraction * 100) + "%"} above cover screen`,
+                      )
+                      .join("; ") || "unknown/uninspected"}
+                    .
+                  </li>
+                ))}
+            </ul>
             <p>{option.inspection?.[i]?.note}</p>
             <p>{option.inspection?.[i]?.measured_obstruction}</p>
             <p>

@@ -81,7 +81,9 @@ def map_svg(path, terrain, new, established, practical, mode, start):
 
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    from matplotlib.patches import Polygon as PlotPolygon
+    from matplotlib.patches import PathPatch
+    from matplotlib.path import Path as PlotPath
+    from shapely.geometry.polygon import orient
     from matplotlib.collections import PatchCollection
     from matplotlib.lines import Line2D
     from matplotlib.colors import ListedColormap, BoundaryNorm
@@ -112,7 +114,12 @@ def map_svg(path, terrain, new, established, practical, mode, start):
     values = []
     for row in layer:
         geom = shape(json.loads(row.GetGeometryRef().ExportToJson()))
-        patches.append(PlotPolygon(np.asarray(geom.exterior.coords), closed=True))
+        geom = orient(geom, sign=1)
+        rings = [geom.exterior, *geom.interiors]
+        outline = PlotPath.make_compound_path(
+            *[PlotPath(np.asarray(r.coords), closed=True) for r in rings]
+        )
+        patches.append(PathPatch(outline))
         values.append(row["group"])
     coll = PatchCollection(
         patches,
