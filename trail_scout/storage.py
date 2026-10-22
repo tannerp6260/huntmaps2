@@ -106,6 +106,11 @@ def implementation():
             for p in sorted((ROOT / "trail_scout").glob("*.py"))
         }
         | {"habitat.py": file_hash(ROOT / "huntmaps_gui/habitat.py")}
+        | {
+            str(p.relative_to(ROOT)): file_hash(p)
+            for p in sorted((ROOT / "practical_glassing").glob("*"))
+            if p.suffix in (".py", ".json")
+        }
     )
 
 

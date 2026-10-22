@@ -233,7 +233,11 @@ def imagery_plan(run, ids, radius):
                     cached=False,
                     object_ids=[f["OBJECTID"] for f in chosen],
                     native_resolution_m=sorted(
-                        {f["Resolution"] for f in chosen if f.get("Resolution")}
+                        {
+                            f.get("resolution_value", f.get("Resolution"))
+                            for f in chosen
+                            if f.get("resolution_value", f.get("Resolution"))
+                        }
                     ),
                 )
             )

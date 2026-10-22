@@ -15,18 +15,18 @@ from .storage import digest
 from . import effort
 
 
-def starts(pack, day, vehicle="truck", manual=()):
+def starts(pack, day, vehicle="truck", manual=(), width_inches=None):
     entry_region = pack.boundary.buffer(2000)
     motor = [
         r
         for r in pack.network
-        if access(r, day, vehicle, manual)["motor"] == "supported"
+        if access(r, day, vehicle, manual, width_inches)["motor"] == "supported"
     ]
     results = []
     for row in pack.network:
         if (
             row["kind"] != "trails"
-            or access(row, day, vehicle, manual)["foot"] != "supported"
+            or access(row, day, vehicle, manual, width_inches)["foot"] != "supported"
             or row["geometry"].length < 500
         ):
             continue
@@ -52,7 +52,9 @@ def starts(pack, day, vehicle="truck", manual=()):
                     ).title()
                     + (" · far end" if end else " · entry"),
                     motor_gap_m=gap,
-                    vehicle_evidence=access(nearest, day, vehicle, manual),
+                    vehicle_evidence=access(
+                        nearest, day, vehicle, manual, width_inches
+                    ),
                     motor_route=nearest["properties"].get("name"),
                     note=(
                         "Plausible mapped entry. Parking, complete vehicle approach and current restrictions require owner review."
@@ -114,6 +116,17 @@ def measured(chunks, terrain, p, tree, shrub):
     s = terrain.sample((xy[:-1] + xy[1:]) / 2, shrub)
     result = effort.measure(xy, raw, mode, p, t, s, distance=ds)
     result["geometry"] = feature(line, kind="itinerary")["geometry"]
+    result["source_segments"] = [
+        dict(
+            source_id=c["segment"],
+            offtrail=c["offtrail"],
+            attributes=c.get("source_properties"),
+            permissions=c.get("status"),
+            direction_start=list(c["coords"][0]),
+            direction_end=list(c["coords"][-1]),
+        )
+        for c in chunks
+    ]
     lon, lat = TO_WGS.transform(xy[:, 0], xy[:, 1])
     for point, x, y in zip(result["profile"], lon, lat):
         point.update(longitude=float(x), latitude=float(y))
@@ -153,7 +166,11 @@ class Network:
             if not row["geometry"].intersects(boundary):
                 continue
             status = access(
-                row, day, settings["vehicle"], settings.get("restrictions", [])
+                row,
+                day,
+                settings["vehicle"],
+                settings.get("restrictions", []),
+                settings.get("vehicle_width_inches"),
             )
             public = dict(
                 id=row["id"],
@@ -253,6 +270,7 @@ class Network:
                     segment=row["id"],
                     offtrail=False,
                     status=status,
+                    source_properties=row["properties"],
                     forward_hours=forward,
                     backward_hours=backward,
                 )

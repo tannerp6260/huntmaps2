@@ -1,0 +1,376 @@
+{
+  "release": "LF2025",
+  "policy": "engineering-1",
+  "classes": {
+    "7011": {
+      "name": "Rocky Mountain Aspen Forest and Woodland",
+      "group": "aspen",
+      "lifeform": "Tree"
+    },
+    "7049": {
+      "name": "Rocky Mountain Foothill Limber Pine-Juniper Woodland",
+      "group": "conifer",
+      "lifeform": "Tree"
+    },
+    "7050": {
+      "name": "Rocky Mountain Lodgepole Pine Forest",
+      "group": "conifer",
+      "lifeform": "Tree"
+    },
+    "7051": {
+      "name": "Southern Rocky Mountain Dry-Mesic Montane Mixed Conifer Forest and Woodland",
+      "group": "conifer",
+      "lifeform": "Tree"
+    },
+    "7052": {
+      "name": "Southern Rocky Mountain Mesic Montane Mixed Conifer Forest and Woodland",
+      "group": "conifer",
+      "lifeform": "Tree"
+    },
+    "7054": {
+      "name": "Southern Rocky Mountain Ponderosa Pine Woodland",
+      "group": "conifer",
+      "lifeform": "Tree"
+    },
+    "7055": {
+      "name": "Rocky Mountain Subalpine Dry-Mesic Spruce-Fir Forest and Woodland",
+      "group": "conifer",
+      "lifeform": "Tree"
+    },
+    "7056": {
+      "name": "Rocky Mountain Subalpine Mesic-Wet Spruce-Fir Forest and Woodland",
+      "group": "conifer",
+      "lifeform": "Tree"
+    },
+    "7057": {
+      "name": "Rocky Mountain Subalpine-Montane Limber-Bristlecone Pine Woodland",
+      "group": "conifer",
+      "lifeform": "Tree"
+    },
+    "7059": {
+      "name": "Southern Rocky Mountain Pinyon-Juniper Woodland",
+      "group": "conifer",
+      "lifeform": "Tree"
+    },
+    "7061": {
+      "name": "Inter-Mountain Basins Aspen-Mixed Conifer Forest and Woodland",
+      "group": "aspen_conifer",
+      "lifeform": "Tree"
+    },
+    "7064": {
+      "name": "Colorado Plateau Mixed Low Sagebrush Shrubland",
+      "group": "sage_browse",
+      "lifeform": "Shrub"
+    },
+    "7072": {
+      "name": "Wyoming Basins Dwarf Sagebrush Shrubland and Steppe",
+      "group": "sage_browse",
+      "lifeform": "Shrub"
+    },
+    "7079": {
+      "name": "Great Basin Xeric Mixed Sagebrush Shrubland",
+      "group": "sage_browse",
+      "lifeform": "Shrub"
+    },
+    "7080": {
+      "name": "Inter-Mountain Basins Big Sagebrush Shrubland",
+      "group": "sage_browse",
+      "lifeform": "Shrub"
+    },
+    "7086": {
+      "name": "Rocky Mountain Lower Montane-Foothill Shrubland",
+      "group": "mountain_shrub",
+      "lifeform": "Shrub"
+    },
+    "7106": {
+      "name": "Northern Rocky Mountain Montane-Foothill Deciduous Shrubland",
+      "group": "mountain_shrub",
+      "lifeform": "Shrub"
+    },
+    "7107": {
+      "name": "Rocky Mountain Gambel Oak-Mixed Montane Shrubland",
+      "group": "mountain_shrub",
+      "lifeform": "Shrub"
+    },
+    "7117": {
+      "name": "Southern Rocky Mountain Ponderosa Pine Savanna",
+      "group": "conifer",
+      "lifeform": "Tree"
+    },
+    "7119": {
+      "name": "Southern Rocky Mountain Juniper Woodland and Savanna",
+      "group": "conifer",
+      "lifeform": "Tree"
+    },
+    "7124": {
+      "name": "Columbia Plateau Low Sagebrush Steppe",
+      "group": "sage_browse",
+      "lifeform": "Shrub"
+    },
+    "7125": {
+      "name": "Inter-Mountain Basins Big Sagebrush Steppe",
+      "group": "sage_browse",
+      "lifeform": "Shrub"
+    },
+    "7126": {
+      "name": "Inter-Mountain Basins Montane Sagebrush Steppe",
+      "group": "sage_browse",
+      "lifeform": "Shrub"
+    },
+    "7140": {
+      "name": "Northern Rocky Mountain Subalpine-Upper Montane Grassland",
+      "group": "meadow",
+      "lifeform": "Herb"
+    },
+    "7144": {
+      "name": "Rocky Mountain Alpine Turf",
+      "group": "meadow",
+      "lifeform": "Herb"
+    },
+    "7145": {
+      "name": "Rocky Mountain Subalpine-Montane Mesic Meadow",
+      "group": "meadow",
+      "lifeform": "Herb"
+    },
+    "7146": {
+      "name": "Southern Rocky Mountain Montane-Subalpine Grassland",
+      "group": "meadow",
+      "lifeform": "Herb"
+    },
+    "7166": {
+      "name": "Middle Rocky Mountain Montane Douglas-fir Forest and Woodland",
+      "group": "conifer",
+      "lifeform": "Tree"
+    },
+    "7167": {
+      "name": "Rocky Mountain Poor-Site Lodgepole Pine Forest",
+      "group": "conifer",
+      "lifeform": "Tree"
+    },
+    "7168": {
+      "name": "Northern Rocky Mountain Avalanche Chute Shrubland",
+      "group": "mountain_shrub",
+      "lifeform": "Shrub"
+    },
+    "7169": {
+      "name": "Northern Rocky Mountain Subalpine Deciduous Shrubland",
+      "group": "mountain_shrub",
+      "lifeform": "Shrub"
+    },
+    "7292": {
+      "name": "Open Water",
+      "group": "nonhabitat",
+      "lifeform": "Water"
+    },
+    "7295": {
+      "name": "Quarries-Strip Mines-Gravel Pits-Well and Wind Pads",
+      "group": "nonhabitat",
+      "lifeform": "Barren"
+    },
+    "7296": {
+      "name": "Developed-Low Intensity",
+      "group": "nonhabitat",
+      "lifeform": "Developed"
+    },
+    "7297": {
+      "name": "Developed-Medium Intensity",
+      "group": "nonhabitat",
+      "lifeform": "Developed"
+    },
+    "7298": {
+      "name": "Developed-High Intensity",
+      "group": "nonhabitat",
+      "lifeform": "Developed"
+    },
+    "7299": {
+      "name": "Developed-Roads",
+      "group": "nonhabitat",
+      "lifeform": "Developed"
+    },
+    "7300": {
+      "name": "Developed-Open Space",
+      "group": "nonhabitat",
+      "lifeform": "Developed"
+    },
+    "7735": {
+      "name": "North American Glacier and Ice Field",
+      "group": "nonhabitat",
+      "lifeform": "Snow-Ice"
+    },
+    "7920": {
+      "name": "Western Cool Temperate Developed Deciduous Forest",
+      "group": "nonhabitat",
+      "lifeform": "Tree"
+    },
+    "7921": {
+      "name": "Western Cool Temperate Developed Evergreen Forest",
+      "group": "nonhabitat",
+      "lifeform": "Tree"
+    },
+    "7922": {
+      "name": "Western Cool Temperate Developed Mixed Forest",
+      "group": "nonhabitat",
+      "lifeform": "Tree"
+    },
+    "7923": {
+      "name": "Western Cool Temperate Developed Shrubland",
+      "group": "nonhabitat",
+      "lifeform": "Shrub"
+    },
+    "7924": {
+      "name": "Western Cool Temperate Developed Herbaceous",
+      "group": "nonhabitat",
+      "lifeform": "Herb"
+    },
+    "7925": {
+      "name": "Eastern Cool Temperate Developed Deciduous Forest",
+      "group": "nonhabitat",
+      "lifeform": "Tree"
+    },
+    "7926": {
+      "name": "Eastern Cool Temperate Developed Evergreen Forest",
+      "group": "nonhabitat",
+      "lifeform": "Tree"
+    },
+    "7927": {
+      "name": "Eastern Cool Temperate Developed Mixed Forest",
+      "group": "nonhabitat",
+      "lifeform": "Tree"
+    },
+    "7928": {
+      "name": "Eastern Cool Temperate Developed Shrubland",
+      "group": "nonhabitat",
+      "lifeform": "Shrub"
+    },
+    "7929": {
+      "name": "Eastern Cool Temperate Developed Herbaceous",
+      "group": "nonhabitat",
+      "lifeform": "Herb"
+    },
+    "7930": {
+      "name": "Western Warm Temperate Developed Deciduous Forest",
+      "group": "nonhabitat",
+      "lifeform": "Tree"
+    },
+    "7931": {
+      "name": "Western Warm Temperate Developed Evergreen Forest",
+      "group": "nonhabitat",
+      "lifeform": "Tree"
+    },
+    "7932": {
+      "name": "Western Warm Temperate Developed Mixed Forest",
+      "group": "nonhabitat",
+      "lifeform": "Tree"
+    },
+    "7933": {
+      "name": "Western Warm Temperate Developed Shrubland",
+      "group": "nonhabitat",
+      "lifeform": "Shrub"
+    },
+    "7934": {
+      "name": "Western Warm Temperate Developed Herbaceous",
+      "group": "nonhabitat",
+      "lifeform": "Herb"
+    },
+    "7935": {
+      "name": "Eastern Warm Temperate Developed Deciduous Forest",
+      "group": "nonhabitat",
+      "lifeform": "Tree"
+    },
+    "7936": {
+      "name": "Eastern Warm Temperate Developed Evergreen Forest",
+      "group": "nonhabitat",
+      "lifeform": "Tree"
+    },
+    "7937": {
+      "name": "Eastern Warm Temperate Developed Mixed Forest",
+      "group": "nonhabitat",
+      "lifeform": "Tree"
+    },
+    "7938": {
+      "name": "Eastern Warm Temperate Developed Shrubland",
+      "group": "nonhabitat",
+      "lifeform": "Shrub"
+    },
+    "7939": {
+      "name": "Eastern Warm Temperate Developed Herbaceous",
+      "group": "nonhabitat",
+      "lifeform": "Herb"
+    },
+    "7016": {
+      "name": "Colorado Plateau Pinyon-Juniper Woodland",
+      "group": "conifer",
+      "lifeform": "Tree"
+    },
+    "7070": {
+      "name": "Rocky Mountain Alpine Dwarf-Shrubland",
+      "group": "mountain_shrub",
+      "lifeform": "Shrub"
+    },
+    "9021": {
+      "name": "Rocky Mountain Subalpine-Montane Riparian Shrubland",
+      "group": "mountain_shrub",
+      "lifeform": "Shrub"
+    },
+    "9519": {
+      "name": "Rocky Mountain Lower Montane-Foothill Riparian Shrubland",
+      "group": "mountain_shrub",
+      "lifeform": "Shrub"
+    },
+    "7135": {
+      "name": "Inter-Mountain Basins Semi-Desert Grassland",
+      "group": "meadow",
+      "lifeform": "Herb"
+    },
+    "9017": {
+      "name": "Rocky Mountain Alpine-Montane Wet Meadow",
+      "group": "meadow",
+      "lifeform": "Herb"
+    },
+    "7900": {
+      "name": "Western Cool Temperate Urban Deciduous Forest",
+      "group": "nonhabitat",
+      "lifeform": "Tree"
+    },
+    "7901": {
+      "name": "Western Cool Temperate Urban Evergreen Forest",
+      "group": "nonhabitat",
+      "lifeform": "Tree"
+    },
+    "7902": {
+      "name": "Western Cool Temperate Urban Mixed Forest",
+      "group": "nonhabitat",
+      "lifeform": "Tree"
+    },
+    "7903": {
+      "name": "Western Cool Temperate Urban Herbaceous",
+      "group": "nonhabitat",
+      "lifeform": "Herb"
+    },
+    "7904": {
+      "name": "Western Cool Temperate Urban Shrubland",
+      "group": "nonhabitat",
+      "lifeform": "Shrub"
+    },
+    "9001": {
+      "name": "Colorado Plateau Mixed Bedrock Canyon and Tableland",
+      "group": "nonhabitat",
+      "lifeform": "Sparse"
+    },
+    "9004": {
+      "name": "Inter-Mountain Basins Active and Stabilized Dune",
+      "group": "nonhabitat",
+      "lifeform": "Sparse"
+    },
+    "9016": {
+      "name": "Rocky Mountain Alpine Bedrock and Scree",
+      "group": "nonhabitat",
+      "lifeform": "Sparse"
+    },
+    "9018": {
+      "name": "Rocky Mountain Cliff Canyon and Massive Bedrock",
+      "group": "nonhabitat",
+      "lifeform": "Sparse"
+    }
+  }
+}

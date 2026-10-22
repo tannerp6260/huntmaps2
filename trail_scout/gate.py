@@ -69,6 +69,7 @@ def main():
             "unittest",
             "test_gui_habitat",
             "test_gui_unit_packs",
+            "test_gui_practical_glassing",
             "-v",
         ],
         dict(
@@ -113,6 +114,14 @@ def main():
             "browser",
             ["node", "trail_scout/checks/browser.mjs"],
             dict(TRAILSCOUT_URL=base, TRAILSCOUT_SCREENSHOTS=str(out / "browser")),
+        )
+        check(
+            "practical-browser",
+            ["node", "practical_glassing/browser.mjs"],
+            dict(
+                TRAILSCOUT_URL=base,
+                TRAILSCOUT_SCREENSHOTS=str(out / "practical-browser"),
+            ),
         )
     finally:
         server.terminate()

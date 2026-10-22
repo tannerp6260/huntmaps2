@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import { api, RecordValue, defaults, miles, feet, acres, clock } from "./api";
 import { ScoutMap } from "./map";
+import { PracticalSettings, PracticalResult } from "./practical";
 import "./style.css";
 
 function NumberField({
@@ -140,7 +141,9 @@ function App() {
             (!!d.settings &&
               JSON.stringify(d.settings) !== JSON.stringify(r.settings)) ||
               r.implementation !== current.implementation ||
-              r.source_revision !== areas[0]?.revision,
+              r.source_revision !== areas[0]?.revision ||
+              (!!r.practical &&
+                r.practical.package !== areas[0]?.practical?.id),
           );
         }
       }
@@ -151,7 +154,16 @@ function App() {
   }, []);
   useEffect(() => {
     let live = true;
-    api("/context?date=" + config.date + "&vehicle=" + config.vehicle)
+    const widthQuery = config.vehicle_width_inches
+      ? "&width=" + config.vehicle_width_inches
+      : "";
+    api(
+      "/context?date=" +
+        config.date +
+        "&vehicle=" +
+        config.vehicle +
+        widthQuery,
+    )
       .then((c) => {
         if (live) setContext(c);
       })
@@ -163,8 +175,15 @@ function App() {
           date: config.date,
           vehicle: config.vehicle,
           restrictions: config.restrictions,
+          vehicle_width_inches: config.vehicle_width_inches ?? null,
         })
-      : api("/starts?date=" + config.date + "&vehicle=" + config.vehicle)
+      : api(
+          "/starts?date=" +
+            config.date +
+            "&vehicle=" +
+            config.vehicle +
+            widthQuery,
+        )
     )
       .then((s) => {
         if (live) {
@@ -179,7 +198,12 @@ function App() {
     return () => {
       live = false;
     };
-  }, [config.date, config.vehicle, JSON.stringify(config.restrictions)]);
+  }, [
+    config.date,
+    config.vehicle,
+    config.vehicle_width_inches,
+    JSON.stringify(config.restrictions),
+  ]);
   useEffect(() => {
     if (!dirty) return;
     const timer = setTimeout(
@@ -283,7 +307,8 @@ function App() {
     setSelected(v.option.id);
     const stale =
       v.implementation !== current.implementation ||
-      v.source_revision !== area?.revision;
+      v.source_revision !== area?.revision ||
+      (!!v.practical && v.practical.package !== area?.practical?.id);
     setDirty(stale);
     setNotice(
       stale
@@ -476,10 +501,34 @@ function App() {
                 onChange={(e) => change({ vehicle: e.target.value })}
               >
                 <option value="truck">Truck</option>
-                <option value="teryx">Teryx &gt;50 in</option>
+                <option value="teryx">Teryx / side-by-side</option>
               </select>
             </label>
           </div>
+          {config.vehicle === "teryx" && (
+            <label>
+              Actual vehicle width · inches
+              <input
+                type="number"
+                min="30"
+                max="100"
+                value={config.vehicle_width_inches ?? ""}
+                placeholder="Unknown"
+                onChange={(e) =>
+                  change({
+                    vehicle_width_inches: e.target.value
+                      ? Number(e.target.value)
+                      : null,
+                  })
+                }
+              />
+              <small>
+                Check your vehicle's actual width. ATV permission is not
+                side-by-side permission. Complete drive-to-parking remains
+                conditional.
+              </small>
+            </label>
+          )}
           <label>
             Who is going?
             <select
@@ -496,19 +545,20 @@ function App() {
               <option value="together">Together · conservative</option>
               <option value="dad">Dad · easy pace</option>
               <option value="tanner">Tanner · moderate</option>
+              <option value="extended">Extended family · 3 mi / 900 ft</option>
             </select>
           </label>
           <p className="micro">{config.profile.explanation}</p>
           <div className="field-row">
             <NumberField
               label="Daily miles limit"
-              value={config.profile.max_miles || 3}
+              value={config.profile.max_miles || 2.5}
               onChange={(n) => profileChange("max_miles", n)}
               step={0.25}
             />
             <NumberField
               label="Gain limit · ft"
-              value={config.profile.max_gain_ft || 700}
+              value={config.profile.max_gain_ft || 750}
               onChange={(n) => profileChange("max_gain_ft", n)}
               step={50}
             />
@@ -676,6 +726,11 @@ function App() {
               />
             </div>
           </details>
+          <PracticalSettings
+            value={config.practical ?? null}
+            ready={area?.practical?.status === "ready"}
+            change={(practical) => change({ practical })}
+          />
           <details>
             <summary>Observation windows & dark travel</summary>
             <div className="detail-body">
@@ -1070,6 +1125,9 @@ function App() {
                     </p>
                   ))}
                 </div>
+              )}
+              {result.practical && (
+                <PracticalResult review={result.practical} />
               )}
               <div className="result-grid">
                 <div className="options" aria-label="Route alternatives">

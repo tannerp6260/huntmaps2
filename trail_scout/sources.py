@@ -1,6 +1,7 @@
 """Read-only prepared-pack adapter. Never invokes an owner API or worker."""
 
 from functools import lru_cache
+from datetime import date as Date
 import json
 import math
 from pathlib import Path
@@ -61,7 +62,17 @@ def date_match(text, date):
     dates = re.findall(r"(\d{2})/(\d{2})\s*-\s*(\d{2})/(\d{2})", str(text))
     if not dates:
         return None
+    remainder = re.sub(r"\d{2}/\d{2}\s*-\s*\d{2}/\d{2}", "", str(text))
+    if remainder.strip(" ,;|\t\n\r"):
+        return None
     day = date.month * 100 + date.day
+    # Reject malformed intervals rather than comparing impossible calendar dates.
+    try:
+        for m, d, M, D in dates:
+            Date(2000, int(m), int(d))
+            Date(2000, int(M), int(D))
+    except ValueError:
+        return None
     for m, d, M, D in dates:
         lo = int(m) * 100 + int(d)
         hi = int(M) * 100 + int(D)
@@ -70,7 +81,7 @@ def date_match(text, date):
     return False
 
 
-def access(row, date, vehicle="truck", manual=()):
+def access(row, date, vehicle="truck", manual=(), width_inches=None):
     p = row["properties"]
     kind = row["kind"]
     foot = "unknown"
@@ -86,23 +97,45 @@ def access(row, date, vehicle="truck", manual=()):
         ):
             foot = "supported"
             evidence.append("USFS pedestrian managed/accepted dates")
+        if (
+            p.get("hiker_pedestrian_restricted")
+            and date_match(p["hiker_pedestrian_restricted"], date) is None
+        ):
+            foot = "unknown"
+            evidence.append("Unparseable pedestrian restriction dates; review source")
     if row.get("motor_closed"):
         motor = "closed"
         evidence.append("USFS separate motor-closed inventory")
     # MVUM geometry is matched over the actual segment, not merely by road name.
+    motor_evidence = []
     for m in row.get("mvum", []):
         key = "truck" if vehicle == "truck" else "other_ohv_gt50inches"
+        if str(m.get(key, "")).lower() in ("closed", "prohibited"):
+            motor_evidence.append("closed")
+            evidence.append("MVUM explicit motor prohibition")
         if str(m.get(key, "")).lower() == "open":
             active = date_match(m.get(key + "_datesopen"), date)
             if active is not None:
                 status = "supported" if active else "closed"
-                if motor != "closed":
-                    motor = status
+                motor_evidence.append(status)
                 evidence.append(f"MVUM {key}: {m.get(key+'_datesopen')}")
+    if motor != "closed" and motor_evidence:
+        motor = "closed" if "closed" in motor_evidence else "supported"
+        if len(set(motor_evidence)) > 1:
+            evidence.append(
+                "Conflicting MVUM records: closed controls; current order review required"
+            )
+    if vehicle == "teryx" and motor == "supported":
+        if width_inches is None or not 50 < width_inches <= 100:
+            motor = "unknown"
+            evidence.append(
+                "Actual side-by-side width over 50 inches required for this MVUM class; ATV eligibility is not inferred"
+            )
     condition = "unknown"
     maint = str(p.get("oper_maint_level", p.get("operationalmaintlevel", "")))
     if maint.startswith("1") or str(p.get("route_status", "")).startswith("DE"):
         condition = "possibly obstructed/decommissioned"
+    closures = set()
     for rule in manual:
         if rule.get("segment") not in (row["id"], "*"):
             continue
@@ -114,11 +147,34 @@ def access(row, date, vehicle="truck", manual=()):
             raise ValueError("Manual restrictions require dated provenance")
         if rule.get("foot") in ("supported", "unknown", "closed"):
             foot = rule["foot"]
+            if foot == "closed":
+                closures.add("foot")
         if rule.get("motor") in ("supported", "unknown", "closed"):
             motor = rule["motor"]
+            if motor == "closed":
+                closures.add("motor")
         if rule.get("condition"):
             condition = rule["condition"]
         evidence.append("Manual: " + rule["provenance"])
+    # Active prohibitions cannot be reopened by record order or a generic assertion.
+    if "foot" in closures or (
+        kind == "trails" and date_match(p.get("hiker_pedestrian_restricted"), date)
+    ):
+        foot = "closed"
+    if "motor" in closures or row.get("motor_closed") or "closed" in motor_evidence:
+        motor = "closed"
+    if (
+        vehicle == "teryx"
+        and motor == "supported"
+        and (width_inches is None or not 50 < width_inches <= 100)
+    ):
+        motor = "unknown"
+    if row.get("source_conflict"):
+        foot = "unknown" if foot == "supported" else foot
+        motor = "unknown" if motor == "supported" else motor
+        evidence.append(
+            "Conflicting duplicate inventory features; no primary permission inference"
+        )
     return dict(
         foot=foot,
         motor=motor,
@@ -264,6 +320,17 @@ class Pack:
                     parts = [g] if g.geom_type == "LineString" else list(g.geoms)
                     for i, line in enumerate(parts):
                         key = f"{kind}:{p.get('globalid',p.get('objectid',f.get('id')))}:{i}"
+                        if key in rows:
+                            prior = rows[key]
+                            if (
+                                not line.equals_exact(prior["geometry"], 1e-8)
+                                or p != prior["properties"]
+                            ):
+                                prior["source_conflict"] = True
+                                prior.setdefault("conflicting_features", []).append(
+                                    dict(geometry_wkt=line.wkt, properties=p)
+                                )
+                            continue
                         rows[key] = dict(
                             id=key,
                             kind=kind,

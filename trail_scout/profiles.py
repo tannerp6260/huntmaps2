@@ -7,8 +7,8 @@ COMMON = dict(
     pace_mph=1.5,
     time_margin=1.35,
     max_hours=7.0,
-    max_miles=3.0,
-    max_gain_ft=700,
+    max_miles=2.5,
+    max_gain_ft=750,
     offtrail_miles=0.25,
     offtrail_minutes=35,
     max_offtrail_slope=20,
@@ -23,7 +23,7 @@ PROFILES = {
     "together": dict(
         COMMON,
         label="Together · conservative",
-        explanation="Uses Dad's conservative limits. Profiles are uncalibrated; the reported Dutton difficulty is not a measured capacity. Reserve 25% of movement limits.",
+        explanation="Editable shared-party planning defaults: 2.5 miles total walking / 750 ft cumulative gain, with 25% held in reserve. Uncalibrated; the reported Dutton difficulty is not a measured capacity.",
     ),
     "dad": dict(
         COMMON,
@@ -43,6 +43,13 @@ PROFILES = {
         max_route_grade=0.40,
         max_steep_m=800,
         explanation="Below reported 5–8 miles/2,000–3,500 ft comfort; no requirement to spend capacity. Uncalibrated and conditional on terrain, altitude and condition.",
+    ),
+    "extended": dict(
+        COMMON,
+        label="Extended family · explicit option",
+        max_miles=3.0,
+        max_gain_ft=900,
+        explanation="Explicit extended shared-party option, 3 miles / 900 ft before 25% reserve. Never selected automatically to make a route fit.",
     ),
 }
 

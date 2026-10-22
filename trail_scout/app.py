@@ -252,6 +252,17 @@ class Service:
                 raise HTTPException(
                     409, "Sources changed. Recalculate with current source revision."
                 )
+            if r.get("practical"):
+                from practical_glassing.package import CommunityPackage, installed_root
+
+                if (
+                    CommunityPackage(installed_root(self.paths)).spec["id"]
+                    != r["practical"]["package"]
+                ):
+                    raise HTTPException(
+                        409,
+                        "Community package changed; recalculate before saving this preview",
+                    )
             option = next(
                 (o for o in r["options"] if o["id"] == body["option_id"]), None
             )
@@ -292,6 +303,8 @@ class Service:
                 option=option,
                 warnings=r["warnings"],
             )
+            if r.get("practical"):
+                value["practical"] = r["practical"]
             p = self.paths.artifact("plans", ident).with_suffix(".json")
             atomic(p, value)
             seal(p)
@@ -370,7 +383,9 @@ def create_app(paths):
         )
 
     @app.get("/api/context")
-    def context(date: str = "2026-10-31", vehicle: str = "truck"):
+    def context(
+        date: str = "2026-10-31", vehicle: str = "truck", width: float | None = None
+    ):
         from osgeo import gdal
         from .sources import Terrain, feature, collection, access
 
@@ -399,7 +414,7 @@ def create_app(paths):
                 id=r["id"],
                 name=r["properties"].get("trail_name", r["properties"].get("name")),
                 kind="closed-road" if r["motor_closed"] else r["kind"],
-                access=access(r, day, vehicle),
+                access=access(r, day, vehicle, width_inches=width),
             )
             for r in pack.network
         ]
@@ -425,7 +440,17 @@ def create_app(paths):
 
     @app.get("/api/areas")
     def areas():
-        return [service.data().summary()]
+        summary = service.data().summary()
+        from practical_glassing.package import CommunityPackage, installed_root
+
+        try:
+            spec = CommunityPackage(installed_root(paths)).spec
+            summary["practical"] = dict(
+                status="ready", release=spec["release"], id=spec["id"]
+            )
+        except (ValueError, FileNotFoundError, KeyError) as error:
+            summary["practical"] = dict(status="unavailable", reason=str(error))
+        return [summary]
 
     @app.post("/api/start-preview")
     def start_preview(body: dict):
@@ -461,11 +486,16 @@ def create_app(paths):
             Date.fromisoformat(c["date"]),
             c["vehicle"],
             c["restrictions"],
+            c.get("vehicle_width_inches"),
         )
 
     @app.get("/api/starts")
-    def entry(date: str = "2026-10-31", vehicle: str = "truck"):
-        return starts(service.data(), Date.fromisoformat(date), vehicle)
+    def entry(
+        date: str = "2026-10-31", vehicle: str = "truck", width: float | None = None
+    ):
+        return starts(
+            service.data(), Date.fromisoformat(date), vehicle, width_inches=width
+        )
 
     @app.get("/api/profiles")
     def preset():
@@ -591,6 +621,29 @@ def create_app(paths):
             media_type="image/png",
             headers={"Cache-Control": "public, max-age=31536000, immutable"},
         )
+
+    @app.get("/practical/{ident}/{name}")
+    def practical_artifact(ident: str, name: str):
+        import re
+
+        if name not in (
+            "review.html",
+            "comparison.json",
+            "points.csv",
+            "community-context.tif",
+            "shortlist.gpx",
+            "community.png",
+            "habitat.png",
+            "unknown.png",
+        ) and not re.fullmatch(
+            r"(?:view-[a-f0-9]{16}|union-(?:terrain|fall_mixed_v1|community_fixed_observation|observation_fixed_habitat|combined))\.png",
+            name,
+        ):
+            raise ValueError("Invalid practical report artifact")
+        folder = paths.artifact("analyses", ident) / "practical"
+        from practical_glassing.packet import artifact
+
+        return FileResponse(artifact(folder, name))
 
     static = ROOT / "trail_scout/web/dist"
     if static.is_dir():

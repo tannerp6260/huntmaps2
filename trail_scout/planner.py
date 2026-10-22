@@ -47,6 +47,8 @@ def validate(body):
         "schedule",
         "travel_area",
         "target_area",
+        "practical",
+        "vehicle_width_inches",
     }
     if not isinstance(body, dict) or set(body) - allowed:
         raise ValueError("Unknown analysis input")
@@ -69,8 +71,23 @@ def validate(body):
         schedule={},
         travel_area=None,
         target_area=None,
+        practical=None,
+        vehicle_width_inches=None,
     )
     out.update(body)
+    if out["practical"] is not None:
+        from practical_glassing.model import settings as practical_settings
+
+        out["practical"] = practical_settings(out["practical"])
+    width = out["vehicle_width_inches"]
+    if width is not None and (
+        type(width) not in (int, float)
+        or not math.isfinite(width)
+        or not 30 <= width <= 100
+    ):
+        raise ValueError(
+            "Supply actual vehicle width in inches, 30–100, or leave unknown"
+        )
     try:
         Date.fromisoformat(out["date"])
     except (ValueError, TypeError):
@@ -148,7 +165,13 @@ def validate(body):
 
 
 def resolve_start(pack, c):
-    rows = starts(pack, Date.fromisoformat(c["date"]), c["vehicle"], c["restrictions"])
+    rows = starts(
+        pack,
+        Date.fromisoformat(c["date"]),
+        c["vehicle"],
+        c["restrictions"],
+        c.get("vehicle_width_inches"),
+    )
     if c["custom_start"]:
         v = c["custom_start"]
         seg = next((r for r in pack.network if r["id"] == v.get("segment")), None)
@@ -202,7 +225,10 @@ def access_evidence(
         else [
             r
             for r in pack.network
-            if access(r, day, c["vehicle"], c["restrictions"])["motor"] == "supported"
+            if access(
+                r, day, c["vehicle"], c["restrictions"], c.get("vehicle_width_inches")
+            )["motor"]
+            == "supported"
         ]
     )
     nearest = min(motor, key=lambda r: pt.distance(r["geometry"]), default=None)
@@ -347,15 +373,23 @@ def calculate(paths, pack, body, folder, progress=lambda *a: None, cancel=lambda
             )
         )
     all_starts = starts(
-        pack, Date.fromisoformat(c["date"]), c["vehicle"], c["restrictions"]
+        pack,
+        Date.fromisoformat(c["date"]),
+        c["vehicle"],
+        c["restrictions"],
+        c.get("vehicle_width_inches"),
     )
     network.prepare_other_access(all_starts)
     motor = [
         r
         for r in pack.network
-        if access(r, Date.fromisoformat(c["date"]), c["vehicle"], c["restrictions"])[
-            "motor"
-        ]
+        if access(
+            r,
+            Date.fromisoformat(c["date"]),
+            c["vehicle"],
+            c["restrictions"],
+            c.get("vehicle_width_inches"),
+        )["motor"]
         == "supported"
     ]
     near_mask = raster_mask(
@@ -829,5 +863,22 @@ def calculate(paths, pack, body, folder, progress=lambda *a: None, cancel=lambda
             if pin_errors
             else "Review candidate rejection reasons, start, access scenario or limits. This bounded search does not prove every possible route impossible."
         )
+    if c["practical"] is not None:
+        from practical_glassing.adapters import trail_review
+
+        result["practical"] = trail_review(
+            paths,
+            pack,
+            result,
+            terrain,
+            layers,
+            target,
+            masks,
+            folder / "practical",
+            c["practical"],
+            progress,
+            cancel,
+        )
+        result["performance"]["total_seconds"] = time.perf_counter() - begin
     atomic(folder / "result.json", result)
     return result
