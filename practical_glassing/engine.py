@@ -290,6 +290,7 @@ def compare(
             key=lambda r: (
                 r["scores"][arm] is None,
                 -(r["scores"][arm] or 0),
+                -r["visible_matching_m2"],
                 -r.get("original_physical_m2", r["visible_matching_m2"]),
                 r["id"],
             ),

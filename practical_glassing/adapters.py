@@ -103,6 +103,15 @@ def saved_run(paths, ident, folder, policy=None, progress=lambda *a: None):
             raise ValueError(
                 "V1 reproduction exceeded absolute 1e-6 relative-m² tolerance"
             )
+        available_ids = {r["id"] for r in report["rows"]}
+        canonical_order = [
+            r["id"] for r in baseline["candidates"] if r["id"] in available_ids
+        ]
+        if report["orders"]["fall_mixed_v1"] != canonical_order:
+            raise ValueError(
+                "V1 canonical ranking differs, including equal-score tie order"
+            )
+        report["v1_canonical_order_match"] = True
         report["v1_reproduction_max_abs_m2"] = max(errors, default=0)
         report["missing_historical_pools"] = [
             name
