@@ -307,6 +307,7 @@ class Service:
                 value["practical"] = r["practical"]
             if r.get("practical_plan"):
                 value["practical_plan"] = r["practical_plan"]
+                value["grid"] = r["grid"]
             p = self.paths.artifact("plans", ident).with_suffix(".json")
             atomic(p, value)
             seal(p)

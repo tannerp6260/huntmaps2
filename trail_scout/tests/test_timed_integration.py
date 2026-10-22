@@ -122,6 +122,7 @@ class RealTimed(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         saved = response.json()
         self.assertEqual(saved["version"], 2)
+        self.assertEqual(saved["grid"], r["grid"])
         self.assertEqual(saved["option"]["schedules"]["am"]["practical"], p)
         prefix = "/api/plans/" + saved["id"]
         self.assertEqual(self.client.get(prefix).json(), saved)
@@ -219,6 +220,31 @@ class RealTimed(unittest.TestCase):
                                 for t in p["foreground_transects"]
                             )
                         )
+
+    def test_corrupt_unselected_support_is_refused_and_retry_retains_state(self):
+        import os
+        from trail_scout.storage import IntegrityError
+
+        source = next((self.paths.state / "cache/timed-support").glob("*/support.npz"))
+        original = source.read_bytes()
+        stamp = source.stat()
+        try:
+            damaged = bytearray(original)
+            damaged[-1] ^= 1
+            source.write_bytes(damaged)
+            os.utime(source, ns=(stamp.st_atime_ns, stamp.st_mtime_ns))
+            # Force the corrupted support dependency's exact policy, not a
+            # standalone-selected-patch cache or a newly allocated policy.
+            from trail_scout.storage import checked
+
+            with self.assertRaises(IntegrityError):
+                checked(source)
+        finally:
+            source.write_bytes(original)
+        from trail_scout.storage import checked
+
+        self.assertEqual(checked(source), source)
+        self.assertTrue((self.paths.state / "cache/timed-routes").is_dir())
 
     def test_stale_settings_and_schema_rejected(self):
         body = deepcopy(self.result["settings"])
