@@ -18,7 +18,10 @@ Run `./gui/check` with the project Python environment. Verification uses disposa
 | Coverage display and stale replies | Browser with controlled original/filtered tile timing/errors | Loading/ready/incomplete states, retry, rapid selection and cached reuse. Failure injection must reach the active filtered endpoint. Timing is deliberately controlled. |
 | Coverage retention and preparation | Real raster tile benchmark and browser without request interception | Repeat tiles perform no reprojection; explicit batches prepare each setup at its normal selection zoom, retained sources avoid return requests, HTTP caching survives reload, and dismissal/restoration is exercised. Disk-priority, budget and job/storage pause guards have focused tests. |
 | Explicit coverage batches | Browser plus helper checks | Displayed ranking, default 10 and 5/20 options, per-setup viewport preparation, one background request at a time, pause/cancel/resume, retained completed URLs, failed-tile retry, ranking invalidation, HTTP cache reuse, desktop and 900 px. |
-| Per-setup approach setup | Real service/browser | No inherited boundary or automatic calculation; explicit copying/confirmation and primary drawing. Read-only preflight checks destinations, exclusions, selected networks, one-mile departure limit, network starts and grid guards. Exact paths/costs match legacy inputs. |
+| Suggested approaches and overrides | Real service/browser and solver checks | Two shortlisted setups automatically receive one recommended path each; reload reuses choices. Explicit alternative mode requires a choice. One-objective path/cost matches the previous Recommended result exactly; barriers still return no path. Manual drawing/copying and preflight guards remain covered. |
+| GMU trail visibility | Browser canvas pixel assertion | Retained unit trails remain above opaque imagery; desktop and 900 px captures include unit context in the scouting workflow. |
+| Roadless distance overlay | Metric geometry checks and real-pack browser | Exact known-distance sides, offscreen roads, adjacent source tiles, coverage-edge exclusion, trail exclusion, imported roads within GMUs, source corruption and bounded inputs. Browser checks toggle, actual transparent pixels above opaque imagery, distance/opacity changes, reload, empty coverage and desktop/900 px layout. |
+| Detailed lidar recovery | Mock transport faults plus actual A0087 acquisition/render | Bounded connection/read retries, exact byte resume, source validators, budgets and non-retryable errors. Actual retained approved A0087 plan completed and rendered fine ground and inferred vegetation; see [evidence](SUGGESTED_APPROACHES_2026-10-20.md). |
 | Coverage visible above imagery | Browser canvas pixel assertions | Opaque local online/saved imagery fixtures expose occlusion of actual coverage API tiles. Checks switching and returning, opacity, imagery toggles, comparison entry/exit, desktop and 900 px. Separate from the HTTP-cache journey because routing disables caching. A loaded/ready label alone cannot pass this check. |
 | Help dismissal | Browser mouse, keyboard and touch | Hover exit, Escape while focused, click/outside click, Tab and scrolling; desktop and 900 px screenshots. |
 | Existing scenes, exports, training and historical controls | Existing backend/browser acceptance | Historical source/output audits; no historical regeneration. Scene acquisition tests include fixtures and mocks, not live lidar acquisition. |
@@ -175,3 +178,32 @@ The completed habitat release evidence, observed counts, exact commands, screens
 performance and preservation audit are in
 [HABITAT_IMPLEMENTATION_REPORT.md](HABITAT_IMPLEMENTATION_REPORT.md); counts are
 observations for that release, not fixed discovery targets for future checks.
+
+## GMU local packs
+
+`test_gui_unit_packs.py` is in the mandatory GUI discovery group. Its twelve focused
+regressions cover atomic publication, bounded exact pixel windows, separate derived
+provenance, offline network imports, oversized/outside observer rejection, corruption
+with unchanged size/mtime, missing assets, TIFF companions, insufficient storage,
+failed and successful updates, interrupted registration, damaged progress, cancellation,
+retained partials, retry and cumulative transfer accounting. Artificial source bytes
+in those tests are engineering fixtures, not evidence of real GMU readiness.
+
+`browser-unit-packs-check.mjs` is registered in the mandatory release list. It selects
+the actual registered GMU 54 pack, loads local relief/context, checks unit/custom/old
+run switching, generates a fresh real-data search, and checks desktop/900 px layouts
+with browser errors and external requests forbidden. A missing real local pack is a
+failed prerequisite, not a simulated ready badge.
+In a separate page, controlled colored satellite tiles verify default-on imagery
+above the real unit relief, the off preference across unit/custom switching,
+scoped offline failure and retry. Those tiles test display composition only;
+the core workflow phase still forbids external requests.
+
+The decisive standalone command is `.venv/bin/python -m gui.pack_acceptance`. It
+starts a separate server and all child workers with external socket/DNS connections
+blocked from startup, uses disposable state/workspaces, generates four new real areas
+including a DEM tile seam, completes screening/Approach/Basic Inspect/Save/export/reload,
+rejects a whole-unit request before launch, and opens the actual saved Basic scene in
+the browser. It also exercises the existing habitat preference on one new area.
+No owner server is used. See [pack report](GMU_PACK_REPORT.md) for final artifact paths
+and the distinction between real workflow evidence and synthetic fault injections.

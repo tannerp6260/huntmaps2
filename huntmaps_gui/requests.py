@@ -72,6 +72,10 @@ class Preparation(Payload):
     avoid_dense_vegetation: StrictBool = False
     access_sampling: dict | None = None
     include_network: StrictBool = False
+    unit_id: str | None = Field(default=None, pattern=r"^[a-z0-9][a-z0-9_-]{0,79}$")
+    pack_version: str | None = Field(
+        default=None, pattern=r"^[a-z0-9][a-z0-9_-]{0,79}$"
+    )
 
     @field_validator("habitat")
     @classmethod

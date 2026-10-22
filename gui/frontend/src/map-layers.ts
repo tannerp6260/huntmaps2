@@ -103,8 +103,8 @@ export function updateMapLayers(
       'boundary-fill',
     );
   };
-  addRaster('hillshade', 'base', 1);
-  if (imagery && run.imagery.length) addRaster('imagery', 'base', imageOpacity);
+  if (!newRun) addRaster('hillshade', 'base', 1);
+  if (!newRun && imagery && run.imagery.length) addRaster('imagery', 'base', imageOpacity);
   const chosenIds = newRun
     ? []
     : compare.length

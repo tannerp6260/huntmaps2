@@ -45,6 +45,8 @@ def approval_inventory(config, acquisition):
             return [source(v) for v in value]
         if not isinstance(value, dict):
             return value
+        if value.get("unit_pack"):
+            return {"verified_pack_window": value}
         if value.get("reuse_origin") or value.get("raw_source", {}).get("reuse_origin"):
             # Imported bytes and all original provenance belong to this review.
             # Existing remote-request approvals cannot authorize a local crop.
@@ -148,6 +150,10 @@ def main():
     a = ap.parse_args()
     path = STATE / "plans" / (a.plan + ".json")
     p = read(path)
+    if p.get("unit_pack"):
+        from .unit_packs import resolve
+
+        resolve(p["unit_pack"])
     from . import rcmap_sources
 
     needs_refresh = rcmap_sources.refresh_required(p)

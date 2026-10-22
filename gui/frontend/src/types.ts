@@ -16,6 +16,7 @@ export type Candidate = {
   obstruction: string;
 };
 export type Run = {
+  unit_pack?: import('./unit-packs').PackSelection | null;
   id: string;
   experimental: boolean;
   candidates: Candidate[];
@@ -309,4 +310,12 @@ export type SceneReady = {
 };
 export type Scene =
   | SceneReady
-  | { status: 'unprepared'; candidate: string; observer: Candidate; key?: never; reason: string };
+  | {
+      status: 'unprepared';
+      candidate: string;
+      observer: Candidate;
+      key?: never;
+      reason: string;
+      core_available?: boolean;
+      detail_status?: string;
+    };

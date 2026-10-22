@@ -2257,3 +2257,15 @@ pre {
 .fp-preparation > .fp-job {
   margin: 6px 0;
 }
+
+.roadless-controls {
+  padding: 8px;
+  margin: 8px 0;
+  border: 1px solid #cbb8db;
+  border-radius: 5px;
+  background: #f8f4fc;
+}
+.roadless-controls small {
+  display: block;
+  margin-top: 6px;
+}

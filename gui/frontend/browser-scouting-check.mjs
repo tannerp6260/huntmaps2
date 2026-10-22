@@ -22,6 +22,7 @@ await openExisting(page, base);await page.getByLabel('Run selector').selectOptio
 let proposalArrived,releaseProposal;const proposalHeld=new Promise(r=>proposalArrived=r),proposalGate=new Promise(r=>releaseProposal=r);
 await page.route(`**/api/runs/${rid}/approach-suggestion`,async route=>{const response=await route.fetch();proposalArrived();await proposalGate;await route.fulfill({response});});
 await page.locator('.workflow-task').getByRole('button',{name:'Shortlist',exact:true}).click();await page.getByRole('button',{name:/Approach.*selected/}).click();
+ await page.getByRole('button',{name:'Explore alternatives or edit approach',exact:true}).click();
 await page.getByLabel('Focused approach spot').waitFor();if(await page.getByLabel('Focused approach spot').inputValue()!==cid)await page.getByLabel('Focused approach spot').selectOption(cid);
 await proposalHeld;
 const importedNetwork=page.waitForResponse(r=>r.url().includes('/networks/import?')&&r.request().method()==='POST');

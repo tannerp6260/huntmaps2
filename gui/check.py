@@ -15,6 +15,9 @@ import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
 BROWSER_CHECKS = (
+    "browser-roadless-check",
+    "browser-suggested-approaches-check",
+    "browser-unit-packs-check",
     "browser-habitat-check",
     "browser-scene-recovery-check",
     "browser-audit-regressions",

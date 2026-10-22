@@ -462,6 +462,9 @@ def api_router(jobs: Jobs):
                 ).get(
                     "notes", ""
                 )
+            if r.config.get("unit_pack"):
+                pack = r.config["unit_pack"]
+                desc += f" Unit: {pack['label']}; local pack {pack['version']}; manifest SHA256 {pack['manifest_sha256']}."
             if fmt == "gpx":
                 w = ET.SubElement(
                     doc, "wpt", lat=str(p["latitude"]), lon=str(p["longitude"])
@@ -507,6 +510,32 @@ def api_router(jobs: Jobs):
         )
         write(folder / "import.json", result)
         return result
+
+    @router.get("/api/unit-packs")
+    def unit_packs():
+        from .unit_packs import catalog
+
+        return catalog()
+
+    @router.get("/api/unit-packs/{unit}/{version}")
+    def unit_context(unit: str, version: str):
+        from .unit_packs import context
+
+        return context(unit, version)
+
+    @router.get("/api/unit-packs/{unit}/{version}/hillshade.png")
+    def unit_hillshade(unit: str, version: str):
+        from .unit_packs import load
+        from osgeo import gdal
+        import io
+        import numpy as np
+        from PIL import Image
+
+        folder, _ = load(unit, version)
+        a = gdal.Open(str(folder / "hillshade.tif")).ReadAsArray()
+        out = io.BytesIO()
+        Image.fromarray(a.astype(np.uint8)).save(out, format="PNG")
+        return Response(out.getvalue(), media_type="image/png")
 
     @router.post("/api/plans")
     def prepare(body: Preparation):
@@ -583,6 +612,17 @@ def api_router(jobs: Jobs):
             from .habitat import validate as validate_habitat
 
             c["search"]["habitat"] = validate_habitat(body["habitat"])
+        if body.get("unit_id") or body.get("pack_version"):
+            if not body.get("unit_id") or not body.get("pack_version"):
+                raise ValueError("Select a unit and a prepared pack version together")
+            from . import unit_packs
+
+            pinned = unit_packs.configure(
+                c, geometry, body["unit_id"], body["pack_version"]
+            )
+            network_ids = unit_packs.install_networks(pinned, geometry)
+            if sampling is not None:
+                sampling = dict(sampling, network_ids=network_ids)
         config = folder / (ident + "-config.json")
         write(config, c)
         p = dict(
@@ -596,6 +636,7 @@ def api_router(jobs: Jobs):
             access_sampling=sampling,
             include_network=body.get("include_network", False),
             estimate_first=body.get("estimate_first", True),
+            unit_pack=c.get("unit_pack"),
         )
         write(folder / (ident + ".json"), p)
         return jobs.start(

@@ -408,6 +408,7 @@ class Run:
             id=self.id,
             experimental=self.experimental,
             synthetic=self.config.get("input_kind") == "synthetic_fixture",
+            unit_pack=self.config.get("unit_pack"),
             candidates=pts,
             groups=self.groups,
             recommendation_ids=self.recommendation_ids,

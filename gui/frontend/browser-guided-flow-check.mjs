@@ -67,6 +67,7 @@ try{
  // Reload to obtain the authoritative revision after API seeding.
  await page.reload();await page.getByRole('button',{name:'Open existing work',exact:true}).click();await page.getByLabel('Run selector').selectOption(run);
  await page.getByRole('button',{name:'Plan approaches (2 shortlisted)',exact:true}).click();
+ await page.getByRole('button',{name:'Explore alternatives or edit approach',exact:true}).click();
  await page.getByRole('button',{name:'Confirm approach search boundary',exact:true}).waitFor();
  assert.ok(await page.getByText('Boundary needs confirmation',{exact:false}).isVisible());
  const focused=await page.getByLabel('Focused approach spot').inputValue();

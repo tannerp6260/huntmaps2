@@ -350,6 +350,7 @@ def snapshot(run, maximum=None):
         implementation=implementation(),
         screen_implementation=file_digest(__file__),
         run_id=run,
+        unit_pack=r.config.get("unit_pack"),
         maximum_slope_deg=maximum,
         dem=[r.hashes[str(r.dem_path.resolve())], file_identity(r.dem_path)],
         epsg=r.config["epsg"],

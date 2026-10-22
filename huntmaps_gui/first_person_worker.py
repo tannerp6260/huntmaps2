@@ -349,6 +349,132 @@ def discover(ident):
     )
 
 
+def download_piece(s, partial, start, end, lock, require_range=False):
+    """Retry transient transport failures, retaining and accounting every saved byte."""
+    import http.client
+    import urllib.error
+    from .progress import received
+
+    size = end - start + 1
+    identity_path = partial.parent / (s["key"] + ".http.json")
+    for attempt in range(3):
+        done = partial.stat().st_size if partial.exists() else 0
+        if done > size:
+            raise ValueError("Range partial larger than expected")
+        if done == size:
+            return
+        begin = start + done
+        headers = {"User-Agent": "HuntMaps2-local-first-person/1"}
+        if require_range or begin:
+            headers["Range"] = f"bytes={begin}-{end}"
+        with lock:
+            identity = read(identity_path, {})
+        if identity.get("etag"):
+            headers["If-Match"] = identity["etag"]
+        try:
+            req = urllib.request.Request(s["url"], headers=headers)
+            with urllib.request.urlopen(req, timeout=60) as response:
+                if urllib.parse.urlparse(response.url).hostname not in (
+                    "rockyweb.usgs.gov",
+                    "prd-tnm.s3.amazonaws.com",
+                ):
+                    raise ValueError("Unexpected lidar download host")
+                if response.status == 206:
+                    if (
+                        response.headers.get("Content-Range")
+                        != f"bytes {begin}-{end}/{s['bytes']}"
+                    ):
+                        raise ValueError(
+                            "Source server did not return the exact requested byte range"
+                        )
+                elif require_range or begin or response.status != 200:
+                    raise ValueError(
+                        "Source server cannot safely resume this partial file; retained for inspection."
+                    )
+                current = dict(
+                    url=s["url"],
+                    bytes=s["bytes"],
+                    etag=response.headers.get("ETag"),
+                    modified=response.headers.get("Last-Modified"),
+                )
+                with lock:
+                    identity = read(identity_path, {})
+                    if identity and identity != current:
+                        raise ValueError(
+                            "Lidar source changed during acquisition; partial files retained. Review a new source plan."
+                        )
+                    if not identity:
+                        write(identity_path, current)
+                with partial.open("ab" if done else "wb") as f:
+                    while True:
+                        check_space(partial.parent, 1024 * 1024)
+                        interrupted = None
+                        try:
+                            block = response.read(min(1024 * 1024, size - f.tell() + 1))
+                        except http.client.IncompleteRead as error:
+                            block, interrupted = error.partial, error
+                        if not block:
+                            if interrupted:
+                                raise interrupted
+                            break
+                        received(len(block), s["url"])
+                        with lock:
+                            ledger_path = partial.parent / "ledger.json"
+                            ledger = read(ledger_path, dict(received_bytes=0))
+                            if ledger["received_bytes"] + len(block) > fp.LIMIT:
+                                raise ValueError(
+                                    "Reviewed transfer allowance reached; partial source retained."
+                                )
+                            before = ledger["received_bytes"]
+                            ledger["received_bytes"] += len(block)
+                            write(ledger_path, ledger)
+                            if f.tell() + len(block) > size:
+                                raise ValueError(
+                                    "Source range exceeds reviewed byte count"
+                                )
+                            f.write(block)
+                            if before // (8 * 1024 * 1024) != ledger[
+                                "received_bytes"
+                            ] // (8 * 1024 * 1024):
+                                fp.stage(
+                                    "Acquiring sources · "
+                                    + str(round(ledger["received_bytes"] / 1e6, 1))
+                                    + " MB actually received"
+                                )
+                        if interrupted:
+                            raise interrupted
+            if partial.stat().st_size == size:
+                return
+            raise ConnectionError("Incomplete lidar response")
+        except (
+            urllib.error.URLError,
+            TimeoutError,
+            ConnectionError,
+            http.client.HTTPException,
+        ) as error:
+            if isinstance(error, urllib.error.HTTPError) and error.code not in (
+                408,
+                429,
+                500,
+                502,
+                503,
+                504,
+            ):
+                raise
+            if attempt == 2:
+                raise ValueError(
+                    "USGS lidar download could not finish after 3 attempts for "
+                    + s["title"]
+                    + ". The provider connection timed out or was interrupted. Saved byte ranges and prior views are retained; retry detailed view to resume. "
+                    + str(error)
+                ) from error
+            saved = partial.stat().st_size if partial.exists() else 0
+            fp.stage(
+                f"USGS connection interrupted · retry {attempt + 2}/3 · resuming {s['title']} at byte {start + saved}"
+            )
+            time.sleep(attempt + 1)
+
+
 def parallel_ranges(s, part, offset):
     import concurrent.futures
     import threading
@@ -371,62 +497,7 @@ def parallel_ranges(s, part, offset):
         size = end - start + 1
         if done > size:
             raise ValueError("Range partial larger than expected")
-        if done < size:
-            begin = start + done
-            req = urllib.request.Request(
-                s["url"],
-                headers={
-                    "Range": f"bytes={begin}-{end}",
-                    "User-Agent": "HuntMaps2-local-first-person/1",
-                },
-            )
-            with urllib.request.urlopen(req, timeout=30) as response:
-                if response.status != 206 or not response.headers.get(
-                    "Content-Range", ""
-                ).startswith(f"bytes {begin}-{end}/"):
-                    raise ValueError(
-                        "Source server did not return the exact requested byte range"
-                    )
-                if urllib.parse.urlparse(response.url).hostname not in [
-                    "rockyweb.usgs.gov",
-                    "prd-tnm.s3.amazonaws.com",
-                ]:
-                    raise ValueError("Unexpected lidar range host")
-                with partial.open("ab" if done else "wb") as f:
-                    while True:
-                        from .downloads import check_space
-                        from .progress import received
-
-                        check_space(folder, 1024 * 1024)
-                        block = response.read(1024 * 1024)
-                        if not block:
-                            break
-                        received(len(block), s["url"])
-                        with lock:
-                            check_space(folder, len(block))
-                            ledger = read(
-                                folder / "ledger.json", dict(received_bytes=0)
-                            )
-                            if ledger["received_bytes"] + len(block) > fp.LIMIT:
-                                raise ValueError(
-                                    "Reviewed transfer allowance reached; partial ranges retained"
-                                )
-                            before = ledger["received_bytes"]
-                            ledger["received_bytes"] += len(block)
-                            write(folder / "ledger.json", ledger)
-                            if before // (8 * 1024 * 1024) != ledger[
-                                "received_bytes"
-                            ] // (8 * 1024 * 1024):
-                                fp.stage(
-                                    "Acquiring sources · "
-                                    + str(round(ledger["received_bytes"] / 1e6, 1))
-                                    + " MB actually received"
-                                )
-                            f.write(block)
-                            if f.tell() > size:
-                                raise ValueError(
-                                    "Source range exceeds reviewed byte count"
-                                )
+        download_piece(s, partial, start, end, lock, require_range=True)
         if partial.stat().st_size != size:
             raise ValueError("Incomplete lidar byte range; safe partial retained")
         h = digest(partial)
@@ -440,8 +511,8 @@ def parallel_ranges(s, part, offset):
         (start, min(start + 8 * 1024 * 1024 - 1, s["bytes"] - 1))
         for start in range(offset, s["bytes"], 8 * 1024 * 1024)
     ]
-    # One preparation job, at most eight bounded HTTP connections; never parallel analysis.
-    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+    # Keep provider pressure bounded; each interrupted piece resumes independently.
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
         pieces = list(executor.map(fetch, ranges))
     from .downloads import check_space
 
@@ -479,56 +550,13 @@ def acquire(s, allow):
     offset = part.stat().st_size if part.exists() else 0
     if offset > s["bytes"]:
         raise ValueError("Partial lidar source exceeds catalog size")
-    headers = (
-        {"User-Agent": "HuntMaps2-local-first-person/1", "Range": f"bytes={offset}-"}
-        if offset
-        else {"User-Agent": "HuntMaps2-local-first-person/1"}
-    )
     fp.stage("Downloading " + s["title"] + f" · resume offset {offset} bytes")
     if offset < s["bytes"] and s["bytes"] - offset > 4 * 1024 * 1024:
         parallel_ranges(s, part, offset)
     elif offset < s["bytes"]:
-        with urllib.request.urlopen(
-            urllib.request.Request(s["url"], headers=headers), timeout=30
-        ) as r:
-            if urllib.parse.urlparse(r.url).hostname not in [
-                "rockyweb.usgs.gov",
-                "prd-tnm.s3.amazonaws.com",
-            ]:
-                raise ValueError("Unexpected lidar download host")
-            if offset and (
-                r.status != 206
-                or not r.headers.get("Content-Range", "").startswith(f"bytes {offset}-")
-            ):
-                raise ValueError(
-                    "Source server cannot safely resume this partial file; retained for inspection."
-                )
-            if offset == s["bytes"]:
-                pass
-            else:
-                with part.open("ab" if offset else "wb") as f:
-                    while True:
-                        from .downloads import check_space
-                        from .progress import received
+        import threading
 
-                        check_space(folder, 1024 * 1024)
-                        block = r.read(1024 * 1024)
-                        if not block:
-                            break
-                        received(len(block), s["url"])
-                        ledger = read(folder / "ledger.json", dict(received_bytes=0))
-                        if ledger["received_bytes"] + len(block) > fp.LIMIT:
-                            raise ValueError(
-                                "Reviewed transfer allowance reached; partial source retained."
-                            )
-                        # Account before writing to keep crashes conservative.
-                        ledger["received_bytes"] += len(block)
-                        write(folder / "ledger.json", ledger)
-                        f.write(block)
-                        if f.tell() > s["bytes"]:
-                            raise ValueError(
-                                "Source larger than its reviewed catalog estimate"
-                            )
+        download_piece(s, part, 0, s["bytes"] - 1, threading.Lock())
     if part.stat().st_size != s["bytes"]:
         raise ValueError("Incomplete lidar source; partial file retained")
     laspy, _ = deps()

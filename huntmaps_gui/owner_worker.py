@@ -226,6 +226,16 @@ def main():
             from .storage import read_json
 
             config = read_json(Path(path).parent / "scouting.json", {})
+            if config.get("unit_pack"):
+                from . import unit_packs
+
+                folder, _ = unit_packs.resolve(config["unit_pack"])
+                for dependency in (
+                    folder / "pack.json",
+                    folder / "seal.json",
+                    Path(unit_packs.__file__),
+                ):
+                    value[str(dependency)] = owner.sha(dependency)
             if config.get("search"):
                 value.update(
                     {

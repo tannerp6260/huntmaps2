@@ -109,6 +109,9 @@ def create(run, body, jobs):
     ):
         raise ValueError("Preference weights must be 0–5")
     maximum = body.get("maximum_slope_deg", 25)
+    mode = body.get("mode", "alternatives")
+    if mode not in ("suggested", "alternatives"):
+        raise ValueError("Choose suggested approach or alternatives")
     if (
         not isinstance(maximum, (int, float))
         or not np.isfinite(maximum)
@@ -134,7 +137,9 @@ def create(run, body, jobs):
         version=1,
         id=uuid.uuid4().hex,
         run_id=run,
+        unit_pack=r.config.get("unit_pack"),
         algorithm=VERSION,
+        mode=mode,
         implementation=implementation(),
         created=time.time(),
         points=[points[i] for i in ids],
@@ -316,6 +321,7 @@ def compute(ident):
             s["weights"],
             start,
             pinned,
+            recommended_only=s.get("mode") == "suggested",
         )
         for a in result["alternatives"]:
             pinned_endpoint = pinned is not None and tuple(a["departure"]) == tuple(
@@ -360,6 +366,7 @@ def export(ident, index, alternative, fmt, jobs):
         raise ValueError("This waypoint changed; recompute its approach before export")
     a = result["alternatives"][alternative]
     p = result["point"]
+    pack = v["scenario"].get("unit_pack")
     if fmt == "geojson":
         features = []
         for mode in ("mapped", "offtrail"):
@@ -385,6 +392,7 @@ def export(ident, index, alternative, fmt, jobs):
                 type="FeatureCollection",
                 features=features,
                 properties=dict(
+                    **({"unit_pack": pack} if pack else {}),
                     notice=NOTICE,
                     algorithm=VERSION,
                     metrics={
@@ -401,6 +409,10 @@ def export(ident, index, alternative, fmt, jobs):
         creator="HuntMaps2 provisional approach",
         xmlns="http://www.topografix.com/GPX/1/1",
     )
+    if pack:
+        ET.SubElement(ET.SubElement(root, "metadata"), "desc").text = (
+            f"{pack['label']}; local pack {pack['version']}; manifest SHA256 {pack['manifest_sha256']}. {NOTICE}"
+        )
     waypoint = ET.SubElement(
         root, "wpt", lat=str(p["latitude"]), lon=str(p["longitude"])
     )

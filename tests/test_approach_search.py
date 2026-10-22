@@ -26,6 +26,27 @@ def grid(dem=None, tree=None, shrub=None, barriers=None, maximum=30):
 
 
 class ApproachSearchTests(unittest.TestCase):
+    def test_suggested_path_matches_recommendation_with_one_search(self):
+        from unittest.mock import patch
+
+        trees = np.zeros((12, 12))
+        trees[4:8, 1:8] = 1
+        g = grid(tree=trees)
+        lines = [LineString([(10, 230), (10, 10)])]
+        full = solve(g, lines, (210, 130), W)
+        with patch.object(g, "search", wraps=g.search) as search:
+            quick = solve(g, lines, (210, 130), W, recommended_only=True)
+        self.assertEqual(search.call_count, 1)
+        self.assertEqual(len(quick["alternatives"]), 1)
+        for key in ("mapped", "offtrail", "cost", "departure", "cost_contributions"):
+            self.assertEqual(
+                quick["alternatives"][0][key], full["alternatives"][0][key]
+            )
+        blocked = grid(barriers=box(115, 0, 125, 240))
+        self.assertFalse(
+            solve(blocked, lines, (210, 130), W, recommended_only=True)["alternatives"]
+        )
+
     def test_exact_endpoints_metrics_and_determinism(self):
         g = grid()
         line = LineString([(10, 230), (10, 10)])

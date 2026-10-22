@@ -23,6 +23,8 @@ export default function NetworkMap({
   geometry,
   budget,
   analysisPlan,
+  localOnly = false,
+  unitId,
 }: {
   map: Map | null;
   api: Api;
@@ -30,6 +32,8 @@ export default function NetworkMap({
   geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon | null;
   budget: number;
   analysisPlan: string;
+  localOnly?: boolean;
+  unitId?: string;
 }) {
   const jobs = useJobs();
   const stamp = jobs.map((j) => `${j.id}:${j.status}`).join(',');
@@ -96,7 +100,9 @@ export default function NetworkMap({
     try {
       const source = 'network-map';
       const features = networks
-        .filter((n) => visible.includes(n.kind))
+        .filter(
+          (n) => visible.includes(n.kind) && (!unitId || (n as any).unit_pack?.unit_id === unitId),
+        )
         .flatMap((n) => n.display_features);
       const data: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features };
       if (map.getSource(source)) (map.getSource(source) as GeoJSONSource).setData(data);
@@ -174,7 +180,7 @@ export default function NetworkMap({
     } catch (e) {
       setNetworkError(`Could not display road/trail data: ${String(e)}`);
     }
-  }, [map, networks, visible]);
+  }, [map, networks, visible, unitId]);
   const covered = (kind: string) =>
     extent &&
     networks.some(
@@ -221,7 +227,7 @@ export default function NetworkMap({
   }
   return (
     <div className="network-status">
-      <Transportation map={map} />
+      {!localOnly && <Transportation map={map} />}
       <p>
         {covered('roads') && covered('trails')
           ? 'Roads and trails ready.'

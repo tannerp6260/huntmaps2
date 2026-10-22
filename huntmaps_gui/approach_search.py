@@ -419,7 +419,9 @@ def summarize(grid, mapped, offtrail, weights):
     )
 
 
-def solve(grid, lines, target, weights, start=None, pinned=None):
+def solve(
+    grid, lines, target, weights, start=None, pinned=None, *, recommended_only=False
+):
     samples = departures(lines, target, pinned)
     alternatives = []
     reachable_count = 0
@@ -433,6 +435,8 @@ def solve(grid, lines, target, weights, start=None, pinned=None):
     ]
     if pinned is not None:
         objectives.append(("Pinned departure", weights))
+    if recommended_only:
+        objectives = objectives[:1]
     for label, w in objectives:
         distances, successor = grid.search(target, w)
         mapped = network_paths(grid, lines, samples, start, w)

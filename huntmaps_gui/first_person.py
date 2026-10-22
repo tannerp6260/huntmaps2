@@ -92,6 +92,7 @@ def new_plan(run=RUN, ids=None, fidelity="lidar", acquisition=None):
             download_cap_bytes=LIMIT,
             candidates=ids,
             run_id=run,
+            unit_pack=scene_run(run).config.get("unit_pack"),
             snapshots=snapshots,
             fidelity=fidelity,
             acquisition=acquisition,
@@ -127,8 +128,14 @@ def scene(ident, cid, run_data=None, orientation=True):
     if pointer is None and ident == RUN and cid in PILOT:
         pointer = read(ROOT / ".gui/first-person/ready" / (cid + ".json"))
     if not pointer:
+        pack = (
+            run_data.config if run_data is not None else scene_run(ident).config
+        ).get("unit_pack")
         return dict(
             status="unprepared",
+            core_available=bool(pack),
+            detail_status="missing" if pack else None,
+            unit_pack=pack,
             candidate=cid,
             observer=p,
             reason="Review a scene source plan, or prepare a terrain-only view from the existing DEM.",

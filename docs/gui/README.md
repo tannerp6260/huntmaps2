@@ -1,5 +1,10 @@
 # HuntMaps2 local scouting desk
 
+Prepared unit workflow: [Colorado GMU 54 local core pack](GMU_PACKS.md). Choose
+**New scouting area → Colorado GMU 54**, draw a manageable local area, then
+**Find → Approach → Inspect → Save**. Core scouting and Basic inspection work offline.
+
+
 Current interface: [Find → Approach → Inspect → Save](UI_REDESIGN.md).
 Workflow evidence and requirements: [Find, reach and inspect setups](WORKFLOW.md).
 
@@ -48,9 +53,9 @@ a new analysis automatically.
    zooms into the active observer. Saved inspection sectors include hidden terrain;
    tree classes apply to the active setup only.
 4. **Shortlist** or **Dismiss** a setup. **Plan approach** opens the focused setup.
-   Draw and confirm a boundary containing that setup and a mapped road or trail,
-   check the boundary, then explicitly **Calculate approaches**. Select an
-   alternative, prepare a view and confirm through Approach → Inspect → Save. Legacy review
+   The program checks a local boundary and selects a feasible suggested path for
+   each shortlisted setup. **Explore alternatives or edit approach** lets you
+   override the suggestion. Prepare a view and confirm through Approach → Inspect → Save. Legacy review
    annotations and notes remain separate from these workflow decisions.
 5. Check **Export** for the observer setups you want, then click GPX or KML.
    Export coordinates are the saved observer positions, with meaningful names and
@@ -66,19 +71,28 @@ The map shows a prominent loading card while a selected view's shading is being
 prepared and a retry button if it fails. **Compare** remains a separate display.
 
 Each shortlisted setup gets its own approach boundary and decision. The setup
-counter is a review queue. A new setup starts with no boundary; importing or copying
-another boundary is an advanced, explicit choice requiring confirmation for that
-setup. Boundary checks explain missing mapped departures before calculation.
+counter is a review queue. New setups use a terrain-supported local boundary and
+calculate one recommended path automatically. Importing or copying another boundary
+is an advanced choice requiring confirmation for that setup. Boundary checks explain
+missing mapped departures before calculation; failures never relax constraints.
 **Dismiss spot & next** advances immediately while saving in the background. A
 failed save restores the spot and shows an error; successful dismissals offer Undo.
 Visible-terrain shading pauses during Approach and returns with your chosen settings
 when you leave that stage.
 Terrain constraints can still prevent a path. **Terrain I want to see** belongs to
 Find; approach preferences describe climbing, steepness, vegetation and the hard
-slope limit. See [coverage and approach verification](COVERAGE_APPROACH_FLOW_2026-10-10.md).
+slope limit. See [suggested approaches and recovery](SUGGESTED_APPROACHES_2026-10-20.md)
+and [coverage batch verification](COVERAGE_APPROACH_FLOW_2026-10-10.md).
 
 Map controls include zoom, compass rotation/reset, yard scale, imagery and
 visibility toggles, opacity sliders, legend and whole-area/close-up buttons.
+**Map layers → Roadless distance overlay** shades land farther than a configurable
+straight-line distance from mapped roads. Set 0–10 miles (default 1 mile) and an
+independent opacity (default 30%). The toggle, distance and opacity persist across
+reloads. It works while choosing a GMU and throughout scouting. Retained unit roads
+and other loaded road inventories contribute; trails do not. Unknown source coverage
+and an inward margin at inventory edges remain unshaded. It is a display overlay,
+not an official roadless designation, candidate filter or scoring change.
 Online imagery fills gaps behind saved aerial clips by default, fetching visible USGS National Map tiles as you pan and zoom. Turn off **Online imagery — fill gaps** for entirely local viewing; this preference persists in your browser. Provider attribution appears on the map. Online acquisition dates vary and tiles are browsing context, separate from analysis sources and its download cap. There is no offline tile pack. Saved imagery dates and native/export resolutions remain in the source drawer. When online imagery fails, the map keeps cached imagery and local hillshade where covered, with a retry control. No PDF screenshots are used as map layers.
 
 ## New scouting area
@@ -318,12 +332,12 @@ Original area and scores stay visible. Matching-area sorting uses original order
 ties. Aspect restrictions exclude flats and unknown aspect; unrestricted aspect keeps
 flats. Edited filters remain unapplied until Apply. Coordinates remain exact.
 
-Shortlist at least one setup to enable **Plan approach**. Draw and confirm a
-separate search boundary for each setup, including its destination and a mapped
-road/trail departure. Geometry/departure checks run before an explicit calculation.
-Imports, boundary copying and exclusion polygons are advanced options; copied
-boundaries require confirmation for their destination. Existing saved definitions
-remain available.
+Shortlist at least one setup to enable **Plan approach**. Suggested mode uses a
+separate local search boundary for each setup, checks mapped road/trail departures,
+and automatically calculates and selects one recommended path. Current saved paths
+are reused. **Explore alternatives or edit approach** opens explicit comparison,
+imports, boundary copying and exclusion polygons. Copied boundaries require
+confirmation for their destination. Existing saved definitions remain available.
 The travel polygon is a search domain, not inferred permission. Departures within one
 mile are compared independently for each kept setup. **Include trail walk** adds a
 network start; use **Choose network start on map** or exact longitude,latitude.
@@ -332,15 +346,17 @@ the nearest selected segment within 100 m, and display the resulting coordinates
 Shared supplied vertices connect network travel; arbitrary crossings and gaps do not.
 
 Distance always contributes. The four 0–5 avoidance preferences control steepness,
-climbing, trees and shrubs; balanced defaults are one each. The separate 30° default
-maximum modeled slope is a desktop screening threshold. Unknown vegetation receives
+climbing, trees and shrubs; balanced defaults are one each. The maximum modeled
+slope follows the current connection-screening limit unless saved for this setup;
+it is a desktop screening threshold. Unknown vegetation receives
 maximum avoidance penalties. The new deterministic 20 m grid service reports modeled
 ascent/descent, separate mapped/off-trail distance, maximum slope, average known
 cover, unknown coverage, cost components and a ground profile. It retains coverage
 scores; coverage does not reward detours or affect path cost.
 
-Review Recommended, Shortest distance and Brush avoidance alternatives; identical
-geometry is collapsed. **Show this alternative on map** fits that path. Solid yellow
+Suggested mode calculates only Recommended. Explicit alternatives also calculate
+Shortest distance and Brush avoidance; identical geometry is collapsed.
+**Show this alternative on map** fits that path. Solid yellow
 is mapped travel, dashed pink is off-trail. No-path results describe constraints and
 coverage rather than proving inaccessibility. Every endpoint connector and exported
 segment stays inside travel geometry and outside exclusions; paths are not smoothed.

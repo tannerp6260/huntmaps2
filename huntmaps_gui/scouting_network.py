@@ -92,7 +92,9 @@ def parse_lines(data, extension, allow_empty=False):
     return lines
 
 
-def save_network(data, extension, kind, source, date="unknown", coverage=None):
+def save_network(
+    data, extension, kind, source, date="unknown", coverage=None, unit_pack=None
+):
     if kind not in SERVICES:
         raise ValueError("Choose roads or trails")
     if len(data) > LIMIT:
@@ -115,6 +117,8 @@ def save_network(data, extension, kind, source, date="unknown", coverage=None):
             coverage_note="Mapped inventory only; absence of lines is not evidence of no access",
             lines=[mapping(l) for l in lines],
         )
+        if unit_pack:
+            value["unit_pack"] = unit_pack
         write(folder / "network.json", value)
         return value
 

@@ -201,6 +201,12 @@ def router(jobs):
             for p in (STATE / "networks").glob("*/network.json")
         ]
 
+    @r.post("/roadless-overlay")
+    def roadless_overlay(body: dict = Body(...)):
+        from .roadless import overlay
+
+        return overlay(body)
+
     @r.post("/network-plans")
     def network_plan(body: dict = Body(...)):
         from .downloads import review_info

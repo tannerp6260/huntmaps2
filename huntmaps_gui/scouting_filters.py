@@ -347,11 +347,12 @@ def sampling_exclusion(config, settings, output):
     from shapely.geometry import shape, mapping, box
     from shapely.ops import transform, unary_union
     from glassing.transfer import project, source, polygon
+    from .config import WORKSPACE, SOURCE
 
     s = validate(settings)
     if s["distance_m"] is None and s["height_m"] is None:
         raise ValueError("Enable an access limit for constrained sampling")
-    area = polygon(config["observer_polygon"], config["epsg"])
+    area = polygon(WORKSPACE / config["observer_polygon"], config["epsg"])
     lines, sources = load_networks(s["network_ids"], config["epsg"], s["kinds"])
     if not lines:
         raise ValueError(
@@ -374,9 +375,24 @@ def sampling_exclusion(config, settings, output):
     height = int(np.ceil((bounds[3] - bounds[1]) / res))
     if width * height > config["max_cells"]:
         raise ValueError("Observer eligibility grid exceeds cell limit")
+    dem_path = Path(config["data"]["dem"]["path"])
+    if not dem_path.is_absolute():
+        # New inputs belong to the run workspace; retained historical datasets
+        # can still be relative to the source checkout. Never fall back from an
+        # existing damaged file: source() verifies its exact checksum below.
+        dem_path = WORKSPACE / dem_path
+        if not dem_path.exists():
+            dem_path = SOURCE / config["data"]["dem"]["path"]
     ds = gdal.Warp(
         "",
-        str(source(config["data"]["dem"])),
+        str(
+            source(
+                dict(
+                    config["data"]["dem"],
+                    path=str(dem_path),
+                )
+            )
+        ),
         format="MEM",
         dstSRS=f"EPSG:{config['epsg']}",
         outputBounds=[

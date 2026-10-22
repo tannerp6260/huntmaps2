@@ -15,10 +15,16 @@ class AppConfig:
     state_dir: Path = PROJECT / ".gui"
     workspace: Path = PROJECT
     display_budget_bytes: int = 2048 * 1024 * 1024
+    pack_dir: Path | None = None
 
     def __post_init__(self):
         for field in ("source_dir", "state_dir", "workspace"):
             object.__setattr__(self, field, Path(getattr(self, field)).resolve())
+        object.__setattr__(
+            self,
+            "pack_dir",
+            Path(self.pack_dir or self.source_dir / "data/unit-packs").resolve(),
+        )
         if self.display_budget_bytes < 0:
             raise ValueError("Display cache budget must be nonnegative")
 
@@ -29,6 +35,11 @@ class AppConfig:
             Path(os.environ.get("HUNTMAPS_STATE_DIR", PROJECT / ".gui")),
             Path(os.environ.get("HUNTMAPS_WORKSPACE", PROJECT)),
             int(os.environ.get("HUNTMAPS_DISPLAY_BUDGET_MB", "2048")) * 1024 * 1024,
+            (
+                Path(os.environ["HUNTMAPS_PACK_DIR"])
+                if os.environ.get("HUNTMAPS_PACK_DIR")
+                else None
+            ),
         )
 
     def environment(self):
@@ -37,6 +48,7 @@ class AppConfig:
             HUNTMAPS_STATE_DIR=str(self.state_dir),
             HUNTMAPS_WORKSPACE=str(self.workspace),
             HUNTMAPS_DISPLAY_BUDGET_MB=str(self.display_budget_bytes // (1024 * 1024)),
+            HUNTMAPS_PACK_DIR=str(self.pack_dir),
         )
 
 

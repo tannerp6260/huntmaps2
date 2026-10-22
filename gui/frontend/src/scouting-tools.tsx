@@ -61,6 +61,7 @@ type Alternative = {
 type Scenario = {
   scenario: {
     id: string;
+    mode?: 'suggested' | 'alternatives';
     notice: string;
     points: Kept[];
     network_ids: string[];
@@ -101,6 +102,7 @@ export default function ScoutingTools({
   onDecision,
   onInspectStage,
   initialSearch,
+  defaultMaximum = 25,
   locationStamp,
   recovery,
   runId,
@@ -132,6 +134,7 @@ export default function ScoutingTools({
     nearby_radius_m?: number;
     tree_threshold_percent?: number;
   };
+  defaultMaximum?: number;
   runId: string;
   observerBoundary?: GeoJSON.FeatureCollection;
   onApproach?: (cid: string, scenario: string, alternative: number) => Promise<boolean>;
@@ -175,11 +178,15 @@ export default function ScoutingTools({
     [drawingExclusion, setDrawingExclusion] = useState(false),
     [editing, setEditing] = useState(false);
   const [weights, setWeights] = useState({ slope: 1, gain: 1, tree: 1, shrub: 1 }),
-    [maximum, setMaximum] = useState(25),
+    [maximum, setMaximum] = useState(defaultMaximum),
     [includeWalk, setIncludeWalk] = useState(false),
     [start, setStart] = useState(''),
     [pinned, setPinned] = useState('');
   const [savingApproach, setSavingApproach] = useState(false);
+  const [manualMode, setManualMode] = useState(false);
+  const manualModeRef = useRef(manualMode);
+  manualModeRef.current = manualMode;
+  const automaticSelections = useRef(new Set<string>());
   const operationTiming = useRef<{
     scenario: string;
     job: string;
@@ -341,6 +348,7 @@ export default function ScoutingTools({
       scenario: scenarioId || null,
       alternative: alternativesOnMap[focusedId] || 0,
       attempted,
+      mode: manualMode ? 'alternatives' : 'suggested',
     };
   }
   function saveReview(value?: any, cid = focusedId, focus = cid) {
@@ -393,6 +401,7 @@ export default function ScoutingTools({
     const d = draftCache.current[cid] || v?.drafts[cid];
     setNetworkOverride(!!d?.network_ids?.length);
     if (d) {
+      setManualMode(d.mode === 'alternatives');
       setArea(d.travel_area);
       setExclusions(d.exclusions);
       setWeights(d.weights);
@@ -402,13 +411,13 @@ export default function ScoutingTools({
       setIncludeWalk(!!d.start);
       setStart(d.start?.join(',') || '');
       setPinned(d.pinned?.join(',') || '');
-      setEditing(!d.boundary_confirmed);
+      setEditing(d.mode === 'alternatives' && !d.boundary_confirmed);
       setScenarioId(d.scenario || workflow?.points[cid]?.approach?.scenario || '');
       setAlternativesOnMap({ [cid]: d.alternative || 0 });
       setAttempted(!!d.attempted);
     } else {
       setWeights(v?.defaults?.weights || weights);
-      setMaximum(v?.defaults?.maximum_slope_deg || (maximum <= 35 ? maximum : 25));
+      setMaximum(v?.defaults?.maximum_slope_deg || defaultMaximum);
       setScenarioId('');
       setAlternativesOnMap({});
       setAttempted(false);
@@ -420,6 +429,7 @@ export default function ScoutingTools({
       setEditing(false);
       setSelectedNetworks([]);
       setKinds(v?.defaults?.kinds || kinds);
+      // An explicit alternatives override carries through this review queue.
     }
     setCopyBoundary('');
     setBoundaryCheck(null);
@@ -528,6 +538,7 @@ export default function ScoutingTools({
     scenarioId,
     alternativesOnMap,
     attempted,
+    manualMode,
   ]);
   useEffect(() => {
     if (
@@ -992,6 +1003,7 @@ export default function ScoutingTools({
         method: 'POST',
         body: JSON.stringify({
           preflight_required: true,
+          mode: manualMode ? 'alternatives' : 'suggested',
           boundary_confirmed: true,
           ids: [focusedId],
           points: [workflow?.points[focusedId]?.point],
@@ -1027,6 +1039,7 @@ export default function ScoutingTools({
         scenario: v.scenario.id,
         alternative: 0,
         attempted: true,
+        mode: v.scenario.mode,
       };
       if (
         run === runRef.current &&
@@ -1065,6 +1078,7 @@ export default function ScoutingTools({
           scenario: v.scenario.id,
           alternative: 0,
           attempted: true,
+          mode: v.scenario.mode,
         },
         cid,
         focusRef.current,
@@ -1162,7 +1176,8 @@ export default function ScoutingTools({
       alive = false;
     };
   }, [scenarioId, scenarioJob?.id, scenarioJob?.status]);
-  // Unreviewed spots receive a proposal, never an implicitly confirmed boundary.
+  // Normal review accepts the bounded terrain-supported proposal. Alternatives
+  // retain explicit editing and confirmation of custom boundaries.
   useEffect(() => {
     if (!planning || !hydrated || hydrationFocus.current !== focusedId || area || !focusedId)
       return;
@@ -1178,7 +1193,7 @@ export default function ScoutingTools({
         if (alive && boundaryVersion === boundaryChoice.current) {
           setArea(v.travel_area);
           if (networkVersion === networkChoice.current) setSelectedNetworks(v.network_ids);
-          setEditing(true);
+          setEditing(manualModeRef.current);
         }
       })
       .catch((e) => {
@@ -1281,6 +1296,91 @@ export default function ScoutingTools({
     };
   }, [boundarySignature, planning, hydrated, editing, locationStamp]);
   const boundaryReady = boundaryCheck?.signature === boundarySignature && boundaryCheck.ready;
+  useEffect(() => {
+    if (
+      !planning ||
+      manualMode ||
+      !hydrated ||
+      hydrationFocus.current !== focusedId ||
+      busy ||
+      active ||
+      dismissing ||
+      attempted ||
+      scenarioId ||
+      !boundaryReady ||
+      !workflow?.points[focusedId]?.shortlisted ||
+      workflow.points[focusedId].approach ||
+      error
+    )
+      return;
+    void planApproaches();
+  }, [
+    planning,
+    manualMode,
+    hydrated,
+    focusedId,
+    busy,
+    active,
+    dismissing,
+    attempted,
+    scenarioId,
+    boundaryReady,
+    workflow?.revision,
+    error,
+  ]);
+  useEffect(() => {
+    if (
+      !planning ||
+      manualMode ||
+      !hydrated ||
+      hydrationFocus.current !== focusedId ||
+      busy ||
+      active ||
+      dismissing ||
+      savingApproach ||
+      scenarioDirty ||
+      !scenario ||
+      scenario.scenario.mode === 'alternatives' ||
+      scenario.stale ||
+      scenario.point_stale?.[focusedId] ||
+      !scenario.results?.results.find((r) => r.point.id === focusedId)?.alternatives.length ||
+      !workflow?.points[focusedId]?.shortlisted ||
+      workflow.points[focusedId].approach ||
+      automaticSelections.current.has(scenarioId)
+    )
+      return;
+    const cid = focusedId,
+      run = runId,
+      id = scenarioId;
+    automaticSelections.current.add(id);
+    setSavingApproach(true);
+    void (async () => {
+      await saveReview({ ...draft(), alternative: 0 });
+      if (runRef.current !== run || focusRef.current !== cid || manualModeRef.current) return;
+      if (!(await onApproach?.(cid, id, 0))) return;
+      const next = queue.find((other) => other !== cid && !workflow?.points[other]?.approach);
+      if (next && runRef.current === run && focusRef.current === cid && !manualModeRef.current)
+        focusSpot(next);
+    })()
+      .catch((e) => {
+        if (mounted.current && runRef.current === run) setError(String(e));
+      })
+      .finally(() => {
+        if (mounted.current && runRef.current === run) setSavingApproach(false);
+      });
+  }, [
+    planning,
+    manualMode,
+    hydrated,
+    focusedId,
+    busy,
+    active,
+    dismissing,
+    savingApproach,
+    scenarioDirty,
+    scenario,
+    workflow?.revision,
+  ]);
   return (
     <section className="scouting-tools">
       <h3>{planning ? 'Plan an approach' : 'Terrain & access'}</h3>
@@ -1504,8 +1604,7 @@ export default function ScoutingTools({
       {planning && hasShortlist && hydrated && hydrationFocus.current === focusedId && (
         <div className="approach-controls">
           <p className="hint">
-            Compare distance, climbing and cover from mapped roads or trails.{' '}
-            <Help topic="approach" />
+            Check for a modeled approach from a mapped road or trail. <Help topic="approach" />
           </p>
           <div className="guided-focus" role="status">
             <h3>
@@ -1513,8 +1612,8 @@ export default function ScoutingTools({
               {focusedId}
             </h3>
             <p>
-              Each setup gets its own boundary and approach decision. This is a review queue, not a
-              trip itinerary.
+              A feasible path using your preferences is selected by default. You can override it
+              with an alternative or edit the search area.
             </p>
             <p>
               {queue.length - unresolved.length} selected · {unresolved.length} remaining
@@ -1545,378 +1644,447 @@ export default function ScoutingTools({
             </button>
             {!!unresolved.length && (
               <p className="hint">
-                Select an approach or dismiss each remaining spot before continuing.
+                {manualMode
+                  ? 'Select an approach or dismiss each remaining spot before continuing.'
+                  : 'Preparing a suggested path for each shortlisted setup.'}
               </p>
             )}
           </div>
-          <details className="approach-settings" open={!scenario || editing}>
-            <summary>Approach boundary & preferences</summary>
-            <ol className="approach-steps">
-              <li>Review suggested boundary for {focusedId}.</li>
-              <li>Confirm or edit the boundary.</li>
-              <li>Check mapped roads/trails inside it.</li>
-              <li>Calculate alternatives, then select an approach.</li>
-            </ol>
-            <h3>
-              Where can you approach from? <Help topic="searchArea" />
-            </h3>
-            <p className="hint">
-              Draw a boundary around this setup and a mapped road or trail you could leave from. Use
-              a smaller area with room for detours to reduce calculation work. Mapped access is not
-              verified permission.
-            </p>
-            {suggesting && <p role="status">Suggesting a boundary within 2,000 m of this setup…</p>}
-            <fieldset
-              disabled={
-                busy || (!!scenarioJob && ['running', 'cancelling'].includes(scenarioJob.status))
-              }
-              className="approach-input-fields"
-            >
-              {map && (
-                <Drawing
-                  key={focusedId + (drawingExclusion ? '-exclusion' : '-travel')}
-                  map={map}
-                  geometry={drawingExclusion ? null : area}
-                  onSave={async (f) => {
-                    if (drawingExclusion) setExclusions((v) => [...v, f.geometry]);
-                    else setArea(f.geometry);
-                  }}
-                  onInvalidate={() => {
-                    setEditing(true);
-                    setPick(null);
-                  }}
-                  onRestore={() => setEditing(false)}
-                  onEditing={(value) => {
-                    if (focusRef.current === focusedId) {
-                      if (value && !drawingExclusion) boundaryChoice.current++;
-                      setEditing(value);
-                      setDrawingBoundaryActive(value);
-                    }
-                  }}
-                  onClear={() => {
-                    if (drawingExclusion) setExclusions([]);
-                    else setArea(null);
-                  }}
-                />
-              )}
-              {area && editing && !drawingBoundaryActive && (
-                <button className="primary approach-primary" onClick={() => setEditing(false)}>
-                  Confirm approach search boundary
-                </button>
-              )}
+          {!manualMode && (
+            <section className="suggested-approach" aria-label="Suggested approach">
+              <h3>Suggested approach</h3>
               <p>
-                {area
-                  ? editing
-                    ? 'Boundary needs confirmation'
-                    : 'Boundary confirmed for this setup'
-                  : 'Draw this setup’s boundary to begin'}{' '}
-                · {exclusions.length} exclusions
+                One path using your current distance, climbing and cover preferences. Alternatives
+                are calculated only when requested.
               </p>
-              {area && !editing && (
-                <div
-                  className="approach-boundary-check"
-                  role="status"
-                  data-ready={
-                    boundaryCheck?.signature !== boundarySignature
-                      ? 'pending'
-                      : boundaryReady
-                        ? 'true'
-                        : 'false'
-                  }
-                >
-                  {boundaryCheck?.signature === boundarySignature
-                    ? boundaryCheck.message
-                    : 'Checking boundary and mapped departures…'}
-                  {boundaryReady && (
-                    <small>
-                      {boundaryCheck?.departures} mapped departure samples ·{' '}
-                      {boundaryCheck?.cells?.toLocaleString()} grid cells. Terrain constraints are
-                      checked during calculation.
-                    </small>
-                  )}
-                  {boundaryCheck?.signature === boundarySignature && !boundaryReady && (
-                    <button
-                      onClick={() => {
-                        const sources =
-                          document.querySelector<HTMLDetailsElement>('.approach-sources');
-                        if (sources) {
-                          sources.open = true;
-                          sources.querySelector('summary')?.focus();
-                          sources.scrollIntoView({ block: 'nearest' });
-                        }
-                      }}
-                    >
-                      Review road/trail sources
-                    </button>
-                  )}
-                </div>
-              )}
-              {area && !selectedNetworks.length && (
-                <div className="notice">
-                  <p>Verified analysis networks are missing for this boundary.</p>
-                  <button disabled={busy || active} onClick={prepareNetwork}>
-                    Prepare roads and trails · up to 20 MB
-                  </button>
-                </div>
-              )}
-              <details>
-                <summary>Advanced boundary options · import, copy and areas to avoid</summary>
-                <button
-                  onClick={() => {
-                    const geometries = observerBoundary?.features
-                      .map((f) => f.geometry)
-                      .filter((g) => g.type === 'Polygon' || g.type === 'MultiPolygon');
-                    if (geometries?.length === 1) {
-                      setArea(geometries[0] as Polygon);
-                      setEditing(true);
-                    } else
-                      setError(
-                        'Import or draw one explicit travel polygon; the observer area has multiple geometries.',
-                      );
-                  }}
-                >
-                  Start from observer boundary
-                </button>
-
-                <label>
-                  Import approach search area
-                  <input
-                    aria-label="Import travel area"
-                    type="file"
-                    accept=".geojson,.json,.kml,.kmz"
-                    onChange={(e) => e.target.files?.[0] && importPolygon(e.target.files[0], false)}
-                  />
-                </label>
-                <label>
-                  Import area to avoid
-                  <input
-                    aria-label="Import approach exclusion"
-                    type="file"
-                    accept=".geojson,.json,.kml,.kmz"
-                    onChange={(e) => e.target.files?.[0] && importPolygon(e.target.files[0], true)}
-                  />
-                </label>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={drawingExclusion}
-                    onChange={(e) => setDrawingExclusion(e.target.checked)}
-                  />
-                  Draw an area to avoid instead of the search area
-                </label>
-                <label>
-                  Copy another setup’s boundary
-                  <select
-                    aria-label="Copy approach boundary"
-                    value={copyBoundary}
-                    onChange={(e) => setCopyBoundary(e.target.value)}
-                  >
-                    <option value="">Choose a setup</option>
-                    {Object.entries(review?.drafts || {})
-                      .filter(([cid, d]: any) => cid !== focusedId && d.travel_area)
-                      .map(([cid]) => (
-                        <option key={cid} value={cid}>
-                          {cid}
-                        </option>
-                      ))}
-                  </select>
-                </label>
-                <button
-                  disabled={!copyBoundary}
-                  onClick={() => {
-                    const d = review?.drafts[copyBoundary];
-                    if (d) {
-                      setArea(d.travel_area);
-                      setExclusions(d.exclusions);
-                      setEditing(true);
-                    }
-                  }}
-                >
-                  Copy boundary for this setup
-                </button>
-                <p>Copied or imported boundaries must be confirmed for this setup.</p>
-                <p>
-                  {area ? 'Travel boundary saved' : 'Travel boundary required'} ·{' '}
-                  {exclusions.length} exclusions
+              {workflow?.points[focusedId]?.approach ? (
+                <p role="status">
+                  Suggested path selected. Continue to inspect, or explore alternatives.
                 </p>
-                {!!exclusions.length && (
-                  <button onClick={() => setExclusions([])}>Clear exclusions</button>
+              ) : suggesting || !area ? (
+                <p role="status">Checking nearby mapped departures…</p>
+              ) : boundaryCheck?.signature === boundarySignature && !boundaryReady ? (
+                <p role="status">{boundaryCheck.message}</p>
+              ) : null}
+              <small>
+                Uses the terrain-supported search area around this setup and the {maximum}° modeled
+                slope limit. Mapped paths need access and condition checks.
+              </small>
+              <button
+                disabled={busy || savingApproach || active}
+                onClick={() => {
+                  setManualMode(true);
+                  if (!scenarioId) setEditing(true);
+                }}
+              >
+                Explore alternatives or edit approach
+              </button>
+              {!busy && !active && attempted && !scenario?.results && (
+                <button disabled={!boundaryReady} onClick={() => void planApproaches()}>
+                  Retry suggested approach
+                </button>
+              )}
+            </section>
+          )}
+          {manualMode && (
+            <button
+              disabled={
+                busy || savingApproach || active || drawingBoundaryActive || !preferencesValid
+              }
+              onClick={() => {
+                setManualMode(false);
+                setEditing(false);
+                setError('');
+                if (!workflow?.points[focusedId]?.approach) {
+                  setScenarioId('');
+                  setAttempted(false);
+                }
+              }}
+            >
+              Use suggested approach mode
+            </button>
+          )}
+          {manualMode && (
+            <details
+              className="approach-settings"
+              open={!scenario || editing || scenario.scenario.mode === 'suggested'}
+            >
+              <summary>Approach boundary & preferences</summary>
+              <ol className="approach-steps">
+                <li>Review suggested boundary for {focusedId}.</li>
+                <li>Confirm or edit the boundary.</li>
+                <li>Check mapped roads/trails inside it.</li>
+                <li>Calculate alternatives, then select an approach.</li>
+              </ol>
+              <h3>
+                Where can you approach from? <Help topic="searchArea" />
+              </h3>
+              <p className="hint">
+                Draw a boundary around this setup and a mapped road or trail you could leave from.
+                Use a smaller area with room for detours to reduce calculation work. Mapped access
+                is not verified permission.
+              </p>
+              {suggesting && (
+                <p role="status">Suggesting a boundary within 2,000 m of this setup…</p>
+              )}
+              <fieldset
+                disabled={
+                  busy || (!!scenarioJob && ['running', 'cancelling'].includes(scenarioJob.status))
+                }
+                className="approach-input-fields"
+              >
+                {map && (
+                  <Drawing
+                    key={focusedId + (drawingExclusion ? '-exclusion' : '-travel')}
+                    map={map}
+                    geometry={drawingExclusion ? null : area}
+                    onSave={async (f) => {
+                      if (drawingExclusion) setExclusions((v) => [...v, f.geometry]);
+                      else setArea(f.geometry);
+                    }}
+                    onInvalidate={() => {
+                      setEditing(true);
+                      setPick(null);
+                    }}
+                    onRestore={() => setEditing(false)}
+                    onEditing={(value) => {
+                      if (focusRef.current === focusedId) {
+                        if (value && !drawingExclusion) boundaryChoice.current++;
+                        setEditing(value);
+                        setDrawingBoundaryActive(value);
+                      }
+                    }}
+                    onClear={() => {
+                      if (drawingExclusion) setExclusions([]);
+                      else setArea(null);
+                    }}
+                  />
                 )}
-              </details>
-              <details>
-                <summary>Departure and network start details</summary>
-                <label>
-                  Departure comparison
-                  <select
-                    value={includeWalk ? 'walk' : 'nearby'}
-                    onChange={(e) => setIncludeWalk(e.target.value === 'walk')}
-                  >
-                    <option value="nearby">
-                      Start where you leave a road/trail (within one mile)
-                    </option>
-                    <option value="walk">
-                      Include travel along roads/trails from a chosen start
-                    </option>
-                  </select>
-                </label>
-                <p className="hint">
-                  A departure is where the approach leaves a mapped road or trail. Nearby mode
-                  compares departures within one mile of this setup; it does not include travel to
-                  reach them.
+                {area && editing && !drawingBoundaryActive && (
+                  <button className="primary approach-primary" onClick={() => setEditing(false)}>
+                    Confirm approach search boundary
+                  </button>
+                )}
+                <p>
+                  {area
+                    ? editing
+                      ? 'Boundary needs confirmation'
+                      : 'Boundary confirmed for this setup'
+                    : 'Draw this setup’s boundary to begin'}{' '}
+                  · {exclusions.length} exclusions
                 </p>
-                {pick && (
-                  <p role="status">
-                    Click the selected mapped network to set {pick}.{' '}
-                    <button onClick={() => setPick(null)}>Cancel point selection</button>
+                {area && !editing && (
+                  <div
+                    className="approach-boundary-check"
+                    role="status"
+                    data-ready={
+                      boundaryCheck?.signature !== boundarySignature
+                        ? 'pending'
+                        : boundaryReady
+                          ? 'true'
+                          : 'false'
+                    }
+                  >
+                    {boundaryCheck?.signature === boundarySignature
+                      ? boundaryCheck.message
+                      : 'Checking boundary and mapped departures…'}
+                    {boundaryReady && (
+                      <small>
+                        {boundaryCheck?.departures} mapped departure samples ·{' '}
+                        {boundaryCheck?.cells?.toLocaleString()} grid cells. Terrain constraints are
+                        checked during calculation.
+                      </small>
+                    )}
+                    {boundaryCheck?.signature === boundarySignature && !boundaryReady && (
+                      <button
+                        onClick={() => {
+                          const sources =
+                            document.querySelector<HTMLDetailsElement>('.approach-sources');
+                          if (sources) {
+                            sources.open = true;
+                            sources.querySelector('summary')?.focus();
+                            sources.scrollIntoView({ block: 'nearest' });
+                          }
+                        }}
+                      >
+                        Review road/trail sources
+                      </button>
+                    )}
+                  </div>
+                )}
+                {area && !selectedNetworks.length && (
+                  <div className="notice">
+                    <p>Verified analysis networks are missing for this boundary.</p>
+                    <button disabled={busy || active} onClick={prepareNetwork}>
+                      Prepare roads and trails · up to 20 MB
+                    </button>
+                  </div>
+                )}
+                <details>
+                  <summary>Advanced boundary options · import, copy and areas to avoid</summary>
+                  <button
+                    onClick={() => {
+                      const geometries = observerBoundary?.features
+                        .map((f) => f.geometry)
+                        .filter((g) => g.type === 'Polygon' || g.type === 'MultiPolygon');
+                      if (geometries?.length === 1) {
+                        setArea(geometries[0] as Polygon);
+                        setEditing(true);
+                      } else
+                        setError(
+                          'Import or draw one explicit travel polygon; the observer area has multiple geometries.',
+                        );
+                    }}
+                  >
+                    Start from observer boundary
+                  </button>
+
+                  <label>
+                    Import approach search area
+                    <input
+                      aria-label="Import travel area"
+                      type="file"
+                      accept=".geojson,.json,.kml,.kmz"
+                      onChange={(e) =>
+                        e.target.files?.[0] && importPolygon(e.target.files[0], false)
+                      }
+                    />
+                  </label>
+                  <label>
+                    Import area to avoid
+                    <input
+                      aria-label="Import approach exclusion"
+                      type="file"
+                      accept=".geojson,.json,.kml,.kmz"
+                      onChange={(e) =>
+                        e.target.files?.[0] && importPolygon(e.target.files[0], true)
+                      }
+                    />
+                  </label>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={drawingExclusion}
+                      onChange={(e) => setDrawingExclusion(e.target.checked)}
+                    />
+                    Draw an area to avoid instead of the search area
+                  </label>
+                  <label>
+                    Copy another setup’s boundary
+                    <select
+                      aria-label="Copy approach boundary"
+                      value={copyBoundary}
+                      onChange={(e) => setCopyBoundary(e.target.value)}
+                    >
+                      <option value="">Choose a setup</option>
+                      {Object.entries(review?.drafts || {})
+                        .filter(([cid, d]: any) => cid !== focusedId && d.travel_area)
+                        .map(([cid]) => (
+                          <option key={cid} value={cid}>
+                            {cid}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                  <button
+                    disabled={!copyBoundary}
+                    onClick={() => {
+                      const d = review?.drafts[copyBoundary];
+                      if (d) {
+                        setArea(d.travel_area);
+                        setExclusions(d.exclusions);
+                        setEditing(true);
+                      }
+                    }}
+                  >
+                    Copy boundary for this setup
+                  </button>
+                  <p>Copied or imported boundaries must be confirmed for this setup.</p>
+                  <p>
+                    {area ? 'Travel boundary saved' : 'Travel boundary required'} ·{' '}
+                    {exclusions.length} exclusions
+                  </p>
+                  {!!exclusions.length && (
+                    <button onClick={() => setExclusions([])}>Clear exclusions</button>
+                  )}
+                </details>
+                <details>
+                  <summary>Departure and network start details</summary>
+                  <label>
+                    Departure comparison
+                    <select
+                      value={includeWalk ? 'walk' : 'nearby'}
+                      onChange={(e) => setIncludeWalk(e.target.value === 'walk')}
+                    >
+                      <option value="nearby">
+                        Start where you leave a road/trail (within one mile)
+                      </option>
+                      <option value="walk">
+                        Include travel along roads/trails from a chosen start
+                      </option>
+                    </select>
+                  </label>
+                  <p className="hint">
+                    A departure is where the approach leaves a mapped road or trail. Nearby mode
+                    compares departures within one mile of this setup; it does not include travel to
+                    reach them.
+                  </p>
+                  {pick && (
+                    <p role="status">
+                      Click the selected mapped network to set {pick}.{' '}
+                      <button onClick={() => setPick(null)}>Cancel point selection</button>
+                    </p>
+                  )}
+                  {includeWalk && (
+                    <button onClick={() => setPick('start')}>Choose network start on map</button>
+                  )}
+                </details>
+                <details>
+                  <summary>More options · pinned departure and preferences</summary>
+                  <button onClick={() => setPick('pinned')}>Pin a departure on map</button>
+                  {includeWalk && (
+                    <label>
+                      Network start (longitude,latitude)
+                      <input
+                        aria-label="Network starting point"
+                        autoComplete="off"
+                        name="terrain-network-start"
+                        value={start}
+                        onChange={(e) => setStart(e.target.value)}
+                      />
+                    </label>
+                  )}
+                  <label>
+                    Optional pinned departure (longitude,latitude)
+                    <input
+                      aria-label="Pinned network departure"
+                      autoComplete="off"
+                      name="terrain-network-departure"
+                      value={pinned}
+                      onChange={(e) => setPinned(e.target.value)}
+                    />
+                  </label>
+                  <p>
+                    Preferences <Help topic="weights" />. Balanced preferences are one each. Weights
+                    are relative costs, not walking times or safety predictions. Distance always
+                    contributes.
+                  </p>
+                  {Object.entries(weights).map(([k, v]) => (
+                    <label key={k}>
+                      Prefer less{' '}
+                      {k === 'gain'
+                        ? 'cumulative climbing'
+                        : k === 'slope'
+                          ? 'steep terrain'
+                          : k + ' cover'}
+                      : {v}
+                      <small className="preference-help">
+                        {k === 'gain'
+                          ? 'Penalizes total uphill climbing along the path.'
+                          : k === 'slope'
+                            ? 'Penalizes steeper cells even below the slope limit.'
+                            : k === 'tree'
+                              ? 'Penalizes mapped tree cover along the path.'
+                              : 'Penalizes mapped shrub cover along the path.'}{' '}
+                        Higher values accept more distance to avoid this feature; zero removes its
+                        penalty.
+                      </small>
+                      <input
+                        aria-label={`Approach ${k} weight`}
+                        disabled={busy}
+                        type="range"
+                        min="0"
+                        max="5"
+                        step=".5"
+                        value={v}
+                        onChange={(e) => setWeights((w) => ({ ...w, [k]: +e.target.value }))}
+                      />
+                    </label>
+                  ))}
+                  <label>
+                    Maximum modeled slope (degrees) <Help topic="slope" />
+                    <DecimalField
+                      key={focusedId + ':' + scenarioId}
+                      disabled={busy}
+                      aria-label="Maximum approach slope"
+                      value={maximum}
+                      min={Number.MIN_VALUE}
+                      max={
+                        currentScenario?.maximum_slope_deg === maximum ? Math.max(35, maximum) : 35
+                      }
+                      onChange={setMaximum}
+                      onValidity={(v) => setPreferencesValid(v)}
+                    />
+                  </label>
+                  <p>
+                    Cells above this limit are excluded, regardless of preferences. The 25° default
+                    is a desktop screening threshold. Unknown vegetation receives maximum cover
+                    penalties when avoidance is enabled.
+                  </p>
+                </details>
+                {(!kept.length ||
+                  !area ||
+                  editing ||
+                  active ||
+                  busy ||
+                  !selectedNetworks.length ||
+                  !boundaryReady ||
+                  !preferencesValid ||
+                  maximum <= 0 ||
+                  maximum > 35) && (
+                  <p>
+                    {!preferencesValid || maximum <= 0 || maximum > 35
+                      ? 'Enter a complete slope limit above 0 and up to 35 degrees.'
+                      : editing
+                        ? 'Confirm this boundary to continue.'
+                        : !area
+                          ? 'Confirm an approach search boundary that includes your spots and a road or trail.'
+                          : !selectedNetworks.length
+                            ? 'Select mapped road/trail sources.'
+                            : !boundaryReady
+                              ? 'Resolve the boundary and road/trail check above before calculating.'
+                              : active || busy
+                                ? 'Wait for the current job or cancel it.'
+                                : 'Shortlist at least one setup.'}
                   </p>
                 )}
-                {includeWalk && (
-                  <button onClick={() => setPick('start')}>Choose network start on map</button>
-                )}
-              </details>
-              <details>
-                <summary>More options · pinned departure and preferences</summary>
-                <button onClick={() => setPick('pinned')}>Pin a departure on map</button>
-                {includeWalk && (
-                  <label>
-                    Network start (longitude,latitude)
-                    <input
-                      aria-label="Network starting point"
-                      autoComplete="off"
-                      name="terrain-network-start"
-                      value={start}
-                      onChange={(e) => setStart(e.target.value)}
-                    />
-                  </label>
-                )}
-                <label>
-                  Optional pinned departure (longitude,latitude)
-                  <input
-                    aria-label="Pinned network departure"
-                    autoComplete="off"
-                    name="terrain-network-departure"
-                    value={pinned}
-                    onChange={(e) => setPinned(e.target.value)}
-                  />
-                </label>
-                <p>
-                  Preferences <Help topic="weights" />. Balanced preferences are one each. Weights
-                  are relative costs, not walking times or safety predictions. Distance always
-                  contributes.
-                </p>
-                {Object.entries(weights).map(([k, v]) => (
-                  <label key={k}>
-                    Prefer less{' '}
-                    {k === 'gain'
-                      ? 'cumulative climbing'
-                      : k === 'slope'
-                        ? 'steep terrain'
-                        : k + ' cover'}
-                    : {v}
-                    <small className="preference-help">
-                      {k === 'gain'
-                        ? 'Penalizes total uphill climbing along the path.'
-                        : k === 'slope'
-                          ? 'Penalizes steeper cells even below the slope limit.'
-                          : k === 'tree'
-                            ? 'Penalizes mapped tree cover along the path.'
-                            : 'Penalizes mapped shrub cover along the path.'}{' '}
-                      Higher values accept more distance to avoid this feature; zero removes its
-                      penalty.
-                    </small>
-                    <input
-                      aria-label={`Approach ${k} weight`}
-                      disabled={busy}
-                      type="range"
-                      min="0"
-                      max="5"
-                      step=".5"
-                      value={v}
-                      onChange={(e) => setWeights((w) => ({ ...w, [k]: +e.target.value }))}
-                    />
-                  </label>
-                ))}
-                <label>
-                  Maximum modeled slope (degrees) <Help topic="slope" />
-                  <DecimalField
-                    key={focusedId + ':' + scenarioId}
-                    disabled={busy}
-                    aria-label="Maximum approach slope"
-                    value={maximum}
-                    min={Number.MIN_VALUE}
-                    max={
-                      currentScenario?.maximum_slope_deg === maximum ? Math.max(35, maximum) : 35
-                    }
-                    onChange={setMaximum}
-                    onValidity={(v) => setPreferencesValid(v)}
-                  />
-                </label>
-                <p>
-                  Cells above this limit are excluded, regardless of preferences. The 25° default is
-                  a desktop screening threshold. Unknown vegetation receives maximum cover penalties
-                  when avoidance is enabled.
-                </p>
-              </details>
-              {(!kept.length ||
-                !area ||
-                editing ||
-                active ||
-                busy ||
-                !selectedNetworks.length ||
-                !boundaryReady ||
-                !preferencesValid ||
-                maximum <= 0 ||
-                maximum > 35) && (
-                <p>
-                  {!preferencesValid || maximum <= 0 || maximum > 35
-                    ? 'Enter a complete slope limit above 0 and up to 35 degrees.'
-                    : editing
-                      ? 'Confirm this boundary to continue.'
-                      : !area
-                        ? 'Confirm an approach search boundary that includes your spots and a road or trail.'
-                        : !selectedNetworks.length
-                          ? 'Select mapped road/trail sources.'
-                          : !boundaryReady
-                            ? 'Resolve the boundary and road/trail check above before calculating.'
-                            : active || busy
-                              ? 'Wait for the current job or cancel it.'
-                              : 'Shortlist at least one setup.'}
-                </p>
-              )}
-            </fieldset>
-            <button
-              className="primary wide approach-primary"
-              disabled={
-                !kept.length ||
-                !area ||
-                editing ||
-                active ||
-                busy ||
-                !selectedNetworks.length ||
-                !boundaryReady ||
-                !preferencesValid ||
-                maximum <= 0 ||
-                maximum > 35 ||
-                !hydrated ||
-                !workflow?.points[focusedId]?.shortlisted
-              }
-              onClick={() => void planApproaches()}
-            >
-              {busy
-                ? 'Submitting approach calculation…'
-                : scenarioJob && ['running', 'cancelling'].includes(scenarioJob.status)
-                  ? 'Calculating approaches…'
-                  : scenarioId || attempted
-                    ? 'Recalculate approaches for ' + focusedId
-                    : 'Calculate approaches for ' + focusedId}
-            </button>
-          </details>
-          <p className="hint">
-            Recommended uses your preferences. Shortest distance minimizes modeled distance within
-            the same constraints. Brush avoidance raises tree and shrub preferences to at least 3
-            and keeps the other preferences. Identical paths are combined. Mapped cover is coarse
-            data, not individual trees.
-          </p>
+              </fieldset>
+              <button
+                className="primary wide approach-primary"
+                disabled={
+                  !kept.length ||
+                  !area ||
+                  editing ||
+                  active ||
+                  busy ||
+                  !selectedNetworks.length ||
+                  !boundaryReady ||
+                  !preferencesValid ||
+                  maximum <= 0 ||
+                  maximum > 35 ||
+                  !hydrated ||
+                  !workflow?.points[focusedId]?.shortlisted
+                }
+                onClick={() => void planApproaches()}
+              >
+                {busy
+                  ? 'Submitting approach calculation…'
+                  : scenarioJob && ['running', 'cancelling'].includes(scenarioJob.status)
+                    ? 'Calculating approaches…'
+                    : scenarioId || attempted
+                      ? 'Recalculate approaches for ' + focusedId
+                      : 'Calculate approaches for ' + focusedId}
+              </button>
+            </details>
+          )}
+          {manualMode && (
+            <p className="hint">
+              Recommended uses your preferences. Shortest distance minimizes modeled distance within
+              the same constraints. Brush avoidance raises tree and shrub preferences to at least 3
+              and keeps the other preferences. Identical paths are combined. Mapped cover is coarse
+              data, not individual trees.
+            </p>
+          )}
           {busy && scenario?.results && (
             <p role="status">Prior preview retained while the new calculation starts.</p>
           )}
@@ -2067,7 +2235,7 @@ export default function ScoutingTools({
                           </button>
                         </>
                       )}
-                      {!!r.alternatives.length && (
+                      {manualMode && !!r.alternatives.length && (
                         <div className="alternative-nav">
                           <p>
                             Alternative {(alternativesOnMap[focusedId] || 0) + 1} of{' '}
@@ -2121,6 +2289,7 @@ export default function ScoutingTools({
                             className="primary"
                             disabled={
                               savingApproach ||
+                              (!manualMode && !!workflow?.points[r.point.id]?.approach) ||
                               busy ||
                               active ||
                               !preferencesValid ||
@@ -2130,7 +2299,13 @@ export default function ScoutingTools({
                             }
                             onClick={() => void nextSpot('approach', j)}
                           >
-                            {savingApproach ? 'Saving approach…' : 'Use this approach & next spot'}
+                            {savingApproach
+                              ? 'Saving approach…'
+                              : !manualMode && workflow?.points[r.point.id]?.approach
+                                ? 'Suggested path selected'
+                                : manualMode
+                                  ? 'Use this approach & next spot'
+                                  : 'Use suggested path'}
                           </button>
                           <button
                             disabled={!map || savingApproach}

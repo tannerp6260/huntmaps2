@@ -121,6 +121,8 @@ def save(run, body, jobs=None):
                 "boundary_confirmed",
             }.issubset(draft):
                 raise ValueError("Invalid approach preferences")
+            if draft.get("mode") not in (None, "suggested", "alternatives"):
+                raise ValueError("Choose suggested approach or alternatives")
             if draft.get("travel_area") is not None:
                 geometry(draft["travel_area"])
             if not isinstance(draft["exclusions"], list):
@@ -196,9 +198,13 @@ def save(run, body, jobs=None):
                 "start",
                 "pinned",
                 "attempted",
+                "mode",
             )
             draft = dict(
-                draft, attempted=draft.get("attempted", False), alternative=index
+                draft,
+                attempted=draft.get("attempted", False),
+                alternative=index,
+                mode=draft.get("mode") or "alternatives",
             )
             v["defaults"] = {
                 k: draft[k] for k in ("weights", "maximum_slope_deg", "kinds")

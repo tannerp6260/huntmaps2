@@ -1,3 +1,4 @@
+import { UnitChooser, UnitMap, type PackSelection } from './unit-packs';
 import {
   useHabitat,
   HabitatSelector,
@@ -32,6 +33,7 @@ import {
   type TargetCriteria,
 } from './target-criteria';
 import NetworkMap from './network-map';
+import Roadless from './roadless';
 import AccessSampling, { type Sampling } from './access-sampling';
 import ScoutingTools, { type AppliedFilter } from './scouting-tools';
 import { updateMapLayers, type CoverageDisplay } from './map-layers';
@@ -238,6 +240,9 @@ function App() {
   const training = useTraining();
   const [newRun, setNewRun] = useState(training.active && training.progress?.lesson === 'area');
   const [startupOpen, setStartupOpen] = useState(true);
+  const [unitPack, setUnitPack] = useState<PackSelection | null>(null);
+  const [roadlessVisible, setRoadlessVisible] = useState(false);
+  const mapPack = newRun ? unitPack : run?.unit_pack || null;
   const [aboutFindOpen, setAboutFindOpen] = useState(false);
   const [generationOpen, setGenerationOpen] = useState(false);
   const [generationMessage, setGenerationMessage] = useState('');
@@ -502,6 +507,7 @@ function App() {
     [goLat, setGoLat] = useState(''),
     [goLon, setGoLon] = useState('');
   const generationInputs = inputSignature({
+    unitPack,
     name,
     radius,
     minutes,
@@ -1345,6 +1351,7 @@ function App() {
         inputs: {
           name,
           import_id: imported?.id,
+          ...(unitPack ? { unit_id: unitPack.unit_id, pack_version: unitPack.version } : {}),
           polygon,
           radius_m: radius,
           observation_minutes: minutes,
@@ -1408,6 +1415,7 @@ function App() {
     setNewRun(false);
   }
   function beginNewArea() {
+    setUnitPack(null);
     setGenerationOpen(false);
     setGenerationMessage('');
     setGenerationJob(undefined);
@@ -1503,6 +1511,7 @@ function App() {
               ' job. Retained results are unchanged.',
           );
         const p = await api('/plans/' + j.plan);
+        setUnitPack(p.unit_pack || null);
         setImported(null);
         setPolygon('');
         setName(p.name);
@@ -2758,6 +2767,9 @@ function App() {
           {ready && run && (
             <TerrainControls map={map.current!} runId={run.id} drawing={drawing} newArea={newRun} />
           )}
+          {ready && (
+            <UnitMap map={map.current!} selection={mapPack} center={newRun} onError={setError} />
+          )}
           <div className="map-heading" data-tour="view-switches">
             <b>
               {newRun
@@ -2818,12 +2830,13 @@ function App() {
                 {Number(imagery) +
                   Number(visibility && !newRun && !planningApproaches) +
                   Number(classes && !newRun && !collection && !planningApproaches) +
-                  Number(sectors && !newRun && !planningApproaches)}
+                  Number(sectors && !newRun && !planningApproaches) +
+                  Number(roadlessVisible)}
               </span>
             </summary>
             <h4 className="layer-group-title">Base map</h4>
             <Meaning topic="layers" />
-            {ready && <OnlineImagery map={map.current!} />}
+            {ready && !startupOpen && <OnlineImagery map={map.current!} />}
             <label>
               <input
                 type="checkbox"
@@ -2842,6 +2855,14 @@ function App() {
               onChange={(e) => setImageOpacity(+e.target.value)}
             />
             <h4 className="layer-group-title">Analysis overlays</h4>
+            {ready && !startupOpen && !training.active && (
+              <Roadless
+                map={map.current!}
+                unitPack={mapPack}
+                contextKey={newRun ? 'new' : run?.id || ''}
+                onVisible={setRoadlessVisible}
+              />
+            )}
             {planningApproaches && (
               <small>Visible-terrain overlays are paused while planning approaches.</small>
             )}
@@ -2891,6 +2912,8 @@ function App() {
             </label>
             {!training.active && (
               <NetworkMap
+                localOnly={!!mapPack}
+                unitId={mapPack?.unit_id}
                 map={ready ? map.current : null}
                 api={api}
                 bounds={!newRun ? run?.bounds : undefined}
@@ -2978,7 +3001,9 @@ function App() {
           <div className="map-footer">
             <span>
               {newRun
-                ? 'Online context when enabled · cached context where covered · analysis sources pending'
+                ? mapPack
+                  ? `${mapPack.label} · core sources ready locally`
+                  : 'Online context when enabled · cached context where covered · analysis sources pending'
                 : imagery && run?.imagery.length
                   ? `Cached aerial imagery: ${[...new Set(run.imagery.flatMap((i) => i.dates || [i.acquisition_date]))].join(', ')} · ${run.id.startsWith('soap-creek') ? 'USGS/USDA NAIP' : 'supplied local imagery'}; online imagery fills gaps when enabled`
                   : 'Terrain hillshade · online imagery fills gaps when enabled'}
@@ -3154,7 +3179,26 @@ function App() {
                 </small>
               </details>
               <div className="eyebrow">Find places to glass</div>
-              <h2>Start with your observer area</h2>
+              <UnitChooser
+                selected={unitPack}
+                onSelect={(p) => {
+                  intakeSession.current++;
+                  if (generationIntent.current) generationIntent.current.cancelled = true;
+                  setUnitPack(p);
+                  setImported(null);
+                  setPolygon('');
+                  setPlan(null);
+                  setPlanId('');
+                  setRecovery(null);
+                  setGenerationOpen(false);
+                  setGenerationJob(undefined);
+                  setPlanningApproaches(false);
+                  setSelected('');
+                  setCompare([]);
+                  setHiddenViews([]);
+                }}
+              />
+              <h2>Choose a local observer area</h2>
               {planJob && (
                 <div className="generation-status" data-testid="generation-status">
                   <JobProgress job={planJob} />
@@ -3549,6 +3593,7 @@ function App() {
                     map={ready ? map.current : null}
                     api={api}
                     initialSearch={workingLoaded ? run?.search_summary?.options : undefined}
+                    defaultMaximum={connections.maximum}
                     locationStamp={
                       workingStamp +
                       JSON.stringify(manualPoints.map((p) => [p.id, p.longitude, p.latitude]))

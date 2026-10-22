@@ -229,6 +229,7 @@ try {
   await staleCompleted;
   assert.equal(await section.getAttribute('data-screen-run'), f.retry_run);
   await page.getByRole('button', { name: 'Plan approaches (1 shortlisted)', exact: true }).click();
+  await page.getByRole('button', { name: 'Explore alternatives or edit approach', exact: true }).click();
   await page.getByText('A modeled connection appears at 30°.', { exact: true }).waitFor();
   assert.equal(
     (await (await page.request.get(base + '/api/approaches/' + f.scenario)).json()).scenario

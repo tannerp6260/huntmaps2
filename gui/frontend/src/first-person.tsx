@@ -543,7 +543,12 @@ export default function FirstPerson({
     )
       return;
     autoChecked.current = url;
-    void action('/api/first-person/plans', { run_id: runId, ids: [cid], fidelity: 'best' });
+    if (meta.core_available) startBasic.current = identity;
+    void action('/api/first-person/plans', {
+      run_id: runId,
+      ids: [cid],
+      fidelity: meta.core_available ? 'terrain' : 'best',
+    });
   }, [meta?.status, url, busy, active, globalBusy, fallbackReason]);
   useEffect(() => {
     if (

@@ -63,6 +63,7 @@ try {
  await page.waitForFunction(()=>!Array.from(document.querySelectorAll('.workflow-stages button')).find(b=>b.textContent.includes('Approach')).disabled);
  await page.screenshot({path:out+'/01-find-desktop.png',fullPage:true});
  await activate(nav.getByRole('button',{name:/Approach.*selected/}));
+ await page.getByRole('button',{name:'Explore alternatives or edit approach',exact:true}).click();
  await page.getByText('Confirm this boundary to continue.',{exact:true}).waitFor();
  const lon=p.longitude,lat=p.latitude;
  const network={type:'LineString',coordinates:[[lon-.0008,lat-.001],[lon-.0008,lat+.001]]};
