@@ -1,0 +1,9 @@
+{
+  "head": "6ec6a5510058edb5668fb0ad83596f2c8795caa6",
+  "branch": "feature/hunter-workflow-ux",
+  "tracked_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "status": "## feature/hunter-workflow-ux\n?? HuntMaps2_Overnight_UX_Coordinator_Prompt.md\n?? docs/gui/overnight-ux/sol-resume/\n",
+  "model": "gpt-6.1-sol",
+  "effort": "high",
+  "original_workflow_commit": "6ec6a5510058edb5668fb0ad83596f2c8795caa6"
+}

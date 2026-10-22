@@ -1,0 +1,10 @@
+{
+  "files": 45980,
+  "bytes": 8976127263,
+  "changed": [],
+  "missing": [],
+  "added": [],
+  "seconds": 11.514497864991426,
+  "original_inventory_sha256": "3f8dbf39d9516dd19b4cbab1dffea4c45cdd254f3c1ea1d9cb732c90aec451c6",
+  "note": "Fresh content verification after all Stage1 tests, against preserved protected inventory."
+}

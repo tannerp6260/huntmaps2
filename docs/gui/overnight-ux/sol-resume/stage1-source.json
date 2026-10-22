@@ -1,0 +1,16 @@
+{
+  "head": "6ec6a5510058edb5668fb0ad83596f2c8795caa6",
+  "branch": "feature/hunter-workflow-ux",
+  "tracked_diff_sha256": "4d6a6e5a99d25eabe8e813e5485ed86bf558e933fa7b0de42044dba704703fcb",
+  "diff_command": "git diff --binary HEAD",
+  "runtime_files": {
+    "trail_scout/web/src/main.tsx": "eed3d2052690ffa8a83037c88fabc24420babbc2923c624fc66ace3f61e42d04",
+    "trail_scout/web/src/style.css": "61f5163e83d77a45c7dc11115b0b8bc6d6d48157d263debcefa2002bb0ee130c",
+    "trail_scout/web/src/recommendation.tsx": "9df803187d74d14788ebd81d90b2aab572c3deb11568c8c2f90f5b8beb0b4bc5"
+  },
+  "untracked_implementation": [
+    "trail_scout/web/src/recommendation.tsx"
+  ],
+  "browser_script_sha256": "3b69d1af7ea61cbf608d1ffe644551a096723f29e17e38d3b98ff72b21442ce2",
+  "original_prompt_sha256": "6469ac12e84ac948de2004f59f8b14db9eec0d89130bad0698173c6e87ede1e6"
+}

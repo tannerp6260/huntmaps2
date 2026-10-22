@@ -1,0 +1,271 @@
+{
+  "stage": 1,
+  "model": "gpt-6.1-sol",
+  "reasoning_effort": "high",
+  "source": {
+    "head": "6ec6a5510058edb5668fb0ad83596f2c8795caa6",
+    "branch": "feature/hunter-workflow-ux",
+    "tracked_diff_sha256": "4d6a6e5a99d25eabe8e813e5485ed86bf558e933fa7b0de42044dba704703fcb",
+    "diff_command": "git diff --binary HEAD",
+    "runtime_files": {
+      "trail_scout/web/src/main.tsx": "eed3d2052690ffa8a83037c88fabc24420babbc2923c624fc66ace3f61e42d04",
+      "trail_scout/web/src/style.css": "61f5163e83d77a45c7dc11115b0b8bc6d6d48157d263debcefa2002bb0ee130c",
+      "trail_scout/web/src/recommendation.tsx": "9df803187d74d14788ebd81d90b2aab572c3deb11568c8c2f90f5b8beb0b4bc5"
+    },
+    "untracked_implementation": [
+      "trail_scout/web/src/recommendation.tsx"
+    ],
+    "browser_script_sha256": "3b69d1af7ea61cbf608d1ffe644551a096723f29e17e38d3b98ff72b21442ce2",
+    "original_prompt_sha256": "6469ac12e84ac948de2004f59f8b14db9eec0d89130bad0698173c6e87ede1e6"
+  },
+  "baseline": {
+    "steps": [
+      "Select Flattop Bench entry",
+      "Expand timed practical settings",
+      "Opt into timed practical plans",
+      "Compare",
+      "Open foreground inspection",
+      "Open Schedule to read observation/return",
+      "Name plan",
+      "Save",
+      "Export GPX"
+    ],
+    "positions": {
+      "compare": {
+        "x": 24,
+        "y": 1278.796875,
+        "width": 256,
+        "height": 50
+      },
+      "firstOption": {
+        "x": 334,
+        "y": 746.796875,
+        "width": 242,
+        "height": 182
+      },
+      "selectedOption": {
+        "x": 334,
+        "y": 746.796875,
+        "width": 242,
+        "height": 182
+      },
+      "save": {
+        "x": 617,
+        "y": 2788.984375,
+        "width": 700,
+        "height": 38
+      }
+    },
+    "elapsedAnalysisUiMs": 18880.686647000002,
+    "recommended": {
+      "am": "8865d096a44376b7094c6a3822cf9f07",
+      "pm": "9779d39be307bf56030cce6be738ad7a"
+    },
+    "errors": [],
+    "external": [],
+    "overflow": {
+      "scroll": 820,
+      "viewport": 820
+    }
+  },
+  "accepted_browser": {
+    "elapsedAnalysisUiMs": 5958.129898,
+    "analysisId": "02fbbbd7b5844162a7767a2f98f87642",
+    "recommended": {
+      "am": "8865d096a44376b7094c6a3822cf9f07",
+      "pm": "9779d39be307bf56030cce6be738ad7a"
+    },
+    "settings": {
+      "date": "2026-10-31",
+      "profile": {
+        "reserve_fraction": 0.25,
+        "pace_mph": 1.5,
+        "time_margin": 1.35,
+        "max_hours": 7,
+        "max_miles": 2.5,
+        "max_gain_ft": 750,
+        "offtrail_miles": 0.25,
+        "offtrail_minutes": 35,
+        "max_offtrail_slope": 20,
+        "max_route_grade": 0.3,
+        "max_steep_m": 250,
+        "steep_grade": 0.15,
+        "max_tree": 0.45,
+        "max_shrub": 0.65,
+        "condition_factor": 1,
+        "label": "Together \u00b7 conservative",
+        "explanation": "Editable shared-party planning defaults: 2.5 miles total walking / 750 ft cumulative gain, with 25% held in reserve. Uncalibrated; the reported Dutton difficulty is not a measured capacity.",
+        "preset": "together"
+      },
+      "start_id": "06ad1da6c4d017650a307b66ceaa7693",
+      "custom_start": null,
+      "vehicle": "truck",
+      "corridor_m": 2500,
+      "view_radius_m": 1500,
+      "search_envelope_m": 300,
+      "candidate_budget": 32,
+      "explore_unknown": false,
+      "excluded_segments": [],
+      "excluded_areas": [],
+      "rejected": [],
+      "pinned": [],
+      "restrictions": [],
+      "schedule": {
+        "am_start_offset": 0,
+        "am_end_offset": 180,
+        "pm_start_offset": -180,
+        "pm_end_offset": 0,
+        "min_glassing_minutes": 60,
+        "setup_minutes": 15,
+        "break_minutes": 20,
+        "dark_travel": false,
+        "earliest": "04:00",
+        "latest": "21:00",
+        "vehicle_transition_minutes": 0
+      },
+      "travel_area": null,
+      "target_area": null,
+      "practical": null,
+      "practical_plan": {
+        "version": 1,
+        "policy": {
+          "task": "identify",
+          "leaf": "unknown",
+          "context_m": 90,
+          "conifer": 0.35,
+          "meadow": 0.5
+        },
+        "search_minutes_cap": null
+      },
+      "vehicle_width_inches": null
+    },
+    "panelPosition": {
+      "x": 333,
+      "y": 254.796875,
+      "width": 1005,
+      "height": 353.5
+    },
+    "savedId": "f3bac9b363da4cdb972936a39ab20761",
+    "selectedCoordinates": [
+      [
+        -106.91477051658299,
+        38.66483519955249
+      ],
+      [
+        -106.90947795537001,
+        38.66443940317754
+      ]
+    ],
+    "layouts": [
+      {
+        "width": 1366,
+        "scrollWidth": 1366
+      },
+      {
+        "width": 820,
+        "scrollWidth": 820
+      },
+      {
+        "width": 390,
+        "scrollWidth": 390
+      }
+    ],
+    "cancelledJob": {
+      "id": "fa14650aef24401cbf44f2c9e189a30f",
+      "status": "cancelled"
+    },
+    "errors": [],
+    "external": [],
+    "coverageImagesRequested": [
+      "http://127.0.0.1:8793/artifacts/ad60f84375cc4fb28fd0e1042f00bfd3/relief.png",
+      "http://127.0.0.1:8793/artifacts/ad60f84375cc4fb28fd0e1042f00bfd3/coverage-2e6a42e97a47b9acbac1feb3386b95c4.png",
+      "http://127.0.0.1:8793/artifacts/ad60f84375cc4fb28fd0e1042f00bfd3/relief.png",
+      "http://127.0.0.1:8793/artifacts/ad60f84375cc4fb28fd0e1042f00bfd3/relief.png",
+      "http://127.0.0.1:8793/artifacts/02fbbbd7b5844162a7767a2f98f87642/relief.png",
+      "http://127.0.0.1:8793/artifacts/02fbbbd7b5844162a7767a2f98f87642/coverage-2e6a42e97a47b9acbac1feb3386b95c4.png",
+      "http://127.0.0.1:8793/artifacts/02fbbbd7b5844162a7767a2f98f87642/coverage-7447cbd00454777eb9b35c7c88b82e97.png",
+      "http://127.0.0.1:8793/artifacts/02fbbbd7b5844162a7767a2f98f87642/coverage-2e6a42e97a47b9acbac1feb3386b95c4.png",
+      "http://127.0.0.1:8793/artifacts/02fbbbd7b5844162a7767a2f98f87642/coverage-e1261986ee679bd60351cb7c99eb2fc2.png",
+      "http://127.0.0.1:8793/artifacts/02fbbbd7b5844162a7767a2f98f87642/coverage-2e6a42e97a47b9acbac1feb3386b95c4.png"
+    ]
+  },
+  "timing_caveat": "18.881s fresh baseline versus 5.958s accepted warm rerun are different cache conditions; no speed, task-time or participant improvement claim.",
+  "full_trailscout_gate": {
+    "results": [
+      {
+        "stage": "python-format",
+        "exit_code": 0,
+        "seconds": 0.3003389349905774
+      },
+      {
+        "stage": "frontend-format",
+        "exit_code": 0,
+        "seconds": 0.5554854740039445
+      },
+      {
+        "stage": "build",
+        "exit_code": 0,
+        "seconds": 4.671730149013456
+      },
+      {
+        "stage": "backend",
+        "exit_code": 0,
+        "seconds": 71.52509804998408
+      },
+      {
+        "stage": "legacy-compatibility",
+        "exit_code": 0,
+        "seconds": 38.99612140501267
+      },
+      {
+        "stage": "browser",
+        "exit_code": 0,
+        "seconds": 112.83244646101957
+      },
+      {
+        "stage": "practical-browser",
+        "exit_code": 0,
+        "seconds": 17.37122504398576
+      },
+      {
+        "stage": "timed-practical-browser",
+        "exit_code": 0,
+        "seconds": 51.14047439899878
+      }
+    ],
+    "evidence": "/tmp/huntmaps-ux-sol-stage1/gate/trailscout-gate-l8s21apr"
+  },
+  "gate_caveat": "Full gate exit 0 during development; small frontend edits occurred while it ran. Final-source build, format and focused browser passed afterward. This is not final Stage2 release acceptance. GUI gate not run in Stage1.",
+  "attempts": [
+    {
+      "path": "/tmp/huntmaps-ux-sol-stage1/baseline.log",
+      "outcome": "passed fresh unchanged-code baseline"
+    },
+    {
+      "path": "/tmp/huntmaps-ux-sol-stage1/browser-first.log",
+      "outcome": "failed exact Plan period accessible label; implementation fixed"
+    },
+    {
+      "path": "/tmp/huntmaps-ux-sol-stage1/browser-rerun.log",
+      "outcome": "passed before later pending/stale and schedule-focus refinements"
+    },
+    {
+      "path": "/tmp/huntmaps-ux-sol-stage1/browser-final.log",
+      "outcome": "failed new test locator exact button name omitted arrow; test corrected with existing anchored gate pattern"
+    },
+    {
+      "path": "/tmp/huntmaps-ux-sol-stage1/browser-final-rerun.log",
+      "outcome": "passed including cancellation; visual review then found schedule jump target too early"
+    },
+    {
+      "path": "/tmp/huntmaps-ux-sol-stage1/browser-accepted.log",
+      "outcome": "passed on final implementation including actual schedule focus"
+    }
+  ],
+  "visual_inspection": [
+    "Baseline laptop start and result viewport",
+    "Initial laptop panel and 820/390 stale layouts",
+    "Final laptop decision panel, actual selected schedule and 390 layout"
+  ],
+  "remaining": "REMAINING.md"
+}

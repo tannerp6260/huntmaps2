@@ -1,0 +1,66 @@
+{
+  "stage": 1,
+  "status": "complete",
+  "branch": "feature/hunter-workflow-ux",
+  "source_identity": {
+    "head": "6ec6a5510058edb5668fb0ad83596f2c8795caa6",
+    "tracked_diff_sha256": "4d6a6e5a99d25eabe8e813e5485ed86bf558e933fa7b0de42044dba704703fcb",
+    "notes": "Final source passed build, format and focused browser checks. Full TrailScout development gate passed while frontend refinements occurred; final release gates remain Stage2. No commits or staging."
+  },
+  "artifacts": [
+    "docs/gui/overnight-ux/sol-resume/DESIGN.md",
+    "docs/gui/overnight-ux/sol-resume/STAGE1.md",
+    "docs/gui/overnight-ux/sol-resume/REMAINING.md",
+    "docs/gui/overnight-ux/sol-resume/stage1-evidence.json",
+    "docs/gui/overnight-ux/sol-resume/stage1-source.json",
+    "docs/gui/overnight-ux/sol-resume/stage1-artifacts.json",
+    "docs/gui/overnight-ux/sol-resume/stage1-preservation-after.json",
+    "docs/gui/overnight-ux/sol-resume/stage1-cli-evidence.txt",
+    "trail_scout/web/src/recommendation.tsx SHA256 9df803187d74d14788ebd81d90b2aab572c3deb11568c8c2f90f5b8beb0b4bc5",
+    "/tmp/huntmaps-ux-sol-stage1/accepted"
+  ],
+  "checks": [
+    {
+      "command": "./trailscout build",
+      "outcome": "Passed on final source; existing bundle-size warning remains.",
+      "evidence": "/tmp/huntmaps-ux-sol-stage1/build-accepted.log"
+    },
+    {
+      "command": "node trail_scout/web/node_modules/prettier/bin/prettier.cjs --check trail_scout/web/src",
+      "outcome": "Passed on final source.",
+      "evidence": "/tmp/huntmaps-ux-sol-stage1/format-accepted.log"
+    },
+    {
+      "command": "TRAILSCOUT_URL=http://127.0.0.1:8793 TRAILSCOUT_SCREENSHOTS=/tmp/huntmaps-ux-sol-stage1/accepted node docs/gui/overnight-ux/sol-resume/stage1-browser.mjs",
+      "outcome": "Passed real GMU54 selection, map, schedule, save/export, cancellation and keyboard checks; no overflow at 1366/820/390px.",
+      "evidence": "/tmp/huntmaps-ux-sol-stage1/browser-accepted.log"
+    },
+    {
+      "command": "TMPDIR=/tmp/huntmaps-ux-sol-stage1/gate ./trailscout check",
+      "outcome": "Exit 0: eight stages, 48 app tests, 50 compatibility tests and three browser scripts. Development pass spanning frontend edits.",
+      "evidence": "/tmp/huntmaps-ux-sol-stage1/gate/trailscout-gate-l8s21apr/gate.json"
+    },
+    {
+      "command": "Fresh protected inventory SHA256 verification",
+      "outcome": "45,980 files unchanged; none missing or added.",
+      "evidence": "docs/gui/overnight-ux/sol-resume/stage1-preservation-after.json"
+    },
+    {
+      "command": "git diff --check; git diff --cached --quiet",
+      "outcome": "Passed; no staged changes.",
+      "evidence": "docs/gui/overnight-ux/sol-resume/stage1-source.json"
+    }
+  ],
+  "findings": [
+    "Implemented one recommendation-to-inspection/save slice using unchanged backend recommendations, routes, coordinates and export schemas.",
+    "Fresh baseline and final Flattop recommendation IDs match. Recommendation facts and actions now appear above the map.",
+    "Fixed selector accessibility, schedule focus and stale saving after cancellation. Failed and intermediate runs remain separately recorded.",
+    "Design, visual evidence and explicit Stage2 tasks are ready. No task-time, biological or field-validation improvement claimed."
+  ],
+  "blockers": [],
+  "remaining_tasks": [
+    "Stage2: finish essential inputs and usable-budget display, consolidate evidence, complete persistence/recovery/accessibility, and run final TrailScout/GUI release gates.",
+    "Stage3: fresh independent Sol High browser review; at most one bounded Stage4 repair if required."
+  ],
+  "launch": "./trailscout build, then ./trailscout serve --state /tmp/huntmaps-ux-sol-review-stage1 --port 8795. Open http://127.0.0.1:8795; select Flattop Bench/Together, enable timed practical plans and compare."
+}

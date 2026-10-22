@@ -1,0 +1,195 @@
+{
+  "note": "Large artifacts remain disposable/ignored. Hashes preserve evidence identity, not availability forever.",
+  "artifacts": [
+    {
+      "path": "/tmp/huntmaps-ux-sol-stage1/accepted/01-result-laptop.png",
+      "bytes": 367326,
+      "sha256": "0e4c9d87ad7284ece60858f0673076907e763bbb8affe48054feadbafaeec138"
+    },
+    {
+      "path": "/tmp/huntmaps-ux-sol-stage1/accepted/01-result-laptop.txt",
+      "bytes": 7720,
+      "sha256": "bfab81525e75b10ca5545d6e7116f92861fb5e0f99620cd7e70c4d30452d57e1"
+    },
+    {
+      "path": "/tmp/huntmaps-ux-sol-stage1/accepted/02-schedule-focus.png",
+      "bytes": 55815,
+      "sha256": "b707f7167fddaacbc726f628e42efa5ea6dd7de6f52d7c3271c979ab8bfdf405"
+    },
+    {
+      "path": "/tmp/huntmaps-ux-sol-stage1/accepted/02-schedule-focus.txt",
+      "bytes": 7408,
+      "sha256": "14dc1a55cc3357e4663e9891dd4bd3e06d4addc6e8e04bb86d8fc164c19bd30f"
+    },
+    {
+      "path": "/tmp/huntmaps-ux-sol-stage1/accepted/03-sightline-inspection.png",
+      "bytes": 272647,
+      "sha256": "3a1e6988379e324abc304ae3e2e3545b8356fae40d1f80f987977fbb7ecff928"
+    },
+    {
+      "path": "/tmp/huntmaps-ux-sol-stage1/accepted/03-sightline-inspection.txt",
+      "bytes": 9627,
+      "sha256": "04a18374e4533d461c57c1900f0d076fb719fa0b9967d335129e1255bab5adeb"
+    },
+    {
+      "path": "/tmp/huntmaps-ux-sol-stage1/accepted/04-stale-1366.png",
+      "bytes": 330069,
+      "sha256": "ce3538a49cff83651c18127a119ca429ef3366713a57cad72c643ecd9271d932"
+    },
+    {
+      "path": "/tmp/huntmaps-ux-sol-stage1/accepted/04-stale-1366.txt",
+      "bytes": 9940,
+      "sha256": "b73b4c62e0d85fe7f0abae1aacf355f3bf8df349bf7db606c605abf9680e2a2f"
+    },
+    {
+      "path": "/tmp/huntmaps-ux-sol-stage1/accepted/04-stale-390.png",
+      "bytes": 67764,
+      "sha256": "c2c4a4f39ee7fd1214040903ccd4fb06c613019cb6d10e053fe407315ce0816e"
+    },
+    {
+      "path": "/tmp/huntmaps-ux-sol-stage1/accepted/04-stale-390.txt",
+      "bytes": 9876,
+      "sha256": "d3e70a9a047b0d31f510b91f63b409a3afc1ed971b1b6d9fda0f7c08cd355fe8"
+    },
+    {
+      "path": "/tmp/huntmaps-ux-sol-stage1/accepted/04-stale-820.png",
+      "bytes": 132311,
+      "sha256": "fea0421dad1de9a7cebad0ebae66da7ae41c61ba058302c45789f094271eb0a3"
+    },
+    {
+      "path": "/tmp/huntmaps-ux-sol-stage1/accepted/04-stale-820.txt",
+      "bytes": 9899,
+      "sha256": "24e7e4d404d0e1f043fd25ee1f8447342a8b2d90ee57700e719adcc7a33bdf89"
+    },
+    {
+      "path": "/tmp/huntmaps-ux-sol-stage1/accepted/evidence.json",
+      "bytes": 3724,
+      "sha256": "2e29fefc0461428d8e55d9b070d28fa0cd4e49dbec9422869b311746ba3de611"
+    },
+    {
+      "path": "/tmp/huntmaps-ux-sol-stage1/accepted/selected.gpx",
+      "bytes": 17882,
+      "sha256": "3486d6a5d93c28f36be5b5ce3a9fd32379c57168e4644b200ba052d42809b5c1"
+    },
+    {
+      "path": "/tmp/huntmaps-ux-sol-stage1/baseline/01-start-laptop.png",
+      "bytes": 172153,
+      "sha256": "c0984b631464c7c795d73b13c87780b9c5fac810439cf6603f4ecf0d9b41dd7e"
+    },
+    {
+      "path": "/tmp/huntmaps-ux-sol-stage1/baseline/01-start-laptop.txt",
+      "bytes": 2468,
+      "sha256": "fd5d69f40c1d8eff5ea8a89a4ffac054c611cdac3112cc41aeb14f18320dc7eb"
+    },
+    {
+      "path": "/tmp/huntmaps-ux-sol-stage1/baseline/02-result-laptop.png",
+      "bytes": 779705,
+      "sha256": "9967b897e101cb081a360a7ca74b58006006d37de4f4436f7662c49373908bb1"
+    },
+    {
+      "path": "/tmp/huntmaps-ux-sol-stage1/baseline/02-result-laptop.txt",
+      "bytes": 7005,
+      "sha256": "639ff5bd7491ca88f528276e0a143d67e221011764c0a23e9b620d537be81c25"
+    },
+    {
+      "path": "/tmp/huntmaps-ux-sol-stage1/baseline/02-result-viewport.png",
+      "bytes": 434894,
+      "sha256": "f00bb75c292775b155260f8842a5f3d70a4c434f20ac8596b97546165c9e4460"
+    },
+    {
+      "path": "/tmp/huntmaps-ux-sol-stage1/baseline/03-inspection.png",
+      "bytes": 919498,
+      "sha256": "628950229c0458b237ea8b2e08b40e7498b8843629a549f1d9def0e6e016dde0"
+    },
+    {
+      "path": "/tmp/huntmaps-ux-sol-stage1/baseline/03-inspection.txt",
+      "bytes": 8912,
+      "sha256": "6f03d91a082b7d06de96b677bb4e4ba137084509e5207e09c90617e74633c427"
+    },
+    {
+      "path": "/tmp/huntmaps-ux-sol-stage1/baseline/04-schedule.png",
+      "bytes": 901190,
+      "sha256": "92921b67c6b0dd7a7b1f1bfb6594a4a9046708303943cc6353393d8daf2671dc"
+    },
+    {
+      "path": "/tmp/huntmaps-ux-sol-stage1/baseline/04-schedule.txt",
+      "bytes": 8604,
+      "sha256": "7c9c99fda82b022bea1d2ccd54fbee0d8ecd84d20d6fab0fb9b8b3dad60319cf"
+    },
+    {
+      "path": "/tmp/huntmaps-ux-sol-stage1/baseline/05-narrow.png",
+      "bytes": 764640,
+      "sha256": "6a28f97d07d982e91efde8977c1125bf83a5bbcf038a6c3e462b4863de0cff83"
+    },
+    {
+      "path": "/tmp/huntmaps-ux-sol-stage1/baseline/05-narrow.txt",
+      "bytes": 8667,
+      "sha256": "8aa3ae01890f7285240e0bfab64123efa20b321007960884026d094c569d9b44"
+    },
+    {
+      "path": "/tmp/huntmaps-ux-sol-stage1/baseline/analysis.json",
+      "bytes": 18022840,
+      "sha256": "181525ce1d8ff792acbc2841391ef4d286cad06d18813f6d51bbe050812164f5"
+    },
+    {
+      "path": "/tmp/huntmaps-ux-sol-stage1/baseline/baseline.gpx",
+      "bytes": 17894,
+      "sha256": "e6248917bfebb48f59a45838fd8d5b487e7849215286aadb6385226902088b2f"
+    },
+    {
+      "path": "/tmp/huntmaps-ux-sol-stage1/baseline/evidence.json",
+      "bytes": 1155060,
+      "sha256": "63676c5b995130d13921626441f0ef502c39e7d00d6bd65e1e582bc89921b830"
+    },
+    {
+      "path": "/tmp/huntmaps-ux-sol-stage1/baseline.log",
+      "bytes": 481,
+      "sha256": "44bd9a3c5f8f7cfaa349501754c2522b1e3c719b6a5070dab0d1ce6d0aa65999"
+    },
+    {
+      "path": "/tmp/huntmaps-ux-sol-stage1/browser-accepted.log",
+      "bytes": 630,
+      "sha256": "213d90c70e2308c8eba9da627b198df0441fed5e50c14e605b5abcfa73fa7dd7"
+    },
+    {
+      "path": "/tmp/huntmaps-ux-sol-stage1/browser-final-rerun.log",
+      "bytes": 636,
+      "sha256": "3426e18698f05646481665ea467081678433ff55fc8a2c0b4d9652bc755c81a4"
+    },
+    {
+      "path": "/tmp/huntmaps-ux-sol-stage1/browser-final.log",
+      "bytes": 465,
+      "sha256": "a6e88107d838313bf1ff4ed9aa63516c8a1253d48aacfd08f5eecc4f33ac6efa"
+    },
+    {
+      "path": "/tmp/huntmaps-ux-sol-stage1/browser-first.log",
+      "bytes": 413,
+      "sha256": "461e6cff8e86c96958d029e10f47b290aae7a2f146f0fd60594764696975c20e"
+    },
+    {
+      "path": "/tmp/huntmaps-ux-sol-stage1/browser-rerun.log",
+      "bytes": 559,
+      "sha256": "c6b92ee7381323899cbd80618288fb2687655369b4965e7ddd04b9825cdb83ba"
+    },
+    {
+      "path": "/tmp/huntmaps-ux-sol-stage1/build-accepted.log",
+      "bytes": 761,
+      "sha256": "83fbf9ac35caa43535a871f11443b10091c1bcb1448d41d5f919128a336caa43"
+    },
+    {
+      "path": "/tmp/huntmaps-ux-sol-stage1/format-accepted.log",
+      "bytes": 66,
+      "sha256": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20"
+    },
+    {
+      "path": "/tmp/huntmaps-ux-sol-stage1/gate/trailscout-gate-l8s21apr/gate.json",
+      "bytes": 918,
+      "sha256": "a54c7d8c537efc152955541ea77429e2a2c5ee825585b7f13f4a278aaaedbe9d"
+    },
+    {
+      "path": "/tmp/huntmaps-ux-sol-stage1/trailscout-gate.log",
+      "bytes": 191,
+      "sha256": "691543cca41174e0624d500e10abe3c3cc85f2a2f018ed09296ea6f4aa3cea08"
+    }
+  ]
+}

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import { api, RecordValue, defaults, miles, feet, acres, clock } from "./api";
 import { ScoutMap } from "./map";
+import { Recommendation } from "./recommendation";
 import {
   PracticalSettings,
   PracticalResult,
@@ -69,6 +70,9 @@ function App() {
     [compareSaved, setCompareSaved] = useState<RecordValue[]>([]);
   const editRevision = useRef(0),
     openRevision = useRef(0);
+  const inspectionRef = useRef<HTMLElement>(null),
+    scheduleRef = useRef<HTMLElement>(null),
+    saveRef = useRef<HTMLDivElement>(null);
   const jobRef = useRef(""),
     configRef = useRef(config),
     dirtyRef = useRef(false),
@@ -79,6 +83,28 @@ function App() {
   const option =
     result?.options.find((o: RecordValue) => o.id === selected) || null;
   const currentSchedule = option?.schedules[mode];
+  const previewStale =
+    dirty ||
+    (!!result && JSON.stringify(config) !== JSON.stringify(result.settings));
+  const selectOption = (id: string) => {
+    setSelected(id);
+    setProfilePoint(null);
+    setPoint(null);
+    setSegment(null);
+  };
+  const selectMode = (value: string) => {
+    setMode(value);
+    if (result?.recommended[value]) selectOption(result.recommended[value]);
+  };
+  const inspect = (value: string) => {
+    setTab(value);
+    requestAnimationFrame(() => {
+      const target =
+        value === "schedule" ? scheduleRef.current : inspectionRef.current;
+      target?.focus({ preventScroll: true });
+      target?.scrollIntoView({ block: "start" });
+    });
+  };
   const change = (patch: RecordValue) => {
     editRevision.current++;
     setConfig((c) => ({ ...c, ...patch }));
@@ -973,6 +999,24 @@ function App() {
               {notice}
             </div>
           )}
+          {result && (
+            <Recommendation
+              result={result}
+              option={option}
+              mode={mode}
+              stale={previewStale}
+              pending={active}
+              onMode={selectMode}
+              onSelect={selectOption}
+              onInspect={inspect}
+              onSave={() => {
+                saveRef.current
+                  ?.querySelector("input")
+                  ?.focus({ preventScroll: true });
+                saveRef.current?.scrollIntoView({ block: "start" });
+              }}
+            />
+          )}
           <ScoutMap
             mode={mode}
             excludedAreas={config.excluded_areas}
@@ -1156,10 +1200,8 @@ function App() {
                         "option " + (o.id === selected ? "selected" : "")
                       }
                       key={o.id}
-                      onClick={() => {
-                        setSelected(o.id);
-                        setProfilePoint(null);
-                      }}
+                      aria-pressed={o.id === selected}
+                      onClick={() => selectOption(o.id)}
                     >
                       <div className="option-top">
                         <strong>
@@ -1202,7 +1244,12 @@ function App() {
                   ))}
                 </div>
                 {option && (
-                  <section className="route-detail">
+                  <section
+                    className="route-detail"
+                    ref={inspectionRef}
+                    tabIndex={-1}
+                    aria-label="Selected route inspection"
+                  >
                     <TimedResult option={option} mode={mode} />
                     <div className="tabs">
                       {[
@@ -1351,7 +1398,11 @@ function App() {
                       </>
                     )}
                     {tab === "schedule" && (
-                      <>
+                      <section
+                        ref={scheduleRef}
+                        tabIndex={-1}
+                        aria-label="Selected schedule"
+                      >
                         <div className="schedule-modes">
                           {[
                             ["am", "Morning"],
@@ -1361,11 +1412,7 @@ function App() {
                           ].map(([v, label]) => (
                             <button
                               className={mode === v ? "active" : ""}
-                              onClick={() => {
-                                setMode(v);
-                                if (result?.recommended[v])
-                                  setSelected(result.recommended[v]);
-                              }}
+                              onClick={() => selectMode(v)}
                               key={v}
                               disabled={
                                 !!result?.practical_plan &&
@@ -1449,7 +1496,7 @@ function App() {
                             one-location plan.
                           </p>
                         )}
-                      </>
+                      </section>
                     )}
                     {tab === "coverage" && (
                       <>
@@ -1632,7 +1679,7 @@ function App() {
                         <p>{result.recommendation_method}</p>
                       </>
                     )}
-                    <div className="save-box">
+                    <div className="save-box" ref={saveRef}>
                       <label>
                         Plan name
                         <input
@@ -1645,11 +1692,7 @@ function App() {
                         <select
                           aria-label="Time variant"
                           value={mode}
-                          onChange={(e) => {
-                            setMode(e.target.value);
-                            if (result?.recommended[e.target.value])
-                              setSelected(result!.recommended[e.target.value]);
-                          }}
+                          onChange={(e) => selectMode(e.target.value)}
                         >
                           <option value="am">Morning</option>
                           <option value="pm">Evening</option>
@@ -1669,7 +1712,12 @@ function App() {
                       </label>
                       <button
                         className="primary"
-                        disabled={dirty || busy || !currentSchedule?.feasible}
+                        disabled={
+                          previewStale ||
+                          busy ||
+                          active ||
+                          !currentSchedule?.feasible
+                        }
                         onClick={() => protectError(save)}
                       >
                         {savedPlan ? "Save a new version" : "Save this plan"}
@@ -1680,7 +1728,7 @@ function App() {
                             "This time variant is unavailable for this route."}
                         </p>
                       )}
-                      {dirty && (
+                      {previewStale && (
                         <p className="micro">
                           Recalculate edited inputs before saving.
                         </p>

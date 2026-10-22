@@ -1,0 +1,11 @@
+OpenAI Codex v0.163.0
+--------
+workdir: /home/tanner/Desktop/huntmaps2
+model: gpt-6.1-sol
+provider: openai
+approval: on-request
+sandbox: workspace-write [workdir, /tmp, $TMPDIR] (network access enabled)
+reasoning effort: high
+reasoning summaries: none
+session id: 01a163bb-2496-71f0-842e-b54d06722def
+--------

@@ -1,0 +1,22 @@
+{
+  "accepted": true,
+  "stage": 1,
+  "verified_utc": "2026-10-22T13:26:09.554862+00:00",
+  "head": "6ec6a5510058edb5668fb0ad83596f2c8795caa6",
+  "tracked_diff_sha256": "4d6a6e5a99d25eabe8e813e5485ed86bf558e933fa7b0de42044dba704703fcb",
+  "runtime_files": {
+    "trail_scout/web/src/main.tsx": "eed3d2052690ffa8a83037c88fabc24420babbc2923c624fc66ace3f61e42d04",
+    "trail_scout/web/src/style.css": "61f5163e83d77a45c7dc11115b0b8bc6d6d48157d263debcefa2002bb0ee130c",
+    "trail_scout/web/src/recommendation.tsx": "9df803187d74d14788ebd81d90b2aab572c3deb11568c8c2f90f5b8beb0b4bc5"
+  },
+  "scope": "Design and one functional presentation slice; full release acceptance remains Stage2.",
+  "verified": [
+    "strict required handoff keys/status/branch",
+    "exact tracked and untracked runtime hashes",
+    "build/format/focused browser evidence inspected",
+    "screenshot visually inspected by coordinator",
+    "full development gate honestly distinguished from final-source checks",
+    "protected-file audit unchanged",
+    "no backend/analytical implementation edits"
+  ]
+}
