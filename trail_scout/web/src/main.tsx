@@ -2,7 +2,12 @@ import React, { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import { api, RecordValue, defaults, miles, feet, acres, clock } from "./api";
 import { ScoutMap } from "./map";
-import { PracticalSettings, PracticalResult } from "./practical";
+import {
+  PracticalSettings,
+  PracticalResult,
+  PracticalPlanSettings,
+  TimedResult,
+} from "./practical";
 import "./style.css";
 
 function NumberField({
@@ -93,6 +98,7 @@ function App() {
   const refreshSaves = async () => setSaved(await api("/plans"));
   useEffect(() => {
     mounted.current = true;
+    const initialEditRevision = editRevision.current;
     (async () => {
       const [areas, p, d, h, plans, current] = await Promise.all([
         api("/areas").catch((e) => {
@@ -114,12 +120,14 @@ function App() {
       setPresets(p);
       setHistory(h);
       setSaved(plans);
-      if (d.settings) setConfig(d.settings);
-      else
-        setConfig({
-          ...defaults,
-          profile: { preset: "together", ...p.together },
-        });
+      if (editRevision.current === initialEditRevision) {
+        if (d.settings) setConfig(d.settings);
+        else
+          setConfig({
+            ...defaults,
+            profile: { preset: "together", ...p.together },
+          });
+      }
       const active = h.find((j: RecordValue) =>
         ["running", "pending"].includes(j.status),
       );
@@ -136,14 +144,18 @@ function App() {
           setResult(r);
           setName(r.start.label.split(" ·")[0] + " scouting");
           setSelected(r.recommended.am || r.options[0]?.id || "");
-          setConfig(d.settings || r.settings);
+          if (editRevision.current === initialEditRevision)
+            setConfig(d.settings || r.settings);
           setDirty(
-            (!!d.settings &&
-              JSON.stringify(d.settings) !== JSON.stringify(r.settings)) ||
+            editRevision.current !== initialEditRevision ||
+              (!!d.settings &&
+                JSON.stringify(d.settings) !== JSON.stringify(r.settings)) ||
               r.implementation !== current.implementation ||
               r.source_revision !== areas[0]?.revision ||
               (!!r.practical &&
-                r.practical.package !== areas[0]?.practical?.id),
+                r.practical.package !== areas[0]?.practical?.id) ||
+              (!!r.practical_plan &&
+                r.practical_plan.package !== areas[0]?.practical?.id),
           );
         }
       }
@@ -308,7 +320,8 @@ function App() {
     const stale =
       v.implementation !== current.implementation ||
       v.source_revision !== area?.revision ||
-      (!!v.practical && v.practical.package !== area?.practical?.id);
+      (!!v.practical && v.practical.package !== area?.practical?.id) ||
+      (!!v.practical_plan && v.practical_plan.package !== area?.practical?.id);
     setDirty(stale);
     setNotice(
       stale
@@ -726,6 +739,11 @@ function App() {
               />
             </div>
           </details>
+          <PracticalPlanSettings
+            value={config.practical_plan ?? null}
+            ready={area?.practical?.status === "ready"}
+            change={(practical_plan) => change({ practical_plan })}
+          />
           <PracticalSettings
             value={config.practical ?? null}
             ready={area?.practical?.status === "ready"}
@@ -956,6 +974,7 @@ function App() {
             </div>
           )}
           <ScoutMap
+            mode={mode}
             excludedAreas={config.excluded_areas}
             context={context}
             result={result}
@@ -1153,8 +1172,16 @@ function App() {
                         )}
                       </div>
                       <div className="option-number">
-                        {acres(o.coverage.effective_m2)}{" "}
-                        <small>quality-adjusted acre equivalents</small>
+                        {result.practical_plan
+                          ? Math.round(
+                              o.schedules[mode]?.practical?.relative_m2 ?? 0,
+                            ).toLocaleString()
+                          : acres(o.coverage.effective_m2)}{" "}
+                        <small>
+                          {result.practical_plan
+                            ? "relative-index m² · practical"
+                            : "quality-adjusted acre equivalents"}
+                        </small>
                       </div>
                       <div className="option-metrics">
                         <span>{miles(o.movement.distance_m)} mi</span>
@@ -1176,6 +1203,7 @@ function App() {
                 </div>
                 {option && (
                   <section className="route-detail">
+                    <TimedResult option={option} mode={mode} />
                     <div className="tabs">
                       {[
                         "route",
@@ -1333,8 +1361,16 @@ function App() {
                           ].map(([v, label]) => (
                             <button
                               className={mode === v ? "active" : ""}
-                              onClick={() => setMode(v)}
+                              onClick={() => {
+                                setMode(v);
+                                if (result?.recommended[v])
+                                  setSelected(result.recommended[v]);
+                              }}
                               key={v}
+                              disabled={
+                                !!result?.practical_plan &&
+                                ["combined", "stay"].includes(v)
+                              }
                             >
                               {label}
                             </button>
@@ -1544,14 +1580,21 @@ function App() {
                           choices, not a proven optimum or a statistical
                           stopping point.
                         </p>
-                        <div className="table-scroll">
+                        <div
+                          className="table-scroll"
+                          style={{ maxHeight: "28rem", overflow: "auto" }}
+                        >
                           <table>
                             <thead>
                               <tr>
                                 <th>Variant</th>
                                 <th>Travel h</th>
                                 <th>Gain ft</th>
-                                <th>Useful equivalents</th>
+                                <th>
+                                  {result.practical_plan
+                                    ? "Practical relative-index m²"
+                                    : "Useful equivalents"}
+                                </th>
                               </tr>
                             </thead>
                             <tbody>
@@ -1570,7 +1613,17 @@ function App() {
                                     </td>
                                     <td>{v.hours_high.toFixed(2)}</td>
                                     <td>{feet(v.ascent_m)}</td>
-                                    <td>{acres(v.effective_m2)}</td>
+                                    <td>
+                                      {result.practical_plan
+                                        ? v.modes[mode]?.relative_m2 === null ||
+                                          v.modes[mode]?.relative_m2 ===
+                                            undefined
+                                          ? "Unavailable"
+                                          : Math.round(
+                                              v.modes[mode].relative_m2,
+                                            ).toLocaleString()
+                                        : acres(v.effective_m2)}
+                                    </td>
                                   </tr>
                                 ))}
                             </tbody>
@@ -1592,12 +1645,24 @@ function App() {
                         <select
                           aria-label="Time variant"
                           value={mode}
-                          onChange={(e) => setMode(e.target.value)}
+                          onChange={(e) => {
+                            setMode(e.target.value);
+                            if (result?.recommended[e.target.value])
+                              setSelected(result!.recommended[e.target.value]);
+                          }}
                         >
                           <option value="am">Morning</option>
                           <option value="pm">Evening</option>
-                          <option value="combined">AM + PM trips</option>
-                          <option value="stay">
+                          <option
+                            disabled={!!result?.practical_plan}
+                            value="combined"
+                          >
+                            AM + PM trips
+                          </option>
+                          <option
+                            disabled={!!result?.practical_plan}
+                            value="stay"
+                          >
                             Stay all day · one location
                           </option>
                         </select>
@@ -1716,7 +1781,7 @@ function App() {
                       <th>Saved outing</th>
                       <th>Entry</th>
                       <th>Miles / gain</th>
-                      <th>Useful equivalents</th>
+                      <th>Established equivalents</th>
                     </tr>
                   </thead>
                   <tbody>

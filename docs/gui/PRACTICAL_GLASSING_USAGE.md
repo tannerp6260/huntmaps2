@@ -1,3 +1,5 @@
+For the newer opt-in **timed AM/PM objective**, see [Practical plans usage](PRACTICAL_PLANS_USAGE.md). The static workflow below remains available.
+
 # Practical glassing review, version 1
 
 From `/home/tanner/Desktop/huntmaps2` on `feature/practical-glassing-opportunity`:

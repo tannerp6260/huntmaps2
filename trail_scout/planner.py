@@ -1,7 +1,6 @@
 """One shared browser/headless engine; bounded alternatives, explicit tradeoffs."""
 
 from datetime import date as Date
-import itertools
 import math
 from pathlib import Path
 import time
@@ -48,6 +47,7 @@ def validate(body):
         "travel_area",
         "target_area",
         "practical",
+        "practical_plan",
         "vehicle_width_inches",
     }
     if not isinstance(body, dict) or set(body) - allowed:
@@ -72,6 +72,7 @@ def validate(body):
         travel_area=None,
         target_area=None,
         practical=None,
+        practical_plan=None,
         vehicle_width_inches=None,
     )
     out.update(body)
@@ -79,6 +80,10 @@ def validate(body):
         from practical_glassing.model import settings as practical_settings
 
         out["practical"] = practical_settings(out["practical"])
+    if out["practical_plan"] is not None:
+        from practical_glassing.timed import settings as timed_settings
+
+        out["practical_plan"] = timed_settings(out["practical_plan"])
     width = out["vehicle_width_inches"]
     if width is not None and (
         type(width) not in (int, float)
@@ -301,6 +306,27 @@ def calculate(paths, pack, body, folder, progress=lambda *a: None, cancel=lambda
         else project(shape(c["target_area"].get("geometry", c["target_area"])))
     )
     target = raster_mask(target_domain, terrain.ds)
+    route_basis = None
+    if c["practical_plan"] is not None and c["practical"] is None:
+        from practical_glassing import replan
+
+        route_basis = replan.key(paths, pack, c)
+        if (route_basis / "basis.json").exists():
+            result = replan.run(
+                paths,
+                pack,
+                c,
+                folder,
+                terrain,
+                layers,
+                target,
+                route_basis,
+                progress,
+                cancel,
+            )
+            result["performance"]["total_seconds"] = time.perf_counter() - begin
+            atomic(folder / "result.json", result)
+            return result
     public = pack.public_area(terrain.bounds)
     if c["travel_area"]:
         public = project(shape(c["travel_area"].get("geometry", c["travel_area"])))
@@ -488,7 +514,9 @@ def calculate(paths, pack, body, folder, progress=lambda *a: None, cancel=lambda
                     hits += int(hit)
                     cov, _ = coverage([mask], layers, target, terrain.res**2)
                     row.update(coverage=cov, mask_key=key)
-                    if cov["effective_m2"] is None or cov["effective_m2"] <= 0:
+                    if c["practical_plan"] is None and (
+                        cov["effective_m2"] is None or cov["effective_m2"] <= 0
+                    ):
                         row["reasons"].append(
                             "No positive supported quality-adjusted target coverage"
                         )
@@ -539,12 +567,31 @@ def calculate(paths, pack, body, folder, progress=lambda *a: None, cancel=lambda
         1,
         "Checking complete out-and-back / connected-pair alternatives and conservative AM/PM schedules",
     )
-    alternatives = [(r,) for r in viable]
-    # Bounded pair search. Full actual travel checked after prefix route joining.
-    pair_pool = viable[:8] + [
-        r for r in pinned if r["feasible"] and r not in viable[:8]
-    ]
-    alternatives.extend(itertools.permutations(pair_pool, 2))
+    objective = None
+    if c["practical_plan"] is not None:
+        from practical_glassing.timed import Objective
+
+        progress(
+            "practical-support",
+            0,
+            len(viable),
+            "Preparing unselected community/task patches; unknowns remain explicit",
+        )
+        objective = Objective(
+            paths,
+            pack,
+            terrain,
+            layers,
+            target,
+            [dict(r, radius_m=c["view_radius_m"]) for r in viable],
+            masks,
+            c["practical_plan"],
+            cancel,
+        )
+    selection_begin = time.perf_counter()
+    from practical_glassing.selection import member_options
+
+    alternatives, pair_pool_size = member_options(viable, pinned, objective is not None)
     options = []
     for members in alternatives:
         cancel()
@@ -585,6 +632,17 @@ def calculate(paths, pack, body, folder, progress=lambda *a: None, cancel=lambda
             m: schedule.variant(c["date"], start, legs, c["profile"], c["schedule"], m)
             for m in ("am", "pm")
         }
+        if objective:
+            for m in ("am", "pm"):
+                mode[m]["practical"] = objective.score(
+                    [r["id"] for r in members], mode[m], cancel
+                )
+                score = mode[m]["practical"]
+                if score and score["relative_m2"] is None:
+                    mode[m]["feasible"] = False
+                    mode[m]["reasons"].append(
+                        "Insufficient supported community/structure data for practical planning"
+                    )
         mode["combined"] = schedule.combined(
             mode["am"], mode["pm"], movement, c["profile"], c["schedule"]
         )
@@ -630,10 +688,20 @@ def calculate(paths, pack, body, folder, progress=lambda *a: None, cancel=lambda
                 + pm["events"][1:],
                 description="One location, one outbound/return; waiting and both observation windows count toward elapsed time.",
             )
+        if objective:
+            for m in ("combined", "stay"):
+                mode[m] = dict(
+                    mode=m,
+                    feasible=False,
+                    reasons=[
+                        "Combined/stay days are established-mode-only; practical mode evaluates one AM or PM outing"
+                    ],
+                    events=[],
+                )
         ident = digest([digest(c), [r["id"] for r in members]])[:32]
         contributions = []
         prior = []
-        for r in members:
+        for r in () if objective else members:
             before = (
                 coverage(prior, layers, target, terrain.res**2)[0]["effective_m2"]
                 if prior
@@ -678,12 +746,12 @@ def calculate(paths, pack, body, folder, progress=lambda *a: None, cancel=lambda
                 schedules=mode,
                 coverage_url=f"/artifacts/{folder.name}/coverage-{ident}.png",
                 reasons=[],
-                _mask=union,
+                _mask=None if objective else union,
             )
         )
     # Pareto frontier uses comparable supported E, movement and off-trail only.
     frontier = []
-    for o in options:
+    for o in [] if objective else options:
         dominated = any(
             (
                 b["coverage"]["effective_m2"] >= o["coverage"]["effective_m2"]
@@ -725,13 +793,17 @@ def calculate(paths, pack, body, folder, progress=lambda *a: None, cancel=lambda
                     o["movement"]["ascent_m"],
                 ),
             )["id"]
+    if objective:
+        from practical_glassing.selection import select_options
+
+        frontier, recommended = select_options(options, cancel)
     retained = []
     retained_ids = set()
     preferred = [o for o in frontier if o["id"] in recommended.values()]
     for o in preferred + frontier:
         if o["id"] in retained_ids:
             continue
-        if o["id"] not in recommended.values():
+        if not objective and o["id"] not in recommended.values():
             similar = False
             for prior in retained:
                 common = (o["_mask"] & prior["_mask"] & target).sum()
@@ -755,9 +827,19 @@ def calculate(paths, pack, body, folder, progress=lambda *a: None, cancel=lambda
             continue
         retained.append(o)
         retained_ids.add(o["id"])
-    retained.sort(key=lambda o: -(o["coverage"]["effective_m2"] or 0))
+    if not objective:
+        retained.sort(key=lambda o: -(o["coverage"]["effective_m2"] or 0))
+    selection_seconds = time.perf_counter() - selection_begin
+    if objective:
+        from practical_glassing.inspection import finalists
+
+        inspection_begin = time.perf_counter()
+        finalists(retained, objective, terrain, layers, paths, cancel, folder)
+        inspection_seconds = time.perf_counter() - inspection_begin
     corners = render.relief(terrain, folder / "relief.png")
     for o in retained:
+        if objective:
+            o["_mask"] = np.logical_or.reduce([masks[r["id"]] for r in o["viewpoints"]])
         render.coverage_image(
             terrain, o.pop("_mask"), layers, target, folder / f"coverage-{o['id']}.png"
         )
@@ -784,7 +866,7 @@ def calculate(paths, pack, body, folder, progress=lambda *a: None, cancel=lambda
                 }
     pack.recheck()
     result = dict(
-        version=1,
+        version=2 if objective else 1,
         created_utc=now(),
         input_token=digest(c),
         settings=c,
@@ -830,7 +912,13 @@ def calculate(paths, pack, body, folder, progress=lambda *a: None, cancel=lambda
             returned_variants=len(retained),
             corridor_radius_m=c["corridor_m"],
             offtrail_envelope_m=c["search_envelope_m"],
-            pair_search_leaders=8,
+            pair_search_leaders=pair_pool_size if objective else 8,
+            pair_search=(
+                "All feasible singles and both orders of every pair within proposal cap"
+                if objective
+                else "Established top-eight pair pool"
+            ),
+            pair_proposals=pair_pool_size * max(0, pair_pool_size - 1),
             viewshed_cache_hits=hits,
             global_optimum=False,
         ),
@@ -851,12 +939,46 @@ def calculate(paths, pack, body, folder, progress=lambda *a: None, cancel=lambda
                 distance_m=o["movement"]["distance_m"],
                 effective_m2=o["coverage"]["effective_m2"],
                 ascent_m=o["movement"]["ascent_m"],
-                dominated=o["dominated"],
+                dominated=o.get("dominated", False),
             )
             for o in options
         ],
         performance=dict(total_seconds=time.perf_counter() - begin),
     )
+    if objective:
+        result["practical_plan"] = dict(
+            version="practical-timed-1",
+            status=(
+                "scored_conditional"
+                if retained
+                else "no_positive_supported_feasible_plan"
+            ),
+            package=objective.package.spec["id"],
+            settings=c["practical_plan"],
+            allocation="Multi-start marginal whole-patch knapsacks and two coordinate sweeps, with independent allocation lower bound; no global guarantee",
+            support_bytes=objective.bytes,
+            support_cache_hits=objective.hits,
+        )
+        result["performance"].update(
+            support_seconds=objective.seconds,
+            plan_selection_seconds=selection_seconds,
+            inspection_seconds=inspection_seconds,
+        )
+        result["recommendation_method"] = (
+            "practical-easier-1: separate AM/PM frontiers; at least 90% of the best practical utility, within three minutes of the least conservative movement time; prefer fewer stops, then utility and ascent. Best among evaluated connected alternatives only."
+        )
+        result["marginal"] = [
+            dict(
+                id=o["id"],
+                viewpoint_ids=[r["id"] for r in o["viewpoints"]],
+                hours_high=o["movement"]["hours_high"],
+                ascent_m=o["movement"]["ascent_m"],
+                effective_m2=o["coverage"]["effective_m2"],
+                movement=o["movement"],
+                modes={m: o["schedules"][m].get("practical") for m in ("am", "pm")},
+            )
+            for o in options
+        ]
     if not retained:
         result["empty_reason"] = "No feasible evaluated plan. " + (
             "Pinned point constraints cannot be met; see pinned explanations."
@@ -880,5 +1002,10 @@ def calculate(paths, pack, body, folder, progress=lambda *a: None, cancel=lambda
             cancel,
         )
         result["performance"]["total_seconds"] = time.perf_counter() - begin
+    result["performance"]["total_seconds"] = time.perf_counter() - begin
+    if route_basis is not None:
+        from practical_glassing import replan
+
+        replan.store(route_basis, result, options, paths_by_id, folder)
     atomic(folder / "result.json", result)
     return result

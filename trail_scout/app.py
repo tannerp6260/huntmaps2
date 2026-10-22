@@ -252,12 +252,12 @@ class Service:
                 raise HTTPException(
                     409, "Sources changed. Recalculate with current source revision."
                 )
-            if r.get("practical"):
+            if r.get("practical") or r.get("practical_plan"):
                 from practical_glassing.package import CommunityPackage, installed_root
 
                 if (
                     CommunityPackage(installed_root(self.paths)).spec["id"]
-                    != r["practical"]["package"]
+                    != (r.get("practical_plan") or r.get("practical"))["package"]
                 ):
                     raise HTTPException(
                         409,
@@ -287,7 +287,7 @@ class Service:
             ident = uuid.uuid4().hex
             family = family or ident
             value = dict(
-                version=1,
+                version=2 if r.get("practical_plan") else 1,
                 id=ident,
                 family=family,
                 parent_id=parent,
@@ -305,6 +305,8 @@ class Service:
             )
             if r.get("practical"):
                 value["practical"] = r["practical"]
+            if r.get("practical_plan"):
+                value["practical_plan"] = r["practical_plan"]
             p = self.paths.artifact("plans", ident).with_suffix(".json")
             atomic(p, value)
             seal(p)

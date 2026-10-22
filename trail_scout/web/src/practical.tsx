@@ -123,3 +123,186 @@ export function PracticalResult({ review }: { review: RecordValue }) {
     </section>
   );
 }
+
+export function PracticalPlanSettings({
+  value,
+  ready,
+  change,
+}: {
+  value: RecordValue | null;
+  ready: boolean;
+  change: (v: RecordValue | null) => void;
+}) {
+  const policy = value?.policy || {};
+  return (
+    <details>
+      <summary>Timed practical plans · experimental</summary>
+      <div className="detail-body">
+        <label>
+          <input
+            type="checkbox"
+            checked={!!value}
+            disabled={!ready}
+            onChange={(e) =>
+              change(
+                e.target.checked
+                  ? {
+                      version: 1,
+                      policy: { task: "identify", leaf: "unknown" },
+                      search_minutes_cap: null,
+                    }
+                  : null,
+              )
+            }
+          />{" "}
+          Use practical objective for AM/PM plans
+        </label>
+        <p className="micro">
+          {ready
+            ? "Ranks feasible single stops and connected pairs using actual stop time and complementary scan sectors. Combined/stay days remain established-mode-only. Source access and parking remain conditional."
+            : "Installed community package required. Established planning remains available."}
+        </p>
+        {value && (
+          <>
+            <label>
+              Timed search task
+              <select
+                aria-label="Timed search task"
+                value={policy.task || "identify"}
+                onChange={(e) =>
+                  change({
+                    ...value,
+                    policy: { ...policy, task: e.target.value },
+                  })
+                }
+              >
+                <option value="spot">Spot a deer</option>
+                <option value="identify">Identify a buck</option>
+                <option value="assess">Assess antlers</option>
+              </select>
+            </label>
+            <label>
+              Timed leaf assumption
+              <select
+                aria-label="Timed leaf assumption"
+                value={policy.leaf || "unknown"}
+                onChange={(e) =>
+                  change({
+                    ...value,
+                    policy: { ...policy, leaf: e.target.value },
+                  })
+                }
+              >
+                {["unknown", "on", "partial", "off"].map((v) => (
+                  <option key={v} value={v}>
+                    {v}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Timed scan cap · minutes per stop (blank uses available time)
+              <input
+                aria-label="Timed scan cap"
+                type="number"
+                min="0"
+                max="720"
+                value={value.search_minutes_cap ?? ""}
+                onChange={(e) =>
+                  change({
+                    ...value,
+                    search_minutes_cap:
+                      e.target.value === "" ? null : Number(e.target.value),
+                  })
+                }
+              />
+            </label>
+            <p className="micro">
+              Separate from static review's 30-minute budget. Whole sectors cost
+              their full footprint. Additional time may search new sectors;
+              repeated coverage earns no extra credit. Eye 1.7 m / target 0.8 m;
+              foreground remains conditional. Candidate placement and coarse
+              dense-cover exclusions are unchanged.
+            </p>
+          </>
+        )}
+      </div>
+    </details>
+  );
+}
+
+export function TimedResult({
+  option,
+  mode,
+}: {
+  option: RecordValue;
+  mode: string;
+}) {
+  const p = option.schedules[mode]?.practical;
+  if (!p) return null;
+  return (
+    <section className="selected-evidence" aria-label="Timed practical plan">
+      <h3>Practical {mode.toUpperCase()} scan plan · experimental</h3>
+      <p>
+        {Math.round(p.relative_m2 || 0).toLocaleString()} relative-index m² ·{" "}
+        {Math.round((p.supported_fraction || 0) * 100)}% habitat support ·{" "}
+        {Math.round(p.unknown_m2).toLocaleString()} m² habitat unknown. These
+        are provisional desktop sectors, not verified sightlines or literal
+        acres searched.
+      </p>
+      <p>
+        Selected-view overlap:{" "}
+        {Math.round(p.overlap_relative_m2).toLocaleString()} relative-index m².
+        Terrain coverage below remains a separate theoretical view.
+      </p>
+      {p.visits.map((v: RecordValue, i: number) => (
+        <div key={i}>
+          <h4>
+            Stop {i + 1} · {option.viewpoints[i].latitude.toFixed(6)},{" "}
+            {option.viewpoints[i].longitude.toFixed(6)}
+          </h4>
+          <p>
+            {v.minutes_used.toFixed(1)} useful scan minutes of{" "}
+            {v.observation_minutes.toFixed(1)} available;{" "}
+            {v.unused_observation_minutes.toFixed(1)} minutes unallocated/rest.
+            Adds {Math.round(v.marginal_relative_m2).toLocaleString()}{" "}
+            relative-index m²; exclusive improvement{" "}
+            {Math.round(v.exclusive_relative_m2).toLocaleString()}.
+          </p>
+          <p>
+            {Object.entries(v.community_relative_m2)
+              .filter(([, n]) => Number(n) > 0)
+              .map(
+                ([name, n]) =>
+                  `${name.replaceAll("_", " ")}: ${Math.round(Number(n)).toLocaleString()}`,
+              )
+              .join(" · ")}
+          </p>
+          <ol>
+            {v.patches.map((s: RecordValue) => (
+              <li key={s.id}>
+                Grid bearing {s.azimuth_start}–{s.azimuth_end}° · {s.inner_m}–
+                {s.outer_m} m · {s.minutes.toFixed(2)} min
+              </li>
+            ))}
+          </ol>
+          <details>
+            <summary>
+              Foreground inspection ·{" "}
+              {option.inspection?.[i]?.status || "unknown/uninspected"}
+            </summary>
+            <p>{option.inspection?.[i]?.source}</p>
+            <p>{option.inspection?.[i]?.note}</p>
+            <p>{option.inspection?.[i]?.measured_obstruction}</p>
+            <p>
+              No clear-opening certification or numerical score adjustment.
+              Check the exact opening, trunks/understory, terrain and current
+              access in the field. The map shows full scan footprints; hidden
+              terrain within them remains hidden.
+            </p>
+          </details>
+        </div>
+      ))}
+    </section>
+  );
+}

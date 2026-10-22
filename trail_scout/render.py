@@ -115,6 +115,10 @@ def geojson(plan):
                 },
             )
         )
+    if option["schedules"][plan["mode"]].get("practical"):
+        features.extend(
+            option["schedules"][plan["mode"]]["practical"]["sectors"]["features"]
+        )
     return dict(
         type="FeatureCollection",
         features=features,
@@ -202,6 +206,28 @@ def field_summary(plan):
         lines.append(
             f"- {p['id']}: {p['longitude']:.8f}, {p['latitude']:.8f}; {p['kind']}; {p['standing_note']}"
         )
+    practical = schedule.get("practical")
+    if practical:
+        lines += [
+            "## Experimental practical scans",
+            f"{practical['relative_m2']:.1f} relative-index m², conditional on unverified foreground. Not literal acres or probability. Habitat supported {practical['supported_m2']:.0f} m²; unknown {practical['unknown_m2']:.0f} m²; selected-view overlap {practical['overlap_relative_m2']:.1f}.",
+        ]
+        for i, v in enumerate(practical["visits"]):
+            lines.append(
+                f"Stop {i+1}: {v['minutes_used']:.2f} useful scan / {v['observation_minutes']:.1f} available minutes; {v['unused_observation_minutes']:.1f} unused/rest. Adds {v['marginal_relative_m2']:.1f}; exclusive improvement {v['exclusive_relative_m2']:.1f} relative-index m²."
+            )
+            for p in v["patches"]:
+                lines.append(
+                    f"- Grid bearing {p['azimuth_start']}–{p['azimuth_end']}°, {p['inner_m']}–{p['outer_m']} m: {p['minutes']:.2f} min (full footprint; hidden terrain remains hidden)."
+                )
+        for item in o.get("inspection", []):
+            lines.append(
+                f"Foreground {item['id']}: {item['status']}; {item.get('source','no compatible measured input')}. No score adjustment or clear-sightline claim."
+            )
+    profile = plan["settings"]["profile"]
+    lines += [
+        f"Nominal limits {profile['max_miles']:.3f} mi / {profile['max_gain_ft']:.1f} ft; {profile['reserve_fraction']*100:.0f}% held reserve; usable {profile['max_miles']*(1-profile['reserve_fraction']):.3f} mi / {profile['max_gain_ft']*(1-profile['reserve_fraction']):.1f} ft."
+    ]
     lines += [
         "## Official references",
         "[GMUG conditions and alerts](https://www.fs.usda.gov/r02/gmug) · [CPW big game rules to verify](https://cpw.state.co.us/activities/hunting/big-game)",

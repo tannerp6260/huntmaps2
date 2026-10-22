@@ -12,6 +12,7 @@ const fc = (features: any[] = []) => ({
 });
 export function ScoutMap({
   context,
+  mode,
   result,
   option,
   starts,
@@ -22,6 +23,7 @@ export function ScoutMap({
   profilePoint,
   excludedAreas,
 }: {
+  mode: string;
   excludedAreas: any[];
   context: RecordValue | null;
   result: RecordValue | null;
@@ -38,7 +40,8 @@ export function ScoutMap({
   const handlers = useRef({ onSegment, onPoint, onMapPoint, editMode });
   handlers.current = { onSegment, onPoint, onMapPoint, editMode };
   const [ready, setReady] = useState(false),
-    [error, setError] = useState("");
+    [error, setError] = useState(""),
+    [terrainOnly, setTerrainOnly] = useState(false);
   useEffect(() => {
     const m = new maplibregl.Map({
       container: container.current!,
@@ -64,6 +67,8 @@ export function ScoutMap({
     );
     m.on("load", () => {
       for (const name of [
+        "sectors",
+        "inspection",
         "network",
         "spurs",
         "route",
@@ -74,6 +79,32 @@ export function ScoutMap({
         "edits",
       ])
         m.addSource(name, { type: "geojson", data: fc() });
+      m.addLayer({
+        id: "sectors",
+        type: "fill",
+        source: "sectors",
+        paint: { "fill-color": "#e1a128", "fill-opacity": 0.16 },
+      });
+      m.addLayer({
+        id: "sector-outline",
+        type: "line",
+        source: "sectors",
+        paint: {
+          "line-color": "#ad7411",
+          "line-width": 1.3,
+          "line-dasharray": [3, 2],
+        },
+      });
+      m.addLayer({
+        id: "inspection",
+        type: "line",
+        source: "inspection",
+        paint: {
+          "line-color": "#9d446e",
+          "line-width": 2,
+          "line-dasharray": [2, 2],
+        },
+      });
       m.addLayer({
         id: "unit",
         type: "line",
@@ -268,6 +299,9 @@ export function ScoutMap({
       },
       "unit",
     );
+    m.moveLayer("sectors", "network");
+    m.moveLayer("sector-outline", "network");
+    m.moveLayer("inspection", "network");
     update("unit", fc([r.map.target_boundary]));
     update(
       "network",
@@ -288,6 +322,12 @@ export function ScoutMap({
   useEffect(() => {
     const m = map.current;
     if (!ready || !m || !result) return;
+    (m.getSource("sectors") as GeoJSONSource).setData(
+      option?.schedules[mode]?.practical?.sectors || fc(),
+    );
+    (m.getSource("inspection") as GeoJSONSource).setData(
+      fc(option?.inspection?.map((p: any) => p.context).filter(Boolean) || []),
+    );
     (m.getSource("route") as GeoJSONSource).setData(
       fc(
         option?.legs.map((leg: any) => ({
@@ -325,7 +365,9 @@ export function ScoutMap({
     if (option) {
       m.addSource("coverage", {
         type: "image",
-        url: option.coverage_url,
+        url:
+          (!terrainOnly && option.schedules[mode]?.practical?.coverage_url) ||
+          option.coverage_url,
         coordinates: result.map.corners,
       });
       m.addLayer(
@@ -338,7 +380,7 @@ export function ScoutMap({
         "network",
       );
     }
-  }, [option, result, ready]);
+  }, [option, result, ready, mode, terrainOnly]);
   useEffect(() => {
     const m = map.current;
     if (!ready || !m) return;
@@ -377,6 +419,9 @@ export function ScoutMap({
       <div
         className="map"
         ref={container}
+        data-scan-sectors={
+          option?.schedules[mode]?.practical?.sectors?.features.length || 0
+        }
         role="img"
         aria-label="Offline terrain, access, route and glassing coverage map"
       />
@@ -391,6 +436,22 @@ export function ScoutMap({
         </div>
       )}
       <div className="legend">
+        {option?.schedules[mode]?.practical && (
+          <label>
+            <input
+              type="checkbox"
+              checked={terrainOnly}
+              onChange={(e) => setTerrainOnly(e.target.checked)}
+            />{" "}
+            Show theoretical terrain instead of selected search support
+          </label>
+        )}
+        {option?.schedules[mode]?.practical && (
+          <span>
+            Amber sectors · selected scan footprints / magenta · coarse
+            inspection
+          </span>
+        )}
         <span>
           <i className="motor" />
           Motor evidence
@@ -409,7 +470,7 @@ export function ScoutMap({
         </span>
         <span>
           <i className="cover" />
-          Visible targets
+          Theoretical visible targets
         </span>
       </div>
       {error && (

@@ -123,6 +123,14 @@ def main():
                 TRAILSCOUT_SCREENSHOTS=str(out / "practical-browser"),
             ),
         )
+        check(
+            "timed-practical-browser",
+            ["node", "practical_glassing/timed-browser.mjs"],
+            dict(
+                TRAILSCOUT_URL=base,
+                TRAILSCOUT_SCREENSHOTS=str(out / "timed-practical-browser"),
+            ),
+        )
     finally:
         server.terminate()
         try:
