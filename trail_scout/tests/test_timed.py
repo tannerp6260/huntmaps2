@@ -241,3 +241,127 @@ class TimedSearchOracles(unittest.TestCase):
         single = allocate([a], [one["observation_minutes"]], 1)[1]
         pair = allocate([a, a], [max(0, ab["observation_minutes"] / 2)] * 2, 1)[1]
         self.assertGreater(single, pair)
+
+
+class CachePublication(unittest.TestCase):
+    def test_interruption_retained_publication_atomic_and_completed_never_overwritten(
+        self,
+    ):
+        from pathlib import Path
+        import tempfile
+        from practical_glassing import cache
+        from trail_scout.storage import IntegrityError, atomic
+
+        with tempfile.TemporaryDirectory(prefix="timed-publication-") as root:
+            folder = Path(root) / ("a" * 64)
+            cache.begin(folder)
+            (folder / "support.npz").write_bytes(b"interrupted incomplete fixture")
+            self.assertFalse(cache.ready(folder))
+            cache.begin(folder)
+            interrupted = list(Path(root).glob("*.interrupted-*"))
+            self.assertEqual(len(interrupted), 1)
+            self.assertEqual(
+                (interrupted[0] / "support.npz").read_bytes(),
+                b"interrupted incomplete fixture",
+            )
+            cache.publish(folder)
+            self.assertTrue(cache.ready(folder))
+            with self.assertRaises(IntegrityError):
+                cache.begin(folder)
+            atomic(folder / "ready.json", dict(version=1, key="wrong generation"))
+            with self.assertRaises(IntegrityError):
+                cache.ready(folder)
+
+
+class WholePlanOracle(unittest.TestCase):
+    def test_enumerated_feasible_plans_against_independent_patch_plan_oracle(self):
+        from trail_scout import profiles, schedule
+        from practical_glassing.selection import member_options
+
+        # Engineering graph: explicit directed travel only, one unsupported edge.
+        # Distances and climbing constraints remain independent of the utility.
+        nodes = ["A", "B", "C"]
+        rows = [dict(id=i, feasible=True) for i in nodes]
+        data = {
+            "A": support([0, 1], [1, 0.8], [0, 1], costs=[160, 160]),
+            "B": support([0, 2], [0.9, 0.9], [0, 1], costs=[160, 160]),
+            "C": support([3, 4], [0.5, 0.5], [0, 1], costs=[160, 160]),
+        }
+        travel = {
+            (a, b): (4 + (ord(b[0]) - 65) % 3, 200, 10)
+            for a in ["E"] + nodes
+            for b in ["E"] + nodes
+            if a != b
+        }
+        travel["B", "C"] = None
+        travel["C", "A"] = (30, 1200, 160)
+        p = profiles.validate({"max_miles": 1, "max_gain_ft": 300})
+        start = dict(latitude=38.7, longitude=-107.2)
+        options = []
+        exact = []
+
+        def evaluate(ids, approx):
+            edges = [travel[a, b] for a, b in zip(["E"] + ids, ids + ["E"])]
+            if any(e is None for e in edges):
+                return None
+            if (
+                sum(e[1] for e in edges) > 1609.344 * 0.75
+                or sum(e[2] for e in edges) > 300 * 0.3048 * 0.75
+            ):
+                return None
+            legs = [dict(hours_low=e[0] / 60, hours_high=e[0] / 60) for e in edges]
+            variant = schedule.variant(
+                "2026-10-31",
+                start,
+                legs,
+                p,
+                dict(am_end_offset=125, min_glassing_minutes=15),
+                "am",
+            )
+            if not variant["feasible"]:
+                return None
+            budgets = [
+                e["minutes"] for e in variant["events"] if e["kind"] == "observe"
+            ]
+            reward = (
+                allocate([data[i] for i in ids], budgets, 1)[1]
+                if approx
+                else oracle([data[i] for i in ids], budgets)
+            )
+            return reward, sum(e[0] for e in edges) / 60, sum(e[2] for e in edges)
+
+        proposed, _ = member_options(rows, [], True)
+        for members in proposed:
+            ids = [r["id"] for r in members]
+            result = evaluate(ids, True)
+            if result:
+                value, hours, gain = result
+                options.append(
+                    dict(
+                        id="-".join(ids),
+                        viewpoints=members,
+                        movement=dict(hours_high=hours, ascent_m=gain, offtrail_m=0),
+                        schedules={
+                            m: dict(feasible=True, practical=dict(relative_m2=value))
+                            for m in ("am", "pm")
+                        },
+                    )
+                )
+        # Separate enumeration and dictionary cell-union oracle, without the
+        # production member generator, knapsack, max reducer or frontier.
+        for count in (1, 2):
+            for ids in itertools.permutations(nodes, count):
+                value = evaluate(list(ids), False)
+                if value:
+                    exact.append(value[0])
+        self.assertAlmostEqual(
+            max(o["schedules"]["am"]["practical"]["relative_m2"] for o in options),
+            max(exact),
+        )
+        _, recommended = select_options(options)
+        chosen = next(o for o in options if o["id"] == recommended["am"])
+        self.assertGreaterEqual(
+            chosen["schedules"]["am"]["practical"]["relative_m2"], 0.9 * max(exact)
+        )
+        self.assertNotIn("B-C", {o["id"] for o in options})
+        self.assertNotIn("C-A", {o["id"] for o in options})

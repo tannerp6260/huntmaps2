@@ -11,8 +11,16 @@ import time
 
 import numpy as np
 
-from trail_scout.storage import atomic, checked, digest, file_hash, read, seal
-from . import model
+from trail_scout.storage import (
+    atomic,
+    checked,
+    digest,
+    file_hash,
+    read,
+    seal,
+    IntegrityError,
+)
+from . import model, cache
 from .engine import community_layers
 from .package import CommunityPackage, installed_root
 
@@ -306,6 +314,7 @@ class Objective:
             ident = row["id"]
             identity = dict(
                 version=VERSION,
+                support_schema=2,
                 package=self.package.spec["id"],
                 sources=pack.revision,
                 grid=[terrain.gt, terrain.a.shape],
@@ -317,12 +326,16 @@ class Objective:
             key = digest(identity)
             folder = paths.state / "cache/timed-support" / key
             path = folder / "support.npz"
-            if path.exists():
+            if cache.ready(folder):
                 with np.load(checked(path), allow_pickle=False) as z:
                     arrays = {
                         k: z[k] for k in ("indices", "q", "known", "patch", "group")
                     }
                 metadata = read(checked(folder / "patches.json"))
+                if digest(metadata["identity"]) != key:
+                    raise IntegrityError(
+                        "Timed support identity differs from requested grid/policy/source"
+                    )
                 self.hits += 1
             else:
                 if self.new is None:
@@ -364,12 +377,17 @@ class Objective:
                     group=get(new["group"]),
                 )
                 metadata = dict(identity=identity, patches=cards)
-                folder.mkdir(parents=True, exist_ok=True)
+                cache.begin(folder)
                 with path.open("wb") as f:
                     np.savez_compressed(f, **arrays)
                 seal(path)
                 atomic(folder / "patches.json", metadata)
                 seal(folder / "patches.json")
+                cache.publish(folder)
+            if len(arrays["indices"]) and arrays["indices"].max() >= terrain.a.size:
+                raise IntegrityError(
+                    "Timed support indices exceed requested source grid"
+                )
             memory += sum(a.nbytes for a in arrays.values())
             if memory > 256 * 1024**2:
                 raise ValueError(

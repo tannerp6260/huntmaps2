@@ -16,6 +16,7 @@ from trail_scout.analysis import npz_read
 from trail_scout.sources import feature, collection
 from trail_scout.storage import atomic, checked, digest, implementation, now, read, seal
 from .timed import Objective
+from . import cache
 from .selection import select_options
 from .inspection import finalists
 
@@ -41,7 +42,7 @@ def key(paths, pack, config):
 
 
 def store(folder, result, options, paths_by_id, evidence_folder):
-    folder.mkdir(parents=True, exist_ok=True)
+    cache.begin(folder)
     clean = [
         {
             k: v
@@ -60,6 +61,7 @@ def store(folder, result, options, paths_by_id, evidence_folder):
     seal(folder / "basis.json")
     shutil.copyfile(evidence_folder / "relief.png", folder / "relief.png")
     seal(folder / "relief.png")
+    cache.publish(folder)
 
 
 def run(

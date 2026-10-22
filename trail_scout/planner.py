@@ -311,7 +311,7 @@ def calculate(paths, pack, body, folder, progress=lambda *a: None, cancel=lambda
         from practical_glassing import replan
 
         route_basis = replan.key(paths, pack, c)
-        if (route_basis / "basis.json").exists():
+        if replan.cache.ready(route_basis):
             result = replan.run(
                 paths,
                 pack,
