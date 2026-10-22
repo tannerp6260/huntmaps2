@@ -1,0 +1,92 @@
+{
+  "baseline_kind": "Fresh Stage1 unchanged-code baseline; baseline only, no new acceptance claimed",
+  "baseline_path": "/tmp/huntmaps-ux-sol-stage1/baseline/evidence.json",
+  "new_path": "/tmp/huntmaps-ux-sol-stage2/matched-task-accepted/evidence.json",
+  "identical_settings": true,
+  "identical_source_revision": true,
+  "identical_recommendations": true,
+  "identical_movement": true,
+  "identical_remaining": true,
+  "identical_coordinates": true,
+  "baseline_steps": [
+    "Select Flattop Bench entry",
+    "Expand timed practical settings",
+    "Opt into timed practical plans",
+    "Compare",
+    "Open foreground inspection",
+    "Open Schedule to read observation/return",
+    "Name plan",
+    "Save",
+    "Export GPX"
+  ],
+  "new_steps": [
+    "Select Flattop Bench entry",
+    "Expand timed practical settings",
+    "Opt into timed practical plans",
+    "Compare",
+    "Open foreground inspection",
+    "Open Schedule to read observation/return",
+    "Name plan",
+    "Save",
+    "Export GPX"
+  ],
+  "baseline_positions": {
+    "compare": {
+      "x": 24,
+      "y": 1278.796875,
+      "width": 256,
+      "height": 50
+    },
+    "firstOption": {
+      "x": 334,
+      "y": 746.796875,
+      "width": 242,
+      "height": 182
+    },
+    "selectedOption": {
+      "x": 334,
+      "y": 746.796875,
+      "width": 242,
+      "height": 182
+    },
+    "save": {
+      "x": 617,
+      "y": 2788.984375,
+      "width": 700,
+      "height": 38
+    }
+  },
+  "new_positions": {
+    "compare": {
+      "x": 24,
+      "y": 879,
+      "width": 256,
+      "height": 50
+    },
+    "recommendation": {
+      "x": 333,
+      "y": 254.796875,
+      "width": 1005,
+      "height": 364
+    },
+    "save": {
+      "x": 354,
+      "y": 2846.671875,
+      "width": 963,
+      "height": 38
+    }
+  },
+  "baseline_analysis_to_region_ms": 18880.686647000002,
+  "new_analysis_to_new_analysis_region_ms": 6994.579794,
+  "cache_conditions": "Baseline fresh state vs new warm derived caches; not comparable GIS speed measurements. No participant task-time claim.",
+  "new_selection_ui_latency": [
+    {
+      "mode": "pm",
+      "uiMs": 27.94237300000168
+    },
+    {
+      "mode": "am",
+      "uiMs": 47.2403290000002
+    }
+  ]
+}

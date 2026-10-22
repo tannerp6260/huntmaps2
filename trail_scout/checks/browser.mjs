@@ -90,6 +90,10 @@ async function compare() {
     (id) => document.querySelector("main")?.dataset.analysisId === id,
     r.analysis_id,
   );
+  const previews = page.locator(".all-previews");
+  // The full retained set is now progressive evidence; exercise its disclosure.
+  if (!(await previews.evaluate((e) => e.open)))
+    await previews.locator("summary").click();
   await page.locator(".option").first().waitFor();
   await page.waitForTimeout(300);
   return r;
@@ -374,6 +378,10 @@ try {
   await page.unroute("**/api/overview/**");
   await page.unroute("**/artifacts/**/relief.png");
   await page.reload();
+  const previews = page.locator(".all-previews");
+  // The full retained set is now progressive evidence; exercise its disclosure.
+  if (!(await previews.evaluate((e) => e.open)))
+    await previews.locator("summary").click();
   await page.locator(".option").first().waitFor();
   await layout(900, "06-recovered-offline-900");
   assert.deepEqual(errors, []);

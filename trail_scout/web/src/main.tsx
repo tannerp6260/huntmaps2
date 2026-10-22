@@ -9,6 +9,7 @@ import {
   PracticalPlanSettings,
   TimedResult,
 } from "./practical";
+import { readWorkspace, writeWorkspace } from "./workspace";
 import "./style.css";
 
 function NumberField({
@@ -41,6 +42,21 @@ function NumberField({
   );
 }
 function App() {
+  const restored = useRef(readWorkspace());
+  const [ready, setReady] = useState(false),
+    [sourcesLoading, setSourcesLoading] = useState(true),
+    [contextReady, setContextReady] = useState(false),
+    [contextFailed, setContextFailed] = useState(false),
+    [contextRetry, setContextRetry] = useState(0);
+  const stateIdentity = useRef("");
+  const draftQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const queueDraft = (settings: RecordValue) => {
+    const next = draftQueue.current
+      .catch(() => {})
+      .then(() => api("/draft", { settings }, "PUT"));
+    draftQueue.current = next;
+    return next;
+  };
   const [config, setConfig] = useState<RecordValue>(defaults),
     [presets, setPresets] = useState<RecordValue>({}),
     [area, setArea] = useState<RecordValue | null>(null),
@@ -48,7 +64,7 @@ function App() {
     [entries, setEntries] = useState<RecordValue[]>([]);
   const [result, setResult] = useState<RecordValue | null>(null),
     [selected, setSelected] = useState(""),
-    [mode, setMode] = useState("am"),
+    [mode, setMode] = useState(restored.current?.mode || "am"),
     [job, setJob] = useState<RecordValue | null>(null),
     [history, setHistory] = useState<RecordValue[]>([]),
     [saved, setSaved] = useState<RecordValue[]>([]),
@@ -57,12 +73,12 @@ function App() {
     [notice, setNotice] = useState(""),
     [dirty, setDirty] = useState(false),
     [busy, setBusy] = useState(false),
-    [name, setName] = useState("TrailScout outing"),
+    [name, setName] = useState(restored.current?.name || "TrailScout outing"),
     [editMode, setEditMode] = useState(""),
     [segment, setSegment] = useState<RecordValue | null>(null),
     [point, setPoint] = useState<RecordValue | null>(null),
     [profilePoint, setProfilePoint] = useState<RecordValue | null>(null),
-    [tab, setTab] = useState("route"),
+    [tab, setTab] = useState(restored.current?.tab || "route"),
     [importText, setImportText] = useState(""),
     [manualNote, setManualNote] = useState(""),
     [sourceKind, setSourceKind] = useState("closed_roads"),
@@ -73,6 +89,8 @@ function App() {
   const inspectionRef = useRef<HTMLElement>(null),
     scheduleRef = useRef<HTMLElement>(null),
     saveRef = useRef<HTMLDivElement>(null);
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
   const jobRef = useRef(""),
     configRef = useRef(config),
     dirtyRef = useRef(false),
@@ -87,12 +105,14 @@ function App() {
     dirty ||
     (!!result && JSON.stringify(config) !== JSON.stringify(result.settings));
   const selectOption = (id: string) => {
+    openRevision.current++;
     setSelected(id);
     setProfilePoint(null);
     setPoint(null);
     setSegment(null);
   };
   const selectMode = (value: string) => {
+    openRevision.current++;
     setMode(value);
     if (result?.recommended[value]) selectOption(result.recommended[value]);
   };
@@ -107,6 +127,7 @@ function App() {
   };
   const change = (patch: RecordValue) => {
     editRevision.current++;
+    openRevision.current++;
     setConfig((c) => ({ ...c, ...patch }));
     setDirty(true);
     setNotice(
@@ -125,6 +146,7 @@ function App() {
   useEffect(() => {
     mounted.current = true;
     const initialEditRevision = editRevision.current;
+    const initialOpenRevision = openRevision.current;
     (async () => {
       const [areas, p, d, h, plans, current] = await Promise.all([
         api("/areas").catch((e) => {
@@ -142,12 +164,20 @@ function App() {
         api("/health"),
       ]);
       if (!mounted.current) return;
-      setArea(areas[0]);
+      stateIdentity.current = current.state;
+      if (restored.current?.state !== current.state) {
+        restored.current = null;
+        setMode("am");
+        setName("TrailScout outing");
+      }
+      setArea(areas[0] || null);
+      setSourcesLoading(false);
       setPresets(p);
       setHistory(h);
       setSaved(plans);
       if (editRevision.current === initialEditRevision) {
-        if (d.settings) setConfig(d.settings);
+        if (restored.current?.pendingSettings || d.settings)
+          setConfig(restored.current?.pendingSettings || d.settings);
         else
           setConfig({
             ...defaults,
@@ -155,7 +185,7 @@ function App() {
           });
       }
       const active = h.find((j: RecordValue) =>
-        ["running", "pending"].includes(j.status),
+        ["running", "pending", "cancelling"].includes(j.status),
       );
       if (active) {
         jobRef.current = active.id;
@@ -165,17 +195,54 @@ function App() {
           (j: RecordValue) => j.status === "completed" && j.kind !== "prepare",
         );
         if (completed) {
-          const r = await api("/analyses/" + completed.analysis_id);
-          if (!mounted.current) return;
+          const remembered = restored.current;
+          // Restore only an analysis still present in this state's job history.
+          const noNewCompletion =
+            remembered?.latestCompleted === completed.analysis_id ||
+            remembered?.analysisId === completed.analysis_id;
+          const analysisId =
+            noNewCompletion &&
+            h.some(
+              (j: RecordValue) =>
+                j.status === "completed" &&
+                j.analysis_id === remembered?.analysisId,
+            )
+              ? remembered!.analysisId
+              : completed.analysis_id;
+          const r = await api("/analyses/" + analysisId);
+          if (!mounted.current || openRevision.current !== initialOpenRevision)
+            return;
+          const period =
+            r.practical_plan &&
+            ["combined", "stay"].includes(remembered?.mode || "")
+              ? "am"
+              : remembered?.mode || "am";
           setResult(r);
-          setName(r.start.label.split(" ·")[0] + " scouting");
-          setSelected(r.recommended.am || r.options[0]?.id || "");
+          setMode(period);
+          setName(
+            remembered?.name || r.start.label.split(" ·")[0] + " scouting",
+          );
+          setSelected(
+            remembered?.analysisId === r.analysis_id &&
+              r.options.some((o: RecordValue) => o.id === remembered?.selected)
+              ? remembered?.selected
+              : r.recommended[period] || "",
+          );
+          if (
+            remembered?.savedId &&
+            plans.some((v: RecordValue) => v.id === remembered.savedId)
+          ) {
+            const v = await api("/plans/" + remembered.savedId);
+            if (mounted.current && openRevision.current === initialOpenRevision)
+              setSavedPlan(v);
+          }
           if (editRevision.current === initialEditRevision)
-            setConfig(d.settings || r.settings);
+            setConfig(remembered?.pendingSettings || d.settings || r.settings);
           setDirty(
             editRevision.current !== initialEditRevision ||
-              (!!d.settings &&
-                JSON.stringify(d.settings) !== JSON.stringify(r.settings)) ||
+              JSON.stringify(
+                restored.current?.pendingSettings || d.settings || r.settings,
+              ) !== JSON.stringify(r.settings) ||
               r.implementation !== current.implementation ||
               r.source_revision !== areas[0]?.revision ||
               (!!r.practical &&
@@ -185,17 +252,27 @@ function App() {
           );
         }
       }
-    })().catch((e) => setError(e.message));
+    })()
+      .catch((e) => setError("Workspace could not load: " + e.message))
+      .finally(() => {
+        if (mounted.current) {
+          setReady(true);
+          setSourcesLoading(false);
+        }
+      });
     return () => {
       mounted.current = false;
     };
   }, []);
   useEffect(() => {
     let live = true;
+    setContextReady(false);
+    setContextFailed(false);
+    setContext(null);
     const widthQuery = config.vehicle_width_inches
       ? "&width=" + config.vehicle_width_inches
       : "";
-    api(
+    const contextRequest = api(
       "/context?date=" +
         config.date +
         "&vehicle=" +
@@ -207,21 +284,23 @@ function App() {
       })
       .catch((e) => {
         if (live) setError("Local context unavailable: " + e.message);
+        return false;
       });
-    (config.restrictions.length
-      ? api("/starts", {
-          date: config.date,
-          vehicle: config.vehicle,
-          restrictions: config.restrictions,
-          vehicle_width_inches: config.vehicle_width_inches ?? null,
-        })
-      : api(
-          "/starts?date=" +
-            config.date +
-            "&vehicle=" +
-            config.vehicle +
-            widthQuery,
-        )
+    const startsRequest = (
+      config.restrictions.length
+        ? api("/starts", {
+            date: config.date,
+            vehicle: config.vehicle,
+            restrictions: config.restrictions,
+            vehicle_width_inches: config.vehicle_width_inches ?? null,
+          })
+        : api(
+            "/starts?date=" +
+              config.date +
+              "&vehicle=" +
+              config.vehicle +
+              widthQuery,
+          )
     )
       .then((s) => {
         if (live) {
@@ -232,36 +311,75 @@ function App() {
       })
       .catch((e) => {
         if (live) setError(e.message);
+        return false;
       });
+    Promise.all([contextRequest, startsRequest]).then(([c, s]) => {
+      if (live) {
+        setContextReady(c !== false && s !== false);
+        setContextFailed(c === false || s === false);
+      }
+    });
     return () => {
       live = false;
     };
   }, [
+    contextRetry,
     config.date,
     config.vehicle,
     config.vehicle_width_inches,
     JSON.stringify(config.restrictions),
   ]);
   useEffect(() => {
-    if (!dirty) return;
-    const timer = setTimeout(
-      () =>
-        api("/draft", { settings: config }, "PUT").catch((e) =>
-          setError("Draft not saved: " + e.message),
-        ),
-      600,
-    );
+    if (!ready) return;
+    // Keep an immediate local recovery copy until the serialized server write lands.
+    writeWorkspace({ pendingSettings: config });
+    const timer = setTimeout(() => {
+      queueDraft(config)
+        .then(() => {
+          if (JSON.stringify(configRef.current) === JSON.stringify(config))
+            writeWorkspace({ pendingSettings: null });
+        })
+        .catch((e) => setError("Draft not saved: " + e.message));
+    }, 600);
     return () => clearTimeout(timer);
-  }, [config, dirty]);
+  }, [config, ready]);
+  useEffect(() => {
+    if (ready)
+      writeWorkspace({
+        state: stateIdentity.current,
+        analysisId: result?.analysis_id || "",
+        selected,
+        mode,
+        tab,
+        name,
+        savedId: savedPlan?.id || "",
+        latestCompleted:
+          history.find(
+            (j: RecordValue) =>
+              j.status === "completed" && j.kind !== "prepare",
+          )?.analysis_id || "",
+      });
+  }, [
+    ready,
+    result?.analysis_id,
+    selected,
+    mode,
+    tab,
+    name,
+    savedPlan?.id,
+    history,
+  ]);
   useEffect(() => {
     if (!job || !["pending", "running", "cancelling"].includes(job.status))
       return;
     let live = true;
+    let polling = false;
     const timer = setInterval(async () => {
+      if (polling) return;
+      polling = true;
       try {
         const j = await api("/jobs/" + job.id);
         if (!live || jobRef.current !== job.id) return;
-        setJob(j);
         if (j.status === "completed") {
           if (j.kind === "prepare") {
             setArea((await api("/areas"))[0]);
@@ -279,7 +397,12 @@ function App() {
             const r = await api("/analyses/" + j.analysis_id);
             if (!mounted.current || jobRef.current !== job.id) return;
             setResult(r);
-            setSelected(r.recommended[mode] || r.options[0]?.id || "");
+            const period =
+              r.practical_plan && ["combined", "stay"].includes(modeRef.current)
+                ? "am"
+                : modeRef.current;
+            setMode(period);
+            setSelected(r.recommended[period] || "");
             setPoint(null);
             setSegment(null);
             if (!dirtyRef.current)
@@ -287,16 +410,21 @@ function App() {
                 "Comparison ready. Review a preview, then save the plan you choose.",
               );
           }
+          if (!live || jobRef.current !== job.id) return;
+          setJob(j);
           setHistory(await api("/jobs"));
         } else if (["failed", "cancelled", "interrupted"].includes(j.status)) {
+          setJob(j);
           setError(j.error || j.status);
           setHistory(await api("/jobs"));
-        }
+        } else setJob(j);
       } catch (e: any) {
         if (live)
           setError(
             "Status unavailable; work may still be running. " + e.message,
           );
+      } finally {
+        polling = false;
       }
     }, 600);
     return () => {
@@ -305,13 +433,15 @@ function App() {
     };
   }, [job?.id, job?.status]);
   async function run() {
+    if (busy || active || !ready || !contextReady || !area) return;
+    openRevision.current++;
     setBusy(true);
     setError("");
     setNotice("");
     const submitted = configRef.current,
       revision = editRevision.current;
     try {
-      await api("/draft", { settings: submitted }, "PUT");
+      await queueDraft(submitted);
       const j = await api("/jobs", submitted);
       jobRef.current = j.id;
       setJob(j);
@@ -333,10 +463,19 @@ function App() {
 
   async function openSaved(id: string) {
     const revision = ++openRevision.current;
+    const edit = editRevision.current;
     const v = await api("/plans/" + id);
     const r = await api("/analyses/" + v.analysis_id);
     const current = await api("/health");
-    if (openRevision.current !== revision) return;
+    if (
+      openRevision.current !== revision ||
+      editRevision.current !== edit ||
+      active
+    )
+      return;
+    setProfilePoint(null);
+    setPoint(null);
+    setSegment(null);
     setSavedPlan(v);
     setName(v.name);
     setMode(v.mode);
@@ -357,8 +496,45 @@ function App() {
             ". Adjusting and saving creates a new version.",
     );
   }
+  async function openPreview(id: string) {
+    const revision = ++openRevision.current;
+    const r = await api("/analyses/" + id);
+    const current = await api("/health");
+    if (openRevision.current !== revision || active) return;
+    setResult(r);
+    setConfig(r.settings);
+    const period =
+      r.practical_plan && ["combined", "stay"].includes(modeRef.current)
+        ? "am"
+        : modeRef.current;
+    setMode(period);
+    setSelected(r.recommended[period] || "");
+    setPoint(null);
+    setSegment(null);
+    setProfilePoint(null);
+    setSavedPlan(null);
+    const stale =
+      r.implementation !== current.implementation ||
+      r.source_revision !== area?.revision ||
+      (!!r.practical && r.practical.package !== area?.practical?.id) ||
+      (!!r.practical_plan && r.practical_plan.package !== area?.practical?.id);
+    setDirty(stale);
+    setNotice(
+      stale
+        ? "Historical preview uses earlier sources/model. Recalculate before saving."
+        : "Opened calculation preview. Saving creates a separate immutable plan.",
+    );
+  }
   async function save() {
-    if (!option || !result) return;
+    if (
+      !option ||
+      !result ||
+      previewStale ||
+      active ||
+      busy ||
+      !currentSchedule?.feasible
+    )
+      return;
     setBusy(true);
     try {
       const v = await api("/plans", {
@@ -486,481 +662,533 @@ function App() {
           </span>
         </a>
         <div className="header-status">
-          <span className="dot" /> Local & offline ready
+          <span className="dot" />{" "}
+          {sourcesLoading
+            ? "Checking local sources…"
+            : area
+              ? "Local sources ready"
+              : "Sources need attention"}
           <span className="tag">PROVISIONAL DESKTOP PLANS</span>
         </div>
       </header>
       <div className="workspace">
         <aside className="controls">
           <div className="eyebrow">PLAN AN OUTING</div>
-          <h1>
-            Good country.
-            <br />
-            Manageable effort.
-          </h1>
-          <p className="intro">
-            Compare useful views along a real walk, with enough in reserve to
-            get back.
-          </p>
-          <label>
-            Area & data package
-            <select
-              aria-label="Area & data package"
-              value="co-gmu54"
-              onChange={() => {}}
-            >
-              <option value="co-gmu54">Colorado · GMU 54</option>
-            </select>
-          </label>
-          <div className="source-status">
-            {area ? (
-              <>
-                <span className="dot" /> Core ready · {area.version}
-                <small>
-                  Bounded corridor analysis, not a whole-unit search.
-                </small>
-              </>
-            ) : (
-              <>Checking real local sources…</>
-            )}
-          </div>
-          <div className="field-row">
+          <h1>Choose a manageable walk.</h1>
+          <fieldset className="input-fields" disabled={!ready}>
+            <div className="source-status">
+              {area ? (
+                <>
+                  <span className="dot" /> Colorado GMU 54 · Core ready ·{" "}
+                  {area.version}
+                </>
+              ) : (
+                <>
+                  {sourcesLoading
+                    ? "Checking real local sources…"
+                    : "Core package needs attention."}
+                </>
+              )}
+            </div>
             <label>
-              Outing date
-              <input
-                type="date"
-                value={config.date}
-                onChange={(e) => change({ date: e.target.value })}
-              />
-            </label>
-            <label>
-              Vehicle
+              Who is going?
               <select
-                value={config.vehicle}
-                onChange={(e) => change({ vehicle: e.target.value })}
-              >
-                <option value="truck">Truck</option>
-                <option value="teryx">Teryx / side-by-side</option>
-              </select>
-            </label>
-          </div>
-          {config.vehicle === "teryx" && (
-            <label>
-              Actual vehicle width · inches
-              <input
-                type="number"
-                min="30"
-                max="100"
-                value={config.vehicle_width_inches ?? ""}
-                placeholder="Unknown"
+                value={config.profile.preset}
                 onChange={(e) =>
                   change({
-                    vehicle_width_inches: e.target.value
-                      ? Number(e.target.value)
-                      : null,
+                    profile: {
+                      preset: e.target.value,
+                      ...presets[e.target.value],
+                    },
                   })
                 }
-              />
-              <small>
-                Check your vehicle's actual width. ATV permission is not
-                side-by-side permission. Complete drive-to-parking remains
-                conditional.
-              </small>
-            </label>
-          )}
-          <label>
-            Who is going?
-            <select
-              value={config.profile.preset}
-              onChange={(e) =>
-                change({
-                  profile: {
-                    preset: e.target.value,
-                    ...presets[e.target.value],
-                  },
-                })
-              }
-            >
-              <option value="together">Together · conservative</option>
-              <option value="dad">Dad · easy pace</option>
-              <option value="tanner">Tanner · moderate</option>
-              <option value="extended">Extended family · 3 mi / 900 ft</option>
-            </select>
-          </label>
-          <p className="micro">{config.profile.explanation}</p>
-          <div className="field-row">
-            <NumberField
-              label="Daily miles limit"
-              value={config.profile.max_miles || 2.5}
-              onChange={(n) => profileChange("max_miles", n)}
-              step={0.25}
-            />
-            <NumberField
-              label="Gain limit · ft"
-              value={config.profile.max_gain_ft || 750}
-              onChange={(n) => profileChange("max_gain_ft", n)}
-              step={50}
-            />
-          </div>
-          <div className="reserve">
-            {Math.round((config.profile.reserve_fraction || 0.25) * 100)}%
-            movement reserve held back{" "}
-            <span>Limits are guardrails, not goals.</span>
-          </div>
-          <label>
-            Mapped entry / assumed parking
-            <select
-              value={config.start_id}
-              onChange={(e) => {
-                change({ start_id: e.target.value, custom_start: null });
-                setName(
-                  (entries.find((v) => v.id === e.target.value)?.label ||
-                    "TrailScout") + " scouting",
-                );
-              }}
-            >
-              {!entries.some((e) => e.id === config.start_id) &&
-                config.start_id && (
-                  <option value={config.start_id}>
-                    Prior entry · currently unavailable
-                  </option>
-                )}
-              {entries.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {e.label}
+              >
+                <option value="together">Together · conservative</option>
+                <option value="dad">Dad · easy pace</option>
+                <option value="tanner">Tanner · moderate</option>
+                <option value="extended">
+                  Extended family · 3 mi / 900 ft
                 </option>
-              ))}
-            </select>
-          </label>
-          <p className="micro">
-            {config.custom_start
-              ? "Custom start active: " +
-                config.custom_start.label +
-                " · " +
-                config.custom_start.longitude.toFixed(6) +
-                ", " +
-                config.custom_start.latitude.toFixed(6)
-              : entries.find((e) => e.id === config.start_id)?.note}
-          </p>
-          <details>
-            <summary>Effort, optics & search limits</summary>
-            <div className="detail-body">
+              </select>
+            </label>
+
+            <div className="field-row">
               <NumberField
-                label="Flat pace · mph"
-                value={config.profile.pace_mph || 1.5}
-                onChange={(n) => profileChange("pace_mph", n)}
-                step={0.1}
+                label="Daily miles limit"
+                value={config.profile.max_miles ?? 2.5}
+                onChange={(n) => profileChange("max_miles", n)}
+                step={0.25}
               />
               <NumberField
-                label="Elapsed outing limit · hours"
-                value={config.profile.max_hours || 7}
-                onChange={(n) => profileChange("max_hours", n)}
-                step={0.5}
-              />
-              <NumberField
-                label="Movement reserve · fraction"
-                value={config.profile.reserve_fraction || 0.25}
-                onChange={(n) => profileChange("reserve_fraction", n)}
-                step={0.05}
-                max={0.6}
-              />
-              <NumberField
-                label="Conservative time multiplier"
-                value={config.profile.time_margin || 1.35}
-                onChange={(n) => profileChange("time_margin", n)}
-                step={0.05}
-              />
-              <NumberField
-                label="Condition time multiplier · dry=1"
-                value={config.profile.condition_factor || 1}
-                onChange={(n) => profileChange("condition_factor", n)}
-                step={0.1}
-              />
-              <NumberField
-                label="Off-trail round-trip miles limit"
-                value={config.profile.offtrail_miles ?? 0.25}
-                onChange={(n) => profileChange("offtrail_miles", n)}
-                step={0.05}
-              />
-              <NumberField
-                label="Off-trail round-trip minutes limit"
-                value={config.profile.offtrail_minutes ?? 35}
-                onChange={(n) => profileChange("offtrail_minutes", n)}
-                step={5}
-              />
-              <NumberField
-                label="Off-trail ground slope limit · °"
-                value={config.profile.max_offtrail_slope || 20}
-                onChange={(n) => profileChange("max_offtrail_slope", n)}
-                max={35}
-              />
-              <NumberField
-                label="Sustained walking grade limit · %"
-                value={(config.profile.max_route_grade || 0.3) * 100}
-                onChange={(n) => profileChange("max_route_grade", n / 100)}
-                max={80}
-              />
-              <NumberField
-                label="Steep travel allowance · metres"
-                value={config.profile.max_steep_m ?? 250}
-                onChange={(n) => profileChange("max_steep_m", n)}
+                label="Gain limit · ft"
+                value={config.profile.max_gain_ft ?? 750}
+                onChange={(n) => profileChange("max_gain_ft", n)}
                 step={50}
               />
-              <NumberField
-                label="Steep grade band begins · %"
-                value={(config.profile.steep_grade || 0.15) * 100}
-                onChange={(n) => profileChange("steep_grade", n / 100)}
-                max={50}
-              />
-              <NumberField
-                label="Off-trail tree cover limit · %"
-                value={(config.profile.max_tree ?? 0.45) * 100}
-                onChange={(n) => profileChange("max_tree", n / 100)}
-                max={100}
-              />
-              <NumberField
-                label="Off-trail shrub cover limit · %"
-                value={(config.profile.max_shrub ?? 0.65) * 100}
-                onChange={(n) => profileChange("max_shrub", n / 100)}
-                max={100}
-              />
-              <NumberField
-                label="Viewing radius · metres"
-                value={config.view_radius_m}
-                onChange={(n) => change({ view_radius_m: n })}
-                step={250}
-                min={500}
-                max={3000}
-              />
-              <p className="micro">
-                16×50 stabilized binoculars, 77 mm scope & tripod. Radius is an
-                analysis assumption, not a detection or shooting guarantee.
-              </p>
-              <NumberField
-                label="Corridor radius from entry · metres"
-                value={config.corridor_m}
-                onChange={(n) => change({ corridor_m: n })}
-                step={500}
-                min={500}
-                max={4500}
-              />
-              <NumberField
-                label="Spur search envelope · metres"
-                value={config.search_envelope_m}
-                onChange={(n) => change({ search_envelope_m: n })}
-                step={100}
-                max={1500}
-              />
-              <p className="micro">
-                An outer search envelope, not a bushwhacking allowance. Every
-                proposed spur must fit its own distance, grade, cover and return
-                limits.
-              </p>
-              <NumberField
-                label="Viewpoint evaluation budget"
-                value={config.candidate_budget}
-                onChange={(n) => change({ candidate_budget: n })}
-                min={8}
-                max={80}
-              />
             </div>
-          </details>
-          <PracticalPlanSettings
-            value={config.practical_plan ?? null}
-            ready={area?.practical?.status === "ready"}
-            change={(practical_plan) => change({ practical_plan })}
-          />
-          <PracticalSettings
-            value={config.practical ?? null}
-            ready={area?.practical?.status === "ready"}
-            change={(practical) => change({ practical })}
-          />
-          <details>
-            <summary>Observation windows & dark travel</summary>
-            <div className="detail-body">
-              <p className="micro">
-                Local astronomical sunrise/sunset anchor the windows. Mountain
-                shadows and legal shooting hours are separate.
-              </p>
-              <NumberField
-                label="AM begins · minutes from sunrise"
-                value={config.schedule.am_start_offset ?? 0}
-                onChange={(n) => scheduleChange("am_start_offset", n)}
-                min={-360}
-              />
-              <NumberField
-                label="AM ends · minutes from sunrise"
-                value={config.schedule.am_end_offset ?? 180}
-                onChange={(n) => scheduleChange("am_end_offset", n)}
-                min={-360}
-              />
-              <NumberField
-                label="PM begins · minutes from sunset"
-                value={config.schedule.pm_start_offset ?? -180}
-                onChange={(n) => scheduleChange("pm_start_offset", n)}
-                min={-360}
-              />
-              <NumberField
-                label="PM ends · minutes from sunset"
-                value={config.schedule.pm_end_offset ?? 0}
-                onChange={(n) => scheduleChange("pm_end_offset", n)}
-                min={-360}
-              />
-              <NumberField
-                label="Minimum observation · minutes/stop"
-                value={config.schedule.min_glassing_minutes ?? 60}
-                onChange={(n) => scheduleChange("min_glassing_minutes", n)}
-                min={15}
-              />
-              <NumberField
-                label="Setup allowance · minutes/stop"
-                value={config.schedule.setup_minutes ?? 15}
-                onChange={(n) => scheduleChange("setup_minutes", n)}
-              />
-              <NumberField
-                label="Break allowance · minutes"
-                value={config.schedule.break_minutes ?? 20}
-                onChange={(n) => scheduleChange("break_minutes", n)}
-              />
+            <div className="reserve" aria-label="Usable effort budget">
+              <strong>
+                Usable after reserve:{" "}
+                {Number(
+                  (
+                    (config.profile.max_miles ?? 2.5) *
+                    (1 - (config.profile.reserve_fraction ?? 0.25))
+                  ).toFixed(3),
+                )}{" "}
+                mi /{" "}
+                {Number(
+                  (
+                    (config.profile.max_gain_ft ?? 750) *
+                    (1 - (config.profile.reserve_fraction ?? 0.25))
+                  ).toFixed(1),
+                )}{" "}
+                ft
+              </strong>
+              <span>
+                {Math.round((config.profile.reserve_fraction ?? 0.25) * 100)}%
+                held from nominal daily limits above. Includes the complete
+                return; limits never relax automatically.
+              </span>
+            </div>
+            <div className="field-row">
               <label>
-                Earliest departure · local
+                Outing date
                 <input
-                  type="time"
-                  value={config.schedule.earliest || "04:00"}
-                  onChange={(e) => scheduleChange("earliest", e.target.value)}
+                  type="date"
+                  value={config.date}
+                  onChange={(e) => change({ date: e.target.value })}
                 />
               </label>
               <label>
-                Latest return · local
-                <input
-                  type="time"
-                  value={config.schedule.latest || "21:00"}
-                  onChange={(e) => scheduleChange("latest", e.target.value)}
-                />
-              </label>
-              <label className="check">
-                <input
-                  type="checkbox"
-                  checked={config.schedule.dark_travel || false}
-                  onChange={(e) =>
-                    scheduleChange("dark_travel", e.target.checked)
-                  }
-                />
-                Allow travel before/after civil twilight
+                Vehicle
+                <select
+                  value={config.vehicle}
+                  onChange={(e) => change({ vehicle: e.target.value })}
+                >
+                  <option value="truck">Truck</option>
+                  <option value="teryx">Teryx / side-by-side</option>
+                </select>
               </label>
             </div>
-          </details>
-          <details>
-            <summary>Access assumptions & owner edits</summary>
-            <div className="detail-body">
-              <label className="check">
+            {config.vehicle === "teryx" && (
+              <label>
+                Actual vehicle width · inches
                 <input
-                  type="checkbox"
-                  checked={config.explore_unknown}
+                  type="number"
+                  min="30"
+                  max="100"
+                  value={config.vehicle_width_inches ?? ""}
+                  placeholder="Unknown"
                   onChange={(e) =>
-                    change({ explore_unknown: e.target.checked })
+                    change({
+                      vehicle_width_inches: e.target.value
+                        ? Number(e.target.value)
+                        : null,
+                    })
                   }
                 />
-                Explore unknown foot access as a scenario
+                <small>
+                  Check your vehicle's actual width. ATV permission is not
+                  side-by-side permission. Complete drive-to-parking remains
+                  conditional.
+                </small>
               </label>
+            )}
+            <label>
+              Mapped entry / assumed parking
+              <select
+                value={config.start_id}
+                onChange={(e) => {
+                  change({ start_id: e.target.value, custom_start: null });
+                  setName(
+                    (entries.find((v) => v.id === e.target.value)?.label ||
+                      "TrailScout") + " scouting",
+                  );
+                }}
+              >
+                {!entries.some((e) => e.id === config.start_id) &&
+                  config.start_id && (
+                    <option value={config.start_id}>
+                      Prior entry · currently unavailable
+                    </option>
+                  )}
+                {entries.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {config.custom_start ? (
               <p className="micro">
-                Unknown is never verified permission. Motor-closed roads need
-                supported foot-use evidence or this explicit scenario.
+                Custom start active: {config.custom_start.label} ·{" "}
+                {config.custom_start.longitude.toFixed(6)},{" "}
+                {config.custom_start.latitude.toFixed(6)}
               </p>
-              <div className="edit-count">
-                {config.pinned.length} pinned · {config.rejected.length}{" "}
-                rejected · {config.excluded_segments.length} segments excluded ·{" "}
-                {config.excluded_areas.length} areas excluded
+            ) : (
+              <details className="entry-evidence">
+                <summary>Entry evidence · parking conditional</summary>
+                <p className="micro">
+                  {entries.find((e) => e.id === config.start_id)?.note ||
+                    "Entry evidence unavailable; retain this assumption for review."}
+                </p>
+              </details>
+            )}
+            <p className="search-scope">
+              Search: {(config.corridor_m / 1000).toFixed(1)} km corridor +{" "}
+              {config.search_envelope_m} m nearby.
+              {config.travel_area && " Selected travel polygon active."}
+              {config.target_area && " Separate target polygon active."}{" "}
+              Advanced limits and Area & source tools adjust this area. Driving,
+              parking and foot rights remain conditional.
+            </p>
+            <button
+              className="primary compare"
+              disabled={
+                !area ||
+                !ready ||
+                !contextReady ||
+                busy ||
+                active ||
+                (!config.start_id && !config.custom_start)
+              }
+              onClick={run}
+            >
+              {busy
+                ? "Starting…"
+                : dirty
+                  ? "Recalculate comparison"
+                  : "Compare route opportunities"}{" "}
+              <span>↗</span>
+            </button>
+            {!contextReady && (
+              <p className="micro" role="status">
+                {contextFailed
+                  ? "Entry/date evidence unavailable. Inputs are retained."
+                  : "Checking entry and date evidence…"}{" "}
+                {contextFailed && (
+                  <button onClick={() => setContextRetry((n) => n + 1)}>
+                    Retry entry evidence
+                  </button>
+                )}
+              </p>
+            )}
+            {active && (
+              <div className="job" role="status">
+                <strong>{job?.stage}</strong>
+                <p>{job?.message}</p>
+                {job?.total > 0 ? (
+                  <progress
+                    aria-label="Backend work units"
+                    max={job.total}
+                    value={job.progress ?? 0}
+                  />
+                ) : (
+                  <progress aria-label="Calculation running" />
+                )}
+                <button
+                  disabled={job?.status === "cancelling"}
+                  onClick={() =>
+                    protectError(async () => {
+                      await api("/jobs/" + job!.id + "/cancel", {});
+                      setJob((j) => (j ? { ...j, status: "cancelling" } : j));
+                    })
+                  }
+                >
+                  {job?.status === "cancelling"
+                    ? "Cancelling…"
+                    : "Cancel calculation"}
+                </button>
               </div>
-              <button
-                onClick={() => {
-                  setEditMode(editMode === "pin" ? "" : "pin");
-                  editCorner.current = null;
-                }}
-              >
-                Pin a new map viewpoint
-              </button>
-              <button
-                onClick={() => {
-                  setEditMode(editMode === "exclude" ? "" : "exclude");
-                  editCorner.current = null;
-                }}
-              >
-                Exclude a small map area
-              </button>
-              <button
-                onClick={() =>
-                  change({
-                    pinned: [],
-                    rejected: [],
-                    excluded_segments: [],
-                    excluded_areas: [],
-                    restrictions: [],
-                    custom_start: null,
-                  })
-                }
-              >
-                Clear owner overrides
-              </button>
-              <p className="micro">
-                Click a mapped segment to exclude it, record a dated access
-                status, or choose an intended start. New points get fresh
-                visibility calculations.
-              </p>
-              <label>
-                Custom start · longitude, latitude, segment ID
-                <textarea
-                  rows={3}
-                  aria-label="Custom start JSON"
-                  placeholder='{"longitude":-107.3,"latitude":38.66,"segment":"trails:…:0"}'
-                  onBlur={(e) => {
-                    if (e.target.value)
-                      try {
-                        change({ custom_start: JSON.parse(e.target.value) });
-                      } catch {
-                        setError(
-                          "Custom start must be JSON with longitude, latitude and segment.",
-                        );
-                      }
-                  }}
+            )}
+            <p className="advanced-label">Advanced settings · optional</p>
+            <details>
+              <summary>Effort, optics & search limits</summary>
+              <div className="detail-body">
+                <p className="micro">{config.profile.explanation}</p>
+                <NumberField
+                  label="Flat pace · mph"
+                  value={config.profile.pace_mph ?? 1.5}
+                  onChange={(n) => profileChange("pace_mph", n)}
+                  step={0.1}
                 />
-              </label>
-            </div>
-          </details>
-          <button
-            className="primary compare"
-            disabled={
-              !area ||
-              busy ||
-              active ||
-              (!config.start_id && !config.custom_start)
-            }
-            onClick={run}
-          >
-            {busy
-              ? "Starting…"
-              : dirty
-                ? "Recalculate comparison"
-                : "Compare route opportunities"}{" "}
-            <span>↗</span>
-          </button>
-          {active && (
-            <div className="job" role="status">
-              <strong>{job?.stage}</strong>
-              <p>{job?.message}</p>
-              <progress max={job?.total || 1} value={job?.progress || 0} />
-              <button
-                onClick={() =>
-                  protectError(async () => {
-                    await api("/jobs/" + job!.id + "/cancel", {});
-                    setJob((j) => (j ? { ...j, status: "cancelling" } : j));
-                  })
-                }
-              >
-                Cancel calculation
-              </button>
-            </div>
-          )}
+                <NumberField
+                  label="Elapsed outing limit · hours"
+                  value={config.profile.max_hours ?? 7}
+                  onChange={(n) => profileChange("max_hours", n)}
+                  step={0.5}
+                />
+                <NumberField
+                  label="Movement reserve · fraction"
+                  value={config.profile.reserve_fraction ?? 0.25}
+                  onChange={(n) => profileChange("reserve_fraction", n)}
+                  step={0.05}
+                  max={0.6}
+                />
+                <NumberField
+                  label="Conservative time multiplier"
+                  value={config.profile.time_margin ?? 1.35}
+                  onChange={(n) => profileChange("time_margin", n)}
+                  step={0.05}
+                />
+                <NumberField
+                  label="Condition time multiplier · dry=1"
+                  value={config.profile.condition_factor ?? 1}
+                  onChange={(n) => profileChange("condition_factor", n)}
+                  step={0.1}
+                />
+                <NumberField
+                  label="Off-trail round-trip miles limit"
+                  value={config.profile.offtrail_miles ?? 0.25}
+                  onChange={(n) => profileChange("offtrail_miles", n)}
+                  step={0.05}
+                />
+                <NumberField
+                  label="Off-trail round-trip minutes limit"
+                  value={config.profile.offtrail_minutes ?? 35}
+                  onChange={(n) => profileChange("offtrail_minutes", n)}
+                  step={5}
+                />
+                <NumberField
+                  label="Off-trail ground slope limit · °"
+                  value={config.profile.max_offtrail_slope ?? 20}
+                  onChange={(n) => profileChange("max_offtrail_slope", n)}
+                  max={35}
+                />
+                <NumberField
+                  label="Sustained walking grade limit · %"
+                  value={(config.profile.max_route_grade ?? 0.3) * 100}
+                  onChange={(n) => profileChange("max_route_grade", n / 100)}
+                  max={80}
+                />
+                <NumberField
+                  label="Steep travel allowance · metres"
+                  value={config.profile.max_steep_m ?? 250}
+                  onChange={(n) => profileChange("max_steep_m", n)}
+                  step={50}
+                />
+                <NumberField
+                  label="Steep grade band begins · %"
+                  value={(config.profile.steep_grade ?? 0.15) * 100}
+                  onChange={(n) => profileChange("steep_grade", n / 100)}
+                  max={50}
+                />
+                <NumberField
+                  label="Off-trail tree cover limit · %"
+                  value={(config.profile.max_tree ?? 0.45) * 100}
+                  onChange={(n) => profileChange("max_tree", n / 100)}
+                  max={100}
+                />
+                <NumberField
+                  label="Off-trail shrub cover limit · %"
+                  value={(config.profile.max_shrub ?? 0.65) * 100}
+                  onChange={(n) => profileChange("max_shrub", n / 100)}
+                  max={100}
+                />
+                <NumberField
+                  label="Viewing radius · metres"
+                  value={config.view_radius_m}
+                  onChange={(n) => change({ view_radius_m: n })}
+                  step={250}
+                  min={500}
+                  max={3000}
+                />
+                <p className="micro">
+                  16×50 stabilized binoculars, 77 mm scope & tripod. Radius is
+                  an analysis assumption, not a detection or shooting guarantee.
+                </p>
+                <NumberField
+                  label="Corridor radius from entry · metres"
+                  value={config.corridor_m}
+                  onChange={(n) => change({ corridor_m: n })}
+                  step={500}
+                  min={500}
+                  max={4500}
+                />
+                <NumberField
+                  label="Spur search envelope · metres"
+                  value={config.search_envelope_m}
+                  onChange={(n) => change({ search_envelope_m: n })}
+                  step={100}
+                  max={1500}
+                />
+                <p className="micro">
+                  An outer search envelope, not a bushwhacking allowance. Every
+                  proposed spur must fit its own distance, grade, cover and
+                  return limits.
+                </p>
+                <NumberField
+                  label="Viewpoint evaluation budget"
+                  value={config.candidate_budget}
+                  onChange={(n) => change({ candidate_budget: n })}
+                  min={8}
+                  max={80}
+                />
+              </div>
+            </details>
+            <PracticalPlanSettings
+              value={config.practical_plan ?? null}
+              ready={area?.practical?.status === "ready"}
+              change={(practical_plan) => change({ practical_plan })}
+            />
+            <PracticalSettings
+              value={config.practical ?? null}
+              ready={area?.practical?.status === "ready"}
+              change={(practical) => change({ practical })}
+            />
+            <details>
+              <summary>Observation windows & dark travel</summary>
+              <div className="detail-body">
+                <p className="micro">
+                  Local astronomical sunrise/sunset anchor the windows. Mountain
+                  shadows and legal shooting hours are separate.
+                </p>
+                <NumberField
+                  label="AM begins · minutes from sunrise"
+                  value={config.schedule.am_start_offset ?? 0}
+                  onChange={(n) => scheduleChange("am_start_offset", n)}
+                  min={-360}
+                />
+                <NumberField
+                  label="AM ends · minutes from sunrise"
+                  value={config.schedule.am_end_offset ?? 180}
+                  onChange={(n) => scheduleChange("am_end_offset", n)}
+                  min={-360}
+                />
+                <NumberField
+                  label="PM begins · minutes from sunset"
+                  value={config.schedule.pm_start_offset ?? -180}
+                  onChange={(n) => scheduleChange("pm_start_offset", n)}
+                  min={-360}
+                />
+                <NumberField
+                  label="PM ends · minutes from sunset"
+                  value={config.schedule.pm_end_offset ?? 0}
+                  onChange={(n) => scheduleChange("pm_end_offset", n)}
+                  min={-360}
+                />
+                <NumberField
+                  label="Minimum observation · minutes/stop"
+                  value={config.schedule.min_glassing_minutes ?? 60}
+                  onChange={(n) => scheduleChange("min_glassing_minutes", n)}
+                  min={15}
+                />
+                <NumberField
+                  label="Setup allowance · minutes/stop"
+                  value={config.schedule.setup_minutes ?? 15}
+                  onChange={(n) => scheduleChange("setup_minutes", n)}
+                />
+                <NumberField
+                  label="Break allowance · minutes"
+                  value={config.schedule.break_minutes ?? 20}
+                  onChange={(n) => scheduleChange("break_minutes", n)}
+                />
+                <label>
+                  Earliest departure · local
+                  <input
+                    type="time"
+                    value={config.schedule.earliest || "04:00"}
+                    onChange={(e) => scheduleChange("earliest", e.target.value)}
+                  />
+                </label>
+                <label>
+                  Latest return · local
+                  <input
+                    type="time"
+                    value={config.schedule.latest || "21:00"}
+                    onChange={(e) => scheduleChange("latest", e.target.value)}
+                  />
+                </label>
+                <label className="check">
+                  <input
+                    type="checkbox"
+                    checked={config.schedule.dark_travel || false}
+                    onChange={(e) =>
+                      scheduleChange("dark_travel", e.target.checked)
+                    }
+                  />
+                  Allow travel before/after civil twilight
+                </label>
+              </div>
+            </details>
+            <details>
+              <summary>Access assumptions & owner edits</summary>
+              <div className="detail-body">
+                <label className="check">
+                  <input
+                    type="checkbox"
+                    checked={config.explore_unknown}
+                    onChange={(e) =>
+                      change({ explore_unknown: e.target.checked })
+                    }
+                  />
+                  Explore unknown foot access as a scenario
+                </label>
+                <p className="micro">
+                  Unknown is never verified permission. Motor-closed roads need
+                  supported foot-use evidence or this explicit scenario.
+                </p>
+                <div className="edit-count">
+                  {config.pinned.length} pinned · {config.rejected.length}{" "}
+                  rejected · {config.excluded_segments.length} segments excluded
+                  · {config.excluded_areas.length} areas excluded
+                </div>
+                <button
+                  onClick={() => {
+                    setEditMode(editMode === "pin" ? "" : "pin");
+                    editCorner.current = null;
+                  }}
+                >
+                  Pin a new map viewpoint
+                </button>
+                <button
+                  onClick={() => {
+                    setEditMode(editMode === "exclude" ? "" : "exclude");
+                    editCorner.current = null;
+                  }}
+                >
+                  Exclude a small map area
+                </button>
+                <button
+                  onClick={() =>
+                    change({
+                      pinned: [],
+                      rejected: [],
+                      excluded_segments: [],
+                      excluded_areas: [],
+                      restrictions: [],
+                      custom_start: null,
+                    })
+                  }
+                >
+                  Clear owner overrides
+                </button>
+                <p className="micro">
+                  Click a mapped segment to exclude it, record a dated access
+                  status, or choose an intended start. New points get fresh
+                  visibility calculations.
+                </p>
+                <label>
+                  Custom start · longitude, latitude, segment ID
+                  <textarea
+                    rows={3}
+                    aria-label="Custom start JSON"
+                    placeholder='{"longitude":-107.3,"latitude":38.66,"segment":"trails:…:0"}'
+                    onBlur={(e) => {
+                      if (e.target.value)
+                        try {
+                          change({ custom_start: JSON.parse(e.target.value) });
+                        } catch {
+                          setError(
+                            "Custom start must be JSON with longitude, latitude and segment.",
+                          );
+                        }
+                    }}
+                  />
+                </label>
+              </div>
+            </details>
+          </fieldset>
         </aside>
         <main data-analysis-id={result?.analysis_id || ""}>
           <div className="main-heading">
@@ -972,8 +1200,8 @@ function App() {
               </div>
               <h2>
                 {result
-                  ? "A better look, with a return plan."
-                  : "Start with the walk. Find the view."}
+                  ? "Choose a view. Review the return."
+                  : "Entry, effort, then a useful view."}
               </h2>
             </div>
             <span className="pill">
@@ -983,7 +1211,9 @@ function App() {
                   ? result.settings.explore_unknown
                     ? "UNKNOWN FOOT ACCESS SCENARIO"
                     : "PREVIEW COMPARISON"
-                  : "PREPARED LOCAL DATA"}
+                  : area
+                    ? "PREPARED LOCAL DATA"
+                    : "CHECK LOCAL SOURCES"}
             </span>
           </div>
           {error && (
@@ -994,6 +1224,27 @@ function App() {
               </button>
             </div>
           )}
+          {!sourcesLoading && !area && (
+            <div className="error" role="alert">
+              Core package unavailable. Saved versions remain below. Review
+              local sources and preparation details; no analysis can run until
+              the core package is ready.{" "}
+              <button onClick={() => location.reload()}>
+                Retry local sources
+              </button>
+            </div>
+          )}
+          {job &&
+            ["failed", "cancelled", "interrupted"].includes(job.status) &&
+            !active && (
+              <div className="notice" role="status">
+                Last calculation {job.status}. Inputs and previous preview are
+                retained.{" "}
+                <button disabled={!area || !contextReady || busy} onClick={run}>
+                  Retry calculation
+                </button>
+              </div>
+            )}
           {notice && (
             <div className="notice" role="status">
               {notice}
@@ -1193,56 +1444,63 @@ function App() {
                 <PracticalResult review={result.practical} />
               )}
               <div className="result-grid">
-                <div className="options" aria-label="Route alternatives">
-                  {result.options.map((o: RecordValue) => (
-                    <button
-                      className={
-                        "option " + (o.id === selected ? "selected" : "")
-                      }
-                      key={o.id}
-                      aria-pressed={o.id === selected}
-                      onClick={() => selectOption(o.id)}
-                    >
-                      <div className="option-top">
-                        <strong>
-                          {o.viewpoints.length === 1
-                            ? "Stay at one view"
-                            : "Connected viewpoints"}
-                        </strong>
-                        {result.recommended[mode] === o.id && (
-                          <span className="recommended">RECOMMENDED</span>
-                        )}
-                      </div>
-                      <div className="option-number">
-                        {result.practical_plan
-                          ? Math.round(
-                              o.schedules[mode]?.practical?.relative_m2 ?? 0,
-                            ).toLocaleString()
-                          : acres(o.coverage.effective_m2)}{" "}
-                        <small>
+                <details className="all-previews">
+                  <summary>
+                    All retained route previews ({result.options.length})
+                  </summary>
+                  <div className="options" aria-label="Route alternatives">
+                    {result.options.map((o: RecordValue) => (
+                      <button
+                        className={
+                          "option " + (o.id === selected ? "selected" : "")
+                        }
+                        key={o.id}
+                        aria-pressed={o.id === selected}
+                        onClick={() => selectOption(o.id)}
+                      >
+                        <div className="option-top">
+                          <strong>
+                            {o.viewpoints.length === 1
+                              ? "Stay at one view"
+                              : "Connected viewpoints"}
+                          </strong>
+                          {result.recommended[mode] === o.id && (
+                            <span className="recommended">RECOMMENDED</span>
+                          )}
+                        </div>
+                        <div className="option-number">
                           {result.practical_plan
-                            ? "relative-index m² · practical"
-                            : "quality-adjusted acre equivalents"}
-                        </small>
-                      </div>
-                      <div className="option-metrics">
-                        <span>{miles(o.movement.distance_m)} mi</span>
-                        <span>↑ {feet(o.movement.ascent_m)} ft</span>
-                        <span>{o.movement.hours_high.toFixed(1)} h travel</span>
-                      </div>
-                      <p>
-                        {o.viewpoints.length}{" "}
-                        {o.viewpoints.length === 1
-                          ? "glassing location"
-                          : "locations"}{" "}
-                        ·{" "}
-                        {o.schedules[mode]?.feasible
-                          ? "Fits " + mode.toUpperCase()
-                          : "Does not fit " + mode.toUpperCase()}
-                      </p>
-                    </button>
-                  ))}
-                </div>
+                            ? Math.round(
+                                o.schedules[mode]?.practical?.relative_m2 ?? 0,
+                              ).toLocaleString()
+                            : acres(o.coverage.effective_m2)}{" "}
+                          <small>
+                            {result.practical_plan
+                              ? "relative-index m² · practical"
+                              : "quality-adjusted acre equivalents"}
+                          </small>
+                        </div>
+                        <div className="option-metrics">
+                          <span>{miles(o.movement.distance_m)} mi</span>
+                          <span>↑ {feet(o.movement.ascent_m)} ft</span>
+                          <span>
+                            {o.movement.hours_high.toFixed(1)} h travel
+                          </span>
+                        </div>
+                        <p>
+                          {o.viewpoints.length}{" "}
+                          {o.viewpoints.length === 1
+                            ? "glassing location"
+                            : "locations"}{" "}
+                          ·{" "}
+                          {o.schedules[mode]?.feasible
+                            ? "Fits " + mode.toUpperCase()
+                            : "Does not fit " + mode.toUpperCase()}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                </details>
                 {option && (
                   <section
                     className="route-detail"
@@ -1251,7 +1509,11 @@ function App() {
                     aria-label="Selected route inspection"
                   >
                     <TimedResult option={option} mode={mode} />
-                    <div className="tabs">
+                    <div
+                      className="tabs"
+                      role="group"
+                      aria-label="Inspection views"
+                    >
                       {[
                         "route",
                         "schedule",
@@ -1261,7 +1523,7 @@ function App() {
                       ].map((t) => (
                         <button
                           key={t}
-                          aria-selected={tab === t}
+                          aria-pressed={tab === t}
                           onClick={() => setTab(t)}
                           className={tab === t ? "active" : ""}
                         >
@@ -1684,7 +1946,10 @@ function App() {
                         Plan name
                         <input
                           value={name}
-                          onChange={(e) => setName(e.target.value)}
+                          onChange={(e) => {
+                            openRevision.current++;
+                            setName(e.target.value);
+                          }}
                         />
                       </label>
                       <label>
@@ -1746,18 +2011,27 @@ function App() {
                         </button>
                       )}
                       {savedPlan && (
-                        <div className="exports" aria-label="Plan exports">
-                          {["md", "json", "gpx", "geojson"].map((k) => (
-                            <a
-                              key={k}
-                              href={
-                                "/api/plans/" + savedPlan.id + "/export/" + k
-                              }
-                              download
-                            >
-                              {k === "md" ? "Field summary" : k.toUpperCase()} ↓
-                            </a>
-                          ))}
+                        <div className="saved-exports">
+                          <p>
+                            Exports: immutable <strong>{savedPlan.name}</strong>{" "}
+                            · {savedPlan.mode.toUpperCase()} · version{" "}
+                            {savedPlan.id.slice(0, 8)}. Changing the preview
+                            does not change these files.
+                          </p>
+                          <div className="exports" aria-label="Plan exports">
+                            {["md", "json", "gpx", "geojson"].map((k) => (
+                              <a
+                                key={k}
+                                href={
+                                  "/api/plans/" + savedPlan.id + "/export/" + k
+                                }
+                                download
+                              >
+                                {k === "md" ? "Field summary" : k.toUpperCase()}{" "}
+                                ↓
+                              </a>
+                            ))}
+                          </div>
                         </div>
                       )}
                     </div>
@@ -1797,7 +2071,10 @@ function App() {
               <div className="saved-list">
                 {saved.map((p) => (
                   <div className="saved-card" key={p.id}>
-                    <button onClick={() => protectError(() => openSaved(p.id))}>
+                    <button
+                      disabled={active || busy || !ready}
+                      onClick={() => protectError(() => openSaved(p.id))}
+                    >
                       <strong>{p.name}</strong>
                       <small>
                         {p.mode?.toUpperCase()} ·{" "}
@@ -1867,14 +2144,9 @@ function App() {
                 </span>
                 {j.status === "completed" && j.kind !== "prepare" ? (
                   <button
+                    disabled={active || busy || !ready}
                     onClick={() =>
-                      protectError(async () => {
-                        const r = await api("/analyses/" + j.analysis_id);
-                        setResult(r);
-                        setConfig(r.settings);
-                        setSelected(r.recommended.am || r.options[0]?.id || "");
-                        setDirty(false);
-                      })
+                      protectError(() => openPreview(j.analysis_id))
                     }
                   >
                     Open preview
@@ -1898,6 +2170,8 @@ function App() {
                   !active && (
                     <button
                       onClick={() => {
+                        editRevision.current++;
+                        openRevision.current++;
                         setConfig(j.settings);
                         setDirty(true);
                         setNotice(

@@ -419,6 +419,10 @@ export function ScoutMap({
       <div
         className="map"
         ref={container}
+        data-option-id={option?.id || ""}
+        data-analysis-id={result?.analysis_id || ""}
+        data-mode={mode}
+        data-route-legs={option?.legs.length || 0}
         data-scan-sectors={
           option?.schedules[mode]?.practical?.sectors?.features.length || 0
         }

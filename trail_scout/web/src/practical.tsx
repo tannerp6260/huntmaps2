@@ -17,7 +17,7 @@ export function PracticalSettings({
           <input
             type="checkbox"
             checked={!!value}
-            disabled={!ready}
+            disabled={!ready && !value}
             onChange={(e) =>
               change(
                 e.target.checked
@@ -142,7 +142,7 @@ export function PracticalPlanSettings({
           <input
             type="checkbox"
             checked={!!value}
-            disabled={!ready}
+            disabled={!ready && !value}
             onChange={(e) =>
               change(
                 e.target.checked
@@ -278,14 +278,19 @@ export function TimedResult({
               )
               .join(" · ")}
           </p>
-          <ol>
-            {v.patches.map((s: RecordValue) => (
-              <li key={s.id}>
-                Grid bearing {s.azimuth_start}–{s.azimuth_end}° · {s.inner_m}–
-                {s.outer_m} m · {s.minutes.toFixed(2)} min
-              </li>
-            ))}
-          </ol>
+          <details className="scan-sectors">
+            <summary>
+              Selected scan sectors ({v.patches.length}) · bearings & ranges
+            </summary>
+            <ol>
+              {v.patches.map((s: RecordValue) => (
+                <li key={s.id}>
+                  Grid bearing {s.azimuth_start}–{s.azimuth_end}° · {s.inner_m}–
+                  {s.outer_m} m · {s.minutes.toFixed(2)} min
+                </li>
+              ))}
+            </ol>
+          </details>
           <details>
             <summary>
               Foreground inspection ·{" "}

@@ -99,6 +99,18 @@ repro/acceptance criteria, observed facts vs judgments. Complete review can have
 findings. Return stage3 handoff with actual independent checks/source identity and
 concrete repairs; do not invoke repair yourself or claim an Astra review occurred.
 
+# Coordinator review focus
+
+Review the complete UX diff from111e2af through current HEAD, plus any implementation
+diff, rather than just the last report commit. Read the source hashes but test behavior
+independently. In addition to original goals, specifically inspect all recommendation
+facts at narrow widths after scrolling; investigate blank/covered regions in screenshots
+rather than treating no-overflow alone as legibility. Test a pending saved-plan open
+while changing only period/selection, as well as while editing inputs, and confirm
+late responses never reverse the newer navigation. These are review probes, not assumed
+bugs or permission to change analytical behavior. Use fresh isolated state/browser and
+verify actual backend route/coordinates/sectors/export identity. No implementation edits.
+
 # Original bounded workflow (model assignments overridden above)
 After the current task finishes, carry out this unattended HuntMaps2 UI/UX workflow. This message queues NEW work; it does not cancel or alter the current task.
 

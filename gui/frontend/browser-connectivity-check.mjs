@@ -1,4 +1,5 @@
 import { chromium } from 'playwright';
+import { assertIsolatedReleaseState } from './browser-isolation.mjs';
 import { openExisting, reloadExisting } from './browser-startup.mjs';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -53,7 +54,7 @@ try {
       const value = await response.json();
       assert.equal(value.job.kind, 'connectivity-screen');
       assert.equal(value.job.name, f.run);
-      assert.ok(process.env.HUNTMAPS_STATE_DIR?.startsWith('/tmp/huntmaps-check-'));
+      assertIsolatedReleaseState();
       const command = fs.readFileSync('/proc/' + value.job.pid + '/cmdline', 'utf8').split('\0');
       assert.ok(command.includes('huntmaps_gui.connectivity_worker') && command.includes(f.run));
       process.kill(-value.job.pid, 'SIGSTOP');

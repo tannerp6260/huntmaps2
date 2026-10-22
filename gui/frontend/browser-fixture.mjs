@@ -1,10 +1,11 @@
 // Explicit service fixture for specialist journeys. This seeds decisions; it does
 // not assert that a browser rendered the scene. browser-workflow-check tests that.
 import assert from 'node:assert/strict';
+import { assertIsolatedReleaseState } from './browser-isolation.mjs';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 export async function workflowFixture(request, base) {
- if (!process.env.HUNTMAPS_STATE_DIR?.startsWith('/tmp/huntmaps-check-')) throw Error('Fixture requires isolated release runner');
+ assertIsolatedReleaseState();
  const headers={'X-HuntMaps':'local'}, api=base+'/api/runs/workflow-fixture';
  async function json(response) { assert.equal(response.status(),200,await response.text()); return response.json(); }
  async function idle(id) {

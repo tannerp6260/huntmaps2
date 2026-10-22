@@ -1,0 +1,36 @@
+{
+  "stage": 2,
+  "state": "running-final-GUI-gate",
+  "updated_utc": "2026-10-22T14:04:45.447263+00:00",
+  "head": "c54f5250c211171e823ae266ab1e44611a58da17",
+  "branch": "feature/hunter-workflow-ux",
+  "runtime_source": {
+    "head": "c54f5250c211171e823ae266ab1e44611a58da17",
+    "runtime_files": {
+      "trail_scout/web/src/main.tsx": "ef84644606793d6401612a8d72b54c7cec7fdbd0de1a67aad08c7938042905c2",
+      "trail_scout/web/src/map.tsx": "57e44727ae32cd0e8af491344a3ca74677da691f0f66e6d726c1235fb514a9b3",
+      "trail_scout/web/src/practical.tsx": "07289f55297e44e406d84787a503f1642894f9c21e1df187cad3601531e817a0",
+      "trail_scout/web/src/recommendation.tsx": "9df803187d74d14788ebd81d90b2aab572c3deb11568c8c2f90f5b8beb0b4bc5",
+      "trail_scout/web/src/style.css": "6b827f3126b2ea606dc81a1368a7b3acbe7a726bfb883d5cc8175a9f176992a7",
+      "trail_scout/web/src/workspace.ts": "57ba6f3e599769e4b14017b2a89457a68727dea87b7ee8623736597ebc6a730c",
+      "trail_scout/checks/browser.mjs": "af47064c90485f5240ff09b2304f729ea9f2eb0ee7f495de5b0f4a267101434e"
+    },
+    "runtime_tracked_diff_sha256": "69e48110fa46c473e2df0681871b0b16b347900bb9f644cb7662922fee57dabe"
+  },
+  "passed": [
+    "Complete TrailScout final3: all8 stages,48 backend,50compat,3browser",
+    "Real journey including save/reload/all4exports/cancel",
+    "Period-only/edit-only stale saved-open protection, draft ordering/context retry/empty scenario",
+    "Actual missing packages/real failed job/explicit established retry/retained GPX",
+    "Layouts1366/820/683/390, keyboard focus, sampled contrast",
+    "Protected45,980files unchanged"
+  ],
+  "gui_first_complete": "Exit1:331unit tests,26/34browser pass;8 scoped-prefix guard failures. Protected audit8673files unchanged.",
+  "gui_second": "Running full ./gui/check --keep-going with stronger isolated-root/layout/realpath/workspace guards. /tmp/huntmaps-ux-sol-stage2/gate-gui-rerun/huntmaps-check-n_997lrs",
+  "launch": "./trailscout serve --state /tmp/huntmaps-ux-sol-review-stage2 --port 8795",
+  "remaining": [
+    "Complete GUI final gate and review results",
+    "Finalize source/artifact hashes and report",
+    "Stop at Stage2 handoff for fresh independent review"
+  ]
+}

@@ -1164,3 +1164,125 @@ a:focus-visible {
     font-size: 8px;
   }
 }
+
+/* Hunter workspace: essential decisions first, evidence available on demand. */
+.input-fields {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.controls h1 {
+  font:
+    600 22px/1.25 ui-sans-serif,
+    system-ui,
+    sans-serif;
+  margin: 8px 0 18px;
+  letter-spacing: -0.4px;
+}
+.controls .reserve {
+  font-size: 13px;
+  color: #344f32;
+  margin: 6px 0 12px;
+}
+.controls .reserve span {
+  font-size: 12px;
+  margin-top: 4px;
+}
+.micro,
+.source-status small {
+  color: #596650;
+  font-size: 12px;
+}
+.search-scope {
+  font-size: 12px;
+  color: #546359;
+}
+.advanced-label {
+  margin: 18px 0 4px;
+  font-weight: 600;
+  font-size: 12px;
+}
+.result-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+.all-previews .options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  max-height: none;
+}
+.all-previews .option {
+  margin: 0;
+}
+.route-detail {
+  min-width: 0;
+}
+.tabs {
+  flex-wrap: wrap;
+  gap: 10px 22px;
+}
+.tabs button {
+  min-height: 44px;
+  font-size: 13px;
+}
+button:focus-visible,
+a:focus-visible,
+summary:focus-visible {
+  outline: 3px solid #315f4c;
+  outline-offset: 3px;
+}
+button,
+summary {
+  touch-action: manipulation;
+}
+summary {
+  min-height: 30px;
+}
+.saved-exports {
+  grid-column: 1 / -1;
+}
+.saved-exports p {
+  font-size: 12px;
+}
+.save-box {
+  scroll-margin-top: 20px;
+}
+@media (max-width: 1050px) {
+  .all-previews .options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 700px) {
+  .controls {
+    padding: 20px;
+  }
+  .all-previews .options {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .tabs {
+    gap: 6px 14px;
+  }
+  .tabs button {
+    font-size: 13px;
+  }
+  .option-top strong {
+    font-size: 13px;
+  }
+  .option-metrics {
+    font-size: 12px;
+  }
+  .recommended {
+    font-size: 9px;
+  }
+  .recommendation-actions button {
+    min-height: 44px;
+  }
+}
+.controls .input-fields > label {
+  margin: 10px 0;
+}
+.controls .source-status {
+  padding-bottom: 6px;
+  font-size: 12px;
+}

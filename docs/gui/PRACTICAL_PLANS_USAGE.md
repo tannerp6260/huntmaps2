@@ -1,5 +1,7 @@
 # Practical AM/PM plans · experimental version 1
 
+The completed hunter workspace is described in [Hunter workspace usage](HUNTER_WORKFLOW_UX_USAGE.md). Analytical controls below are unchanged.
+
 Launch from this checkout:
 
 ```sh
@@ -23,8 +25,9 @@ connection or new download is required for installed GMU 54 operation.
 4. Compare route opportunities. The recommendation uses separate AM and PM rankings.
    Choose **Morning/Evening** under Schedule or **Time variant** near Save. Each
    switches to that variant's recommendation. Select another route preview to inspect
-   an alternative. Combined/stay days are available only with practical planning off.
-5. Read the practical summary: coordinates and stop order, habitat added, supported
+   an alternative under **All retained route previews**. Short alternatives and
+   inspection/save focus actions are above the map. Combined/stay days are available only with practical planning off.
+5. Read the practical summary and expand **Selected scan sectors**: coordinates and stop order, habitat added, supported
    and unknown area, incremental/exclusive opportunity, useful scan minutes and
    unallocated/rest time. Read full walking distance, ascent, return trigger and
    held/remaining reserve in Route/Schedule. Useful units are relative-index m²,
