@@ -1,0 +1,64 @@
+{
+  "results": [
+    {
+      "stage": "python-format",
+      "exit_code": 0,
+      "seconds": 0.4007658699993044
+    },
+    {
+      "stage": "frontend-format",
+      "exit_code": 0,
+      "seconds": 0.6328172329958761
+    },
+    {
+      "stage": "build",
+      "exit_code": 0,
+      "seconds": 5.316462827991927
+    },
+    {
+      "stage": "backend",
+      "exit_code": 0,
+      "seconds": 97.50125859800028
+    },
+    {
+      "stage": "legacy-compatibility",
+      "exit_code": 0,
+      "seconds": 54.98792026699812
+    },
+    {
+      "stage": "browser",
+      "exit_code": 0,
+      "seconds": 134.95026839099592
+    },
+    {
+      "stage": "practical-browser",
+      "exit_code": 0,
+      "seconds": 16.331661421994795
+    },
+    {
+      "stage": "timed-practical-browser",
+      "exit_code": 0,
+      "seconds": 49.174513207006385
+    }
+  ],
+  "command": "./trailscout check",
+  "exit_code": 0,
+  "evidence_id": "trailscout-gate-l01sms50",
+  "tested_implementation_commit": "abeaeb7608a847656e7bc63373362e26f807d27e",
+  "numerical_commit": "71f83f9337d449cd828be86852d505861049afc7",
+  "numerical_fingerprint": "a02cf9470646739694de7bdc75fb536045fee6eb4abdf2e5a139d44b9a0e9389",
+  "backend_tests": 48,
+  "compatibility_tests": 50,
+  "browser_journeys": 3,
+  "timed_browser": {
+    "analysis": "52cf364a08544395b3f78138b059fc34",
+    "source": "999aa8aef68940d701abe8bd1e8f771d9e8f37310beb3b0cad87fa2c182b3d31",
+    "package": "64fab3d1b6f354db533b5e88abf9e131ceaada22e308605e53acce0f8ad7796d",
+    "probes": 334,
+    "p95_ms": 66.60778399999981,
+    "maximum_ms": 296.4421569999977,
+    "errors": [],
+    "external": []
+  },
+  "tracked_source_diff_at_gate_end_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

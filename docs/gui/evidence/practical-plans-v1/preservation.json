@@ -1,0 +1,19 @@
+{
+  "files": 45980,
+  "bytes": 8976127263,
+  "changed": [],
+  "missing": [],
+  "base_branch": "feature/practical-glassing-opportunity",
+  "base_commit": "903d47d9cd962b89eb3352a72a858ab23b215fc7",
+  "feature_branch": "feature/practical-glassing-plans",
+  "runtime_commit": "71f83f9337d449cd828be86852d505861049afc7",
+  "main_commit": "c594668152783eb8895c8c76284b10bb5fbfba62",
+  "other_worktree_commit": "48eb71010dc1d24a5214b5bf4976e72d8557fa49",
+  "initial_status": "clean; origin tracking equal",
+  "baseline_inventory_sha256": "783129d3b9a374774bbcd5da422b1838d343dfef6a72fc11fd1e9325f180fab7",
+  "new_core_download_bytes": 0,
+  "new_optional_download_bytes": 0,
+  "unrelated_new_file": "One unrelated Markdown file appeared during execution; preserved untracked, never read or staged",
+  "additions": [],
+  "final_tested_implementation_commit": "abeaeb7608a847656e7bc63373362e26f807d27e"
+}

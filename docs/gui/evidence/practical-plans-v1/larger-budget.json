@@ -1,0 +1,66 @@
+{
+  "seconds": 44.847201971992035,
+  "search": {
+    "candidate_budget": 80,
+    "evaluated": 76,
+    "supported_viewpoints": 36,
+    "route_departures": 33,
+    "all_evaluated_plan_variants": 818,
+    "returned_variants": 6,
+    "corridor_radius_m": 2500,
+    "offtrail_envelope_m": 300,
+    "pair_search_leaders": 36,
+    "pair_search": "All feasible singles and both orders of every pair within proposal cap",
+    "pair_proposals": 1260,
+    "viewshed_cache_hits": 0,
+    "global_optimum": false
+  },
+  "peak_rss_mib": 1131.71484375,
+  "implementation": "a02cf9470646739694de7bdc75fb536045fee6eb4abdf2e5a139d44b9a0e9389",
+  "recommendations": {
+    "am": "984db519afec9cf533acf5af057e763b",
+    "pm": "f7f551ab00d975b1a6452a5c5725b330"
+  },
+  "network_attempts": 0,
+  "performance": {
+    "total_seconds": 39.549058472999604,
+    "support_seconds": 1.1304074930085335,
+    "plan_selection_seconds": 21.023309012001846,
+    "inspection_seconds": 0.4609944730036659
+  },
+  "note": "Separate larger-budget full-pipeline engineering run; not matched default-pool comparison. All pairs enumerated; no measured encounter or global route optimum.",
+  "selected": {
+    "am": {
+      "ids": [
+        "8a7d9b639ba3ec1f15d4331eeb4c7823",
+        "2afe7dcaed26b140622da4abe231a76d"
+      ],
+      "coordinates": [
+        [
+          -106.92078733436644,
+          38.66565739438652
+        ],
+        [
+          -106.92180926057566,
+          38.6700042569607
+        ]
+      ]
+    },
+    "pm": {
+      "ids": [
+        "2afe7dcaed26b140622da4abe231a76d",
+        "d644b9447835b66c49c3daa2984852bb"
+      ],
+      "coordinates": [
+        [
+          -106.92180926057566,
+          38.6700042569607
+        ],
+        [
+          -106.91964952504127,
+          38.66676876525264
+        ]
+      ]
+    }
+  }
+}

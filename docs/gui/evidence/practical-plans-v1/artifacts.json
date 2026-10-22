@@ -1,0 +1,54 @@
+{
+  "schema": 1,
+  "files": {
+    "Flattop-am.svg": {
+      "bytes": 1100495,
+      "sha256": "42500050b5fe07cd3851d83dafc3d5cb12b2c4183d2e03110d9cbcf8953c818b"
+    },
+    "Flattop-pm.svg": {
+      "bytes": 1100187,
+      "sha256": "c13aa7da38dc4a1fbd28d8335dd41ceead97dd9bda12a37ecabec9547a62e44d"
+    },
+    "Soap-am.svg": {
+      "bytes": 1576254,
+      "sha256": "f9f3aaaf1f6b520d2c718cb39dea31d268afb6c8b3655285a3c3051639c54aac"
+    },
+    "Soap-pm.svg": {
+      "bytes": 1575517,
+      "sha256": "57c405472434573f3075e29b656747e6f01aa6bafa592dd5cc716ad21440478a"
+    },
+    "comparison.json": {
+      "bytes": 352612,
+      "sha256": "e590ef70a6743414cc8e4b38ea2828dcd2af6b9f740c76afa28d6a163653463e"
+    },
+    "gui-verification.json": {
+      "bytes": 3802,
+      "sha256": "211f61d73cd3412e5b4b0515ee444a823e67d729f305cf1f1efe3ed52c53761e"
+    },
+    "larger-budget.json": {
+      "bytes": 1804,
+      "sha256": "7b09492fce42c853e646eb0d956ec962e8ba60684eb18a839ac025a3aa1a72f8"
+    },
+    "packet-validation.json": {
+      "bytes": 1086,
+      "sha256": "90c677ead583859b02b06a4d142144a72ad5f84a7e16c8d5b5e52220f93c308e"
+    },
+    "preservation.json": {
+      "bytes": 896,
+      "sha256": "9141f6a4f4c69b4d344f4931baf76352273fb4958ee20c915d123506cc8ed956"
+    },
+    "routes-and-scans.geojson": {
+      "bytes": 116565,
+      "sha256": "f7169a6e02e7d6d33c7b5a47b83fd7f660c4b1049d03e0c054f71f926fd6ccdd"
+    },
+    "sources.json": {
+      "bytes": 14125,
+      "sha256": "982070c86029dcc4eee9ccbe781d01786c4dd067012e89f9ea672a6753d75442"
+    },
+    "trailscout-verification.json": {
+      "bytes": 1741,
+      "sha256": "c9766c278c372613a67e9505bbe3f419a8e69a5a1045d4198052f8c327d0c0a9"
+    }
+  },
+  "notes": "Vector figures and compact engineering evidence only; no raw rasters, imagery, owner state or private paths"
+}

@@ -1,0 +1,42 @@
+{
+  "checks": [
+    {
+      "entry": "Soap Creek \u00b7 entry",
+      "mode": "am",
+      "connected": true,
+      "return_included": true,
+      "stop_order_exact": true,
+      "projected_distance_error_m": 9.412133294972591e-10,
+      "scan_sectors": 19
+    },
+    {
+      "entry": "Soap Creek \u00b7 entry",
+      "mode": "pm",
+      "connected": true,
+      "return_included": true,
+      "stop_order_exact": true,
+      "projected_distance_error_m": 9.412133294972591e-10,
+      "scan_sectors": 18
+    },
+    {
+      "entry": "Flattop Bench \u00b7 entry",
+      "mode": "am",
+      "connected": true,
+      "return_included": true,
+      "stop_order_exact": true,
+      "projected_distance_error_m": 3.824425220955163e-09,
+      "scan_sectors": 20
+    },
+    {
+      "entry": "Flattop Bench \u00b7 entry",
+      "mode": "pm",
+      "connected": true,
+      "return_included": true,
+      "stop_order_exact": true,
+      "projected_distance_error_m": 3.823970473604277e-09,
+      "scan_sectors": 20
+    }
+  ],
+  "tolerance_m": 1e-05,
+  "coordinate_chain_tolerance_degrees": 1e-09
+}

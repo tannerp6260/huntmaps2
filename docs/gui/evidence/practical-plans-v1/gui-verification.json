@@ -1,0 +1,121 @@
+{
+  "command": "./gui/check --keep-going",
+  "exit_code": 0,
+  "evidence_id": "huntmaps-check-xjv9sqit",
+  "tested_numerical_commit": "71f83f9337d449cd828be86852d505861049afc7",
+  "later_presentation_commit": "abeaeb7608a847656e7bc63373362e26f807d27e",
+  "numerical_fingerprint": "a02cf9470646739694de7bdc75fb536045fee6eb4abdf2e5a139d44b9a0e9389",
+  "GUI_runtime_diff_from_test_start": "",
+  "changed_files_outside_GUI": [
+    "trail_scout/web/src/practical.tsx",
+    "trail_scout/checks/practical_plans.py"
+  ],
+  "presentation_and_helper_diff_sha256": "912911f48c8157687994739058f16b731e7e98e33b7442bf7f2072757607babd",
+  "backend": {
+    "test_approach*": {
+      "tests": 23,
+      "seconds": 9.959,
+      "outcome": "passed"
+    },
+    "test_workflow": {
+      "tests": 7,
+      "seconds": 13.006,
+      "outcome": "passed"
+    },
+    "test_foliage_clusters": {
+      "tests": 7,
+      "seconds": 4.47,
+      "outcome": "passed"
+    },
+    "test_working_waypoints": {
+      "tests": 8,
+      "seconds": 19.404,
+      "outcome": "passed"
+    },
+    "test_nearby_observer": {
+      "tests": 9,
+      "seconds": 0.726,
+      "outcome": "passed"
+    },
+    "test_owner": {
+      "tests": 3,
+      "seconds": 9.389,
+      "outcome": "inspect log"
+    },
+    "test_first_person": {
+      "tests": 21,
+      "seconds": 4.175,
+      "outcome": "passed"
+    },
+    "test_vegetation_screen": {
+      "tests": 7,
+      "seconds": 0.023,
+      "outcome": "passed"
+    },
+    "test_gui*": {
+      "tests": 229,
+      "seconds": 197.286,
+      "outcome": "passed"
+    },
+    "test_vegetation_rays": {
+      "tests": 4,
+      "seconds": 0.067,
+      "outcome": "passed"
+    },
+    "test_nearby_foliage": {
+      "tests": 6,
+      "seconds": 0.268,
+      "outcome": "passed"
+    },
+    "test_scouting_filters": {
+      "tests": 7,
+      "seconds": 0.513,
+      "outcome": "passed"
+    }
+  },
+  "backend_total": 331,
+  "browsers": {
+    "browser-roadless-check": "passed",
+    "browser-suggested-approaches-check": "passed",
+    "browser-unit-packs-check": "passed",
+    "browser-habitat-check": "passed",
+    "browser-scene-recovery-check": "passed",
+    "browser-audit-regressions": "passed",
+    "browser-connectivity-check": "passed",
+    "browser-lidar-recovery-check": "passed",
+    "browser-guided-flow-check": "passed",
+    "browser-find-flow-check": "passed",
+    "browser-workflow-check": "passed",
+    "browser-redesign-check": "passed",
+    "browser-target-search-check": "passed",
+    "browser-guided-approaches-check": "passed",
+    "browser-approach-dismiss-check": "passed",
+    "browser-refinement-check": "passed",
+    "browser-workflow-regressions": "passed",
+    "browser-transfer-check": "passed",
+    "browser-coverage-search-check": "passed",
+    "browser-coverage-cache-check": "passed",
+    "browser-coverage-batch-check": "passed",
+    "browser-coverage-render-check": "passed",
+    "browser-complementary-check": "passed",
+    "browser-check": "passed",
+    "browser-training-check": "passed",
+    "browser-first-person-check": "passed",
+    "browser-scene-storage-check": "passed",
+    "browser-working-waypoint-check": "passed",
+    "browser-storage-check": "passed",
+    "browser-scouting-check": "passed",
+    "browser-network-compat-check": "passed",
+    "browser-performance-check": "passed",
+    "browser-clusters-check": "passed",
+    "browser-nearby-observer-check": "passed"
+  },
+  "browser_total": 34,
+  "required_recovery": "passed; actual interrupted 600-location controlled-provider engineering fixture, not field data",
+  "format_build": "Black, Prettier, TypeScript, Vite and git diff --check passed",
+  "limitations": "Measured foreground acceptance not implemented; full practical warm target not met",
+  "protected_audit": {
+    "files": 8673,
+    "changed": []
+  }
+}
